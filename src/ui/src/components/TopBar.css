@@ -1,0 +1,42 @@
+.topbar {
+  background: white;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  z-index: 100;
+}
+
+.topbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0;
+}
+
+.namespace-count {
+  font-size: 13px;
+  color: var(--secondary);
+  padding: 4px 8px;
+  background-color: var(--light);
+  border-radius: 12px;
+}
+
+.topbar-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}

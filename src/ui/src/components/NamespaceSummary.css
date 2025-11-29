@@ -1,0 +1,51 @@
+.namespace-summary {
+  padding: var(--spacing);
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-header h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: var(--light);
+  border-radius: var(--radius);
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--secondary);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dark);
+}
+
+.stat-value.expired {
+  color: var(--danger);
+}
+
+.expiry-warning {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: #856404;
+}

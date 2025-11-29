@@ -1,0 +1,393 @@
+/* Modern Professional UI for Stream Panel */
+.stream-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #fafbfc;
+}
+
+/* Compact Single-Line Header */
+.stream-controls-compact {
+  padding: 12px 24px;
+  background: white;
+  border-bottom: 1px solid #e1e4e8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.header-left h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #24292e;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* DLQ Badge - Compact */
+.dlq-badge {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Compact Badges */
+.entity-type-badge {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.entity-context {
+  font-size: 12px;
+  color: #6a737d;
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* Compact Message Count Badge */
+.message-count-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0366d6;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 1px solid #90caf9;
+  padding: 4px 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.15);
+  transition: all 0.2s ease;
+}
+
+/* Compact Action Buttons */
+.action-buttons-compact {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-compact {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: not-allowed;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-compact.btn-primary {
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+  color: white;
+}
+
+.btn-compact.btn-outline {
+  background: white;
+  color: #495057;
+  border: 2px solid #dee2e6;
+}
+
+/* Modern Header Design (legacy - keeping for backwards compatibility) */
+.stream-controls {
+  padding: 20px 24px;
+  background: white;
+  border-bottom: 1px solid #e1e4e8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.dlq-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 16px;
+  padding: 4px 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dlq-toggle:hover {
+  background: #ffe69c;
+}
+
+.dlq-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.dlq-toggle span {
+  font-weight: 600;
+  color: #856404;
+}
+
+.mode-selector {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mode-btn {
+  padding: 8px 16px;
+  background: white;
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.mode-btn:last-child {
+  border-right: none;
+}
+
+.mode-btn:hover:not(:disabled) {
+  background: var(--light);
+}
+
+.mode-btn.active {
+  background: var(--primary);
+  color: white;
+}
+
+.mode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.stream-status {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.status-indicator {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 20px;
+  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.15);
+  transition: all 0.2s ease;
+}
+
+.message-count-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.2);
+}
+
+/* Modern Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-primary,
+.btn-outline,
+.btn-success,
+.btn-danger {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #198754 0%, #146c43 100%);
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(25, 135, 84, 0.4);
+}
+
+.btn-outline {
+  background: white;
+  color: #495057;
+  border: 2px solid #dee2e6;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #adb5bd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%);
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+}
+
+.btn-primary:disabled,
+.btn-outline:disabled,
+.btn-success:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.status-indicator.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-indicator.disconnected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.mode-info {
+  padding: 8px var(--spacing);
+  background: var(--light);
+  border-bottom: 1px solid var(--border);
+}
+
+.mode-info p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dark);
+}
+
+.alert-success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #2196f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-spinner p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 2000;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 250px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-notification.success {
+  background: #4caf50;
+  color: white;
+}
+
+.toast-notification.error {
+  background: #f44336;
+  color: white;
+}
