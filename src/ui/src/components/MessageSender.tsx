@@ -180,7 +180,6 @@ const SAMPLE_PAYLOADS = [
 ];
 
 export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entities = [], currentEntity }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState('');
   const [message, setMessage] = useState('');
   const [showSamples, setShowSamples] = useState(false);
@@ -318,7 +317,6 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
         
         setTimeout(() => {
           setStatusMessage(null);
-          setIsExpanded(false);
         }, 2000);
       } else {
         setStatusMessage({ text: `✗ Failed to send messages (${failCount} failed)`, type: 'error' });
@@ -539,7 +537,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
   };
 
   return (
-    <div className={`message-sender ${isExpanded ? 'expanded' : ''}`}>
+    <div className="message-sender">
       <div className="message-sender-content">
           <div className="message-sender-controls">
             <div className="control-group">
