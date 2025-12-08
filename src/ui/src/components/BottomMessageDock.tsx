@@ -1,7 +1,7 @@
 /**
  * Bottom Message Drawer - Enterprise overlay panel
- * Collapsible button at bottom expands into a modal overlay (38% default height)
- * Backdrop dims main content, drawer overlays on top with no content push
+ * Full drawer with header opens on demand
+ * No separate collapsed bar - cleaner UI
  */
 
 import React, { useState, useRef } from 'react'
@@ -43,22 +43,23 @@ export default function BottomMessageDock({
     }
   }
 
+  // Handle open trigger - could be from FAB or other trigger
+  const handleOpenDrawer = () => {
+    setIsExpanded(true)
+  }
+
   return (
     <>
-      {/* Collapsed Button Bar - only shown when drawer is closed */}
+      {/* Floating Action Button - only shown when drawer is closed */}
       {!isExpanded && (
-        <div className="bottom-dock-bar">
-          <button
-            className="dock-trigger-button"
-            onClick={() => setIsExpanded(true)}
-            title="Click to open Send Message drawer (Esc to close)"
-            aria-label="Open Send Message drawer"
-          >
-            <span className="dock-icon">✉</span>
-            <span className="dock-label">Send Message to Service Bus</span>
-            <span className="dock-chevron">▼</span>
-          </button>
-        </div>
+        <button
+          className="drawer-fab"
+          onClick={handleOpenDrawer}
+          title="Click to open Send Message drawer (Esc to close)"
+          aria-label="Open Send Message drawer"
+        >
+          <span className="fab-icon">✉</span>
+        </button>
       )}
 
       {/* Drawer Overlay - fixed position overlay with backdrop */}

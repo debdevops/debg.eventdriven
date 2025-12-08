@@ -540,18 +540,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
 
   return (
     <div className={`message-sender ${isExpanded ? 'expanded' : ''}`}>
-      <div className="message-sender-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="message-sender-title">
-          <span className="message-sender-icon">📤</span>
-          <span>Send Message to Service Bus</span>
-        </div>
-        <button className="message-sender-toggle" aria-label={isExpanded ? 'Collapse' : 'Expand'}>
-          {isExpanded ? '▼' : '▲'}
-        </button>
-      </div>
-
-      {isExpanded && (
-        <div className="message-sender-content">
+      <div className="message-sender-content">
           <div className="message-sender-controls">
             <div className="control-group">
               <label htmlFor="entity-select">Queue/Topic:</label>
@@ -854,7 +843,6 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
             </div>
           )}
         </div>
-      )}
     </div>
   );
 };

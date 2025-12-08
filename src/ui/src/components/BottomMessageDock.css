@@ -1,80 +1,48 @@
 /**
  * Bottom Message Drawer Styles - Enterprise overlay
+ * Floating Action Button triggers full-screen drawer overlay
  * Two-state UI: 
- * 1. Collapsed: bottom-dock-bar button at bottom of screen (z:50)
+ * 1. Collapsed: FAB button (floating action button) at bottom-right
  * 2. Expanded: backdrop (z:99) + drawer panel (z:100) as true overlay
  */
 
-/* ===== COLLAPSED STATE: Bottom Bar Button ===== */
-.bottom-dock-bar {
+/* ===== FLOATING ACTION BUTTON (FAB) ===== */
+.drawer-fab {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 48px;
-  background: linear-gradient(180deg, #f5f5f5 0%, #ececec 100%);
-  border-top: 1px solid #d0d0d0;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
-  z-index: 50;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #5558e3 100%);
+  border: none;
+  color: white;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  z-index: 50;
+  transition: all 0.2s ease;
+  font-size: 24px;
   padding: 0;
   margin: 0;
 }
 
-.dock-trigger-button {
-  flex: 1;
-  height: 100%;
+.drawer-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.6);
+}
+
+.drawer-fab:active {
+  transform: scale(0.95);
+}
+
+.fab-icon {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-  transition: background-color 0.15s ease;
-  text-align: left;
-  margin: 0;
-  font-family: inherit;
-}
-
-.dock-trigger-button:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.dock-trigger-button:active {
-  background-color: rgba(0, 0, 0, 0.08);
-}
-
-.dock-icon {
-  display: inline-block;
-  font-size: 16px;
-  min-width: 20px;
-  text-align: center;
-  opacity: 0.8;
-}
-
-.dock-label {
-  flex: 1;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.dock-chevron {
-  display: inline-block;
-  font-size: 12px;
-  opacity: 0.6;
-  transition: transform 0.2s ease;
-}
-
-.dock-trigger-button:hover .dock-chevron {
-  transform: translateY(-2px);
-  opacity: 0.9;
+  justify-content: center;
+  font-size: 24px;
 }
 
 /* ===== EXPANDED STATE: Backdrop ===== */
