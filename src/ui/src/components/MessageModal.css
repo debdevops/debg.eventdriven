@@ -51,6 +51,81 @@
   gap: 8px;
 }
 
+.message-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.message-section-header h3 {
+  margin: 0;
+}
+
+.format-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f8f9fa;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.format-tab {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #495057;
+  transition: all 0.2s ease;
+}
+
+.format-tab:hover {
+  background: white;
+  color: #0d6efd;
+}
+
+.format-tab.active {
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2);
+}
+
+.format-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.correlationId-highlight {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #ffc107;
+  font-weight: 600;
+  color: #856404;
+}
+
+.dlq-info {
+  background: #fff5f5;
+  padding: 8px;
+  border-radius: 4px;
+  border-left: 4px solid #dc3545;
+}
+
+.dlq-reason {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.dlq-error {
+  color: #721c24;
+}
+
 .code-block {
   background: #f5f5f5;
   border: 1px solid var(--border);

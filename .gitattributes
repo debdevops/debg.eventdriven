@@ -1,0 +1,33 @@
+###############################################################################
+# Set default behavior to automatically normalize line endings.
+###############################################################################
+* text=auto
+
+###############################################################################
+# Set file types
+###############################################################################
+*.cs     text diff=csharp
+*.csproj text
+*.sln    text eol=crlf
+*.json   text
+*.js     text
+*.ts     text
+*.tsx    text
+*.css    text
+*.html   text
+*.md     text
+*.txt    text
+*.sh     text eol=lf
+*.bash   text eol=lf
+
+###############################################################################
+# Set binary files
+###############################################################################
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary

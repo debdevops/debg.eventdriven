@@ -2,7 +2,6 @@
  * Namespace Tabs Component
  */
 
-import { useSessionExpiry } from '../hooks/useSessionExpiry'
 import type { Namespace } from '../types'
 import './NamespaceTabs.css'
 
@@ -42,13 +41,11 @@ interface NamespaceTabProps {
 }
 
 function NamespaceTab({ namespace, isActive, onSelect, onClose }: NamespaceTabProps) {
-  const { isExpired, formatTimeRemaining } = useSessionExpiry(namespace.expiresAtUtc)
-
   const label = namespace.friendlyName || `Session ${namespace.sessionId.substring(0, 8)}`
 
   return (
     <div
-      className={`namespace-tab ${isActive ? 'active' : ''} ${isExpired ? 'expired' : ''}`}
+      className={`namespace-tab ${isActive ? 'active' : ''}`}
       onClick={onSelect}
       role="tab"
       aria-selected={isActive}
@@ -61,7 +58,6 @@ function NamespaceTab({ namespace, isActive, onSelect, onClose }: NamespaceTabPr
       }}
     >
       <span className="tab-label">{label}</span>
-      <span className="tab-expiry">{formatTimeRemaining()}</span>
       <button
         className="tab-close"
         onClick={(e) => {

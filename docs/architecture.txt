@@ -1,0 +1,319 @@
+Dynamic Azure Service Bus Inspector - System Architecture
+=========================================================
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           BROWSER / CLIENT                              │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │               React + TypeScript Frontend                        │  │
+│  │  - ConnectForm (session creation)                                │  │
+│  │  - EntityList (queue/topic browser)                              │  │
+│  │  - StreamPanel (SSE message streaming)                           │  │
+│  │  - useSSE hook (auto-reconnection, backoff)                      │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                         │                       ▲                        │
+│                         │ HTTPS                 │ SSE Stream             │
+│                         │ (REST API)            │ (EventSource)          │
+└─────────────────────────┼───────────────────────┼─────────────────────────┘
+                          │                       │
+                          ▼                       │
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        ASP.NET CORE API                                 │
+│                      (.NET 9 Minimal API)                               │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  Endpoints:                                                      │   │
+│  │  • POST /api/namespace/connect                                  │   │
+│  │  • GET  /api/namespace/{sessionId}/entities                     │   │
+│  │  • GET  /api/stream/{sessionId}/{entityName}  [SSE]             │   │
+│  │  • POST /api/queue/{sessionId}/{entityName}/peek                │   │
+│  │  • POST /api/queue/{sessionId}/{entityName}/receive             │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  Services:                                                       │   │
+│  │  • KeyVaultService (secret retrieval)                           │   │
+│  │  • ServiceBusProvisioningService (entity listing)               │   │
+│  │  • ServiceBusStreamer (SSE orchestration)                       │   │
+│  │  • AuditStore (compliance logging)                              │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  In-Memory Session Store                                        │   │
+│  │  SessionId → { SecretName, TokenMappings, ExpiresAt }           │   │
+│  │  (Replace with Redis in production)                             │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  OpenTelemetry Instrumentation                                  │   │
+│  │  Traces → Azure Monitor / Application Insights                  │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+         │                  │                        │
+         │ DefaultAzure     │ Service Bus SDK       │ File I/O
+         │ Credential       │ (Peek/Receive)        │ (Audit Log)
+         ▼                  ▼                        ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│  Azure Key Vault │  │ Azure Service Bus│  │  data/audit.log  │
+│                  │  │                  │  │  (JSON Lines)    │
+│  Secrets:        │  │  Queues/Topics   │  │  → Cosmos DB     │
+│  - ServiceBus    │  │  Messages        │  │    (Production)  │
+│    Connection    │  │  Locks           │  │                  │
+│    String        │  │                  │  │                  │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
+```
+
+## Security Model: Zero-Trust Connection String Handling
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 1: User provides Key Vault Secret Name (NOT conn string)  │
+│  Input: { "secretName": "ServiceBusConnectionString" }          │
+└─────────────────────────────────────────────────────────────────┘
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 2: Backend creates ephemeral SessionId                    │
+│  SessionId: "abc123..."  ExpiresAt: +10 minutes                 │
+│  Returns: { "sessionId": "abc123...", "expiresAtUtc": "..." }   │
+└─────────────────────────────────────────────────────────────────┘
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 3: All subsequent API calls use SessionId                 │
+│  Backend maps SessionId → SecretName → Connection String        │
+│  Connection string NEVER sent to client                         │
+└─────────────────────────────────────────────────────────────────┘
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 4: Receive mode uses ephemeral tokens                     │
+│  Backend receives message → generates ephemeralToken            │
+│  Stores: ephemeralToken → lockToken (server-side only)          │
+│  Client receives ephemeralToken (NOT lockToken)                 │
+└─────────────────────────────────────────────────────────────────┘
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Step 5: Client confirms receive with ephemeralToken            │
+│  Backend maps ephemeralToken → lockToken                        │
+│  Calls ServiceBus.CompleteMessageAsync(lockToken)               │
+│  Logs audit entry                                               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Data Flow: Peek Mode
+
+```
+User clicks "Peek Mode"
+    │
+    ▼
+Frontend calls /api/stream/{sessionId}/{entityName}?mode=peek
+    │
+    ▼
+Backend validates session and retrieves connection string from Key Vault
+    │
+    ▼
+ServiceBusStreamer creates receiver with PeekLock mode
+    │
+    ▼
+Loop: PeekMessagesAsync() every 2 seconds
+    │
+    ├─► Messages found?
+    │   ├─► YES: Send SSE events with message data
+    │   │        event: message
+    │   │        data: { messageId, body, properties, ... }
+    │   │
+    │   └─► NO:  Send heartbeat
+    │            event: heartbeat
+    │            data: { timestamp: ... }
+    │
+    ▼
+Client receives SSE events via useSSE hook
+    │
+    ▼
+Messages displayed in table (sortable, filterable)
+```
+
+## Data Flow: Receive Mode with Confirmation
+
+```
+User clicks "Receive Mode"
+    │
+    ▼
+Frontend calls /api/stream/{sessionId}/{entityName}?mode=receive
+    │
+    ▼
+Backend receives messages with ReceiveMessagesAsync()
+    │
+    ▼
+For each message:
+    ├─► Generate ephemeralToken (GUID)
+    ├─► Store mapping: ephemeralToken → { lockToken, messageId, sequenceNumber }
+    └─► Send SSE event with ephemeralToken (NOT lockToken)
+        event: message
+        data: { token: "ephemeral123...", messageId, body, lockedUntilUtc, ... }
+    │
+    ▼
+Client displays messages with checkboxes
+    │
+    ▼
+User selects messages and clicks "Receive Selected"
+    │
+    ▼
+Confirmation modal shown
+    │
+    ▼
+User confirms
+    │
+    ▼
+Frontend calls POST /api/queue/{sessionId}/{entityName}/receive
+    Body: { "tokens": ["ephemeral123...", "ephemeral456..."] }
+    │
+    ▼
+Backend:
+    ├─► For each ephemeralToken:
+    │   ├─► Lookup lockToken from session mapping
+    │   ├─► Call receiver.CompleteMessageAsync(lockToken)
+    │   ├─► Log audit entry: { sessionId, entityName, operation: "Receive", messageId, ... }
+    │   └─► Remove token mapping
+    │
+    └─► Return: { completed: [...], failed: [...] }
+    │
+    ▼
+Frontend removes completed messages from UI
+```
+
+## Session Lifecycle
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  SESSION CREATED                                             │
+│  • SessionId: unique GUID                                    │
+│  • CreatedAt: timestamp                                      │
+│  • ExpiresAt: now + 10 minutes                               │
+│  • SecretName: stored (for Key Vault lookup)                 │
+│  • TokenMappings: empty ConcurrentDictionary                 │
+└──────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌──────────────────────────────────────────────────────────────┐
+│  SESSION ACTIVE                                              │
+│  • User browses entities                                     │
+│  • User streams messages                                     │
+│  • TokenMappings accumulate (receive mode)                   │
+└──────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌──────────────────────────────────────────────────────────────┐
+│  SESSION EXPIRY (after 10 minutes)                           │
+│  • Background task removes expired sessions                  │
+│  • All token mappings cleared                                │
+│  • Future API calls with sessionId → 401 Unauthorized        │
+└──────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌──────────────────────────────────────────────────────────────┐
+│  USER RECONNECTS                                             │
+│  • Must provide secretName again                             │
+│  • New sessionId created                                     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Observability & Tracing
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Frontend                                                    │
+│  • Generates correlation-id for each request                 │
+│  • Header: X-Correlation-ID: web-timestamp-random            │
+└─────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Backend (OpenTelemetry)                                     │
+│  • Captures correlation-id from header                       │
+│  • Traces API requests, Key Vault calls, Service Bus ops    │
+│  • Exports to Azure Monitor / Application Insights           │
+└─────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Azure Monitor / Application Insights                        │
+│  • End-to-end distributed tracing                            │
+│  • Query by correlation-id to see full request flow         │
+│  • Metrics: latency, error rates, throughput                 │
+└─────────────────────────────────────────────────────────────┘
+
+Example Kusto Query:
+    traces
+    | where customDimensions.CorrelationId == "web-1731585600-abc123"
+    | order by timestamp asc
+    | project timestamp, message, severityLevel
+```
+
+## Future: Agentic AI Integration
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  AI Agent Layer (Future Enhancement)                         │
+│  • Analyze message patterns (detect anomalies)               │
+│  • Predict queue depth trends                                │
+│  • Auto-suggest dead-letter queue remediation                │
+│  • Generate synthetic test messages                          │
+│  • Intelligent message routing recommendations               │
+└─────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Integration Points                                          │
+│  • Hook into audit log for historical analysis               │
+│  • Use Azure OpenAI for pattern recognition                  │
+│  • Provide agent API: /api/agent/analyze                     │
+│  • Return insights as JSON for UI rendering                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Production Deployment Topology
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Azure Static Web Apps or Storage Static Website            │
+│  • React Frontend (CDN-backed)                               │
+│  • HTTPS enforced                                            │
+└──────────────────────────────────────────────────────────────┘
+                         │
+                         │ HTTPS
+                         ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Azure App Service (Linux, .NET 9)                           │
+│  • ASP.NET Core Backend                                      │
+│  • System-Assigned Managed Identity enabled                  │
+│  • CORS configured for frontend origin                       │
+│  • Application Insights connection string configured         │
+└──────────────────────────────────────────────────────────────┘
+         │                          │                    │
+         │ Managed Identity         │ Connection String  │ HTTPS
+         ▼                          ▼                    ▼
+┌────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│ Azure Key Vault│  │Azure Service Bus │  │Application       │
+│ • RBAC: Secrets│  │ • Queues/Topics  │  │Insights          │
+│   User role    │  │ • Private        │  │ • Telemetry      │
+│ • Private Link │  │   Endpoint       │  │ • Logs           │
+└────────────────┘  └──────────────────┘  └──────────────────┘
+```
+
+## Notes for draw.io Conversion
+
+This ASCII diagram can be converted to draw.io by:
+1. Create swimlanes for Browser, Backend, Azure Services
+2. Use rounded rectangles for components
+3. Use cylinders for data stores
+4. Use arrows with labels for data flow
+5. Color-code by concern: blue (frontend), green (backend), orange (Azure)
+6. Add legends for icons and terminology
+
+---
+
+**Author**: Debasis Ghosh
+**Created**: November 2025
+**Version**: 1.0

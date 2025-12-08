@@ -1,7 +1,9 @@
 /**
- * Message Modal - View full message JSON
+ * Message Modal - View full message JSON with multiple format options
+ * Supports: Raw, Pretty JSON, Base64, XML, UTF-8
  */
 
+import { useState } from 'react'
 import { parseMessageBody } from '../utils/formatters'
 import type { MessageEnvelope } from '../types'
 import './MessageModal.css'
@@ -11,8 +13,70 @@ interface MessageModalProps {
   onClose: () => void
 }
 
+type FormatType = 'raw' | 'pretty' | 'base64' | 'xml' | 'utf8'
+
 export function MessageModal({ message, onClose }: MessageModalProps) {
-  const { formatted, isJson } = parseMessageBody(message.body)
+  const [activeFormat, setActiveFormat] = useState<FormatType>('pretty')
+  const { isJson } = parseMessageBody(message.body)
+
+  const formatBody = (type: FormatType): string => {
+    const body = message.body
+
+    switch (type) {
+      case 'raw':
+        return body
+
+      case 'pretty':
+        try {
+          const parsed = JSON.parse(body)
+          return JSON.stringify(parsed, null, 2)
+        } catch {
+          return body
+        }
+
+      case 'base64':
+        try {
+          // Try to decode if it's base64, otherwise encode
+          const decoded = atob(body)
+          return `Decoded:\n${decoded}\n\n---\n\nOriginal Base64:\n${body}`
+        } catch {
+          // Not base64, so encode it
+          const encoded = btoa(body)
+          return `Base64 Encoded:\n${encoded}\n\n---\n\nOriginal:\n${body}`
+        }
+
+      case 'xml':
+        try {
+          // Try to parse as XML and pretty-print
+          const parser = new DOMParser()
+          const xmlDoc = parser.parseFromString(body, 'text/xml')
+          const serializer = new XMLSerializer()
+          return serializer.serializeToString(xmlDoc)
+        } catch {
+          return `Not valid XML:\n\n${body}`
+        }
+
+      case 'utf8':
+        return body
+
+      default:
+        return body
+    }
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(formatBody(activeFormat))
+  }
+
+  const handleDownload = () => {
+    const blob = new Blob([formatBody(activeFormat)], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `message-${message.messageId}-${activeFormat}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -51,7 +115,7 @@ export function MessageModal({ message, onClose }: MessageModalProps) {
             {message.correlationId && (
               <div className="detail-row">
                 <span className="detail-label">Correlation ID:</span>
-                <span className="detail-value">{message.correlationId}</span>
+                <span className="detail-value correlationId-highlight">{message.correlationId}</span>
               </div>
             )}
             {message.subject && (
@@ -66,6 +130,19 @@ export function MessageModal({ message, onClose }: MessageModalProps) {
                 <span className="detail-value">{new Date(message.lockedUntilUtc).toLocaleString()}</span>
               </div>
             )}
+            {/* DLQ-specific fields */}
+            {message.deadLetterReason && (
+              <div className="detail-row dlq-info">
+                <span className="detail-label">Dead Letter Reason:</span>
+                <span className="detail-value dlq-reason">{message.deadLetterReason}</span>
+              </div>
+            )}
+            {message.deadLetterErrorDescription && (
+              <div className="detail-row dlq-info">
+                <span className="detail-label">Error Description:</span>
+                <span className="detail-value dlq-error">{message.deadLetterErrorDescription}</span>
+              </div>
+            )}
           </div>
 
           {Object.keys(message.applicationProperties || {}).length > 0 && (
@@ -78,9 +155,51 @@ export function MessageModal({ message, onClose }: MessageModalProps) {
           )}
 
           <div className="message-section">
-            <h3>Message Body {isJson && <span className="badge-info">JSON</span>}</h3>
+            <div className="message-section-header">
+              <h3>Message Body {isJson && <span className="badge-info">JSON</span>}</h3>
+              <div className="format-tabs">
+                <button
+                  className={`format-tab ${activeFormat === 'pretty' ? 'active' : ''}`}
+                  onClick={() => setActiveFormat('pretty')}
+                >
+                  Pretty JSON
+                </button>
+                <button
+                  className={`format-tab ${activeFormat === 'raw' ? 'active' : ''}`}
+                  onClick={() => setActiveFormat('raw')}
+                >
+                  Raw
+                </button>
+                <button
+                  className={`format-tab ${activeFormat === 'base64' ? 'active' : ''}`}
+                  onClick={() => setActiveFormat('base64')}
+                >
+                  Base64
+                </button>
+                <button
+                  className={`format-tab ${activeFormat === 'xml' ? 'active' : ''}`}
+                  onClick={() => setActiveFormat('xml')}
+                >
+                  XML
+                </button>
+                <button
+                  className={`format-tab ${activeFormat === 'utf8' ? 'active' : ''}`}
+                  onClick={() => setActiveFormat('utf8')}
+                >
+                  UTF-8
+                </button>
+              </div>
+              <div className="format-actions">
+                <button onClick={handleCopy} className="btn-sm btn-outline" title="Copy to clipboard">
+                  📋 Copy
+                </button>
+                <button onClick={handleDownload} className="btn-sm btn-outline" title="Download as file">
+                  ⬇️ Download
+                </button>
+              </div>
+            </div>
             <pre className="code-block">
-              {formatted}
+              {formatBody(activeFormat)}
             </pre>
           </div>
         </div>

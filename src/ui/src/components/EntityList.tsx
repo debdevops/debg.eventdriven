@@ -1,8 +1,10 @@
 /**
  * Entity List Component - Queues and Topics with Subscriptions
+ * Compact 200px sidebar with collapsible sections
  */
 
 import { useState, useEffect } from 'react'
+import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Entity, Topic, Subscription } from '../types'
 import { apiClient } from '../api/client'
 import './EntityList.css'
@@ -23,9 +25,14 @@ interface EntityListProps {
   onSelectEntity: (entity: Entity) => void
   onSelectSubscription: (subscription: Subscription, topicName: string) => void
   onSelectDLQ: (entity: Entity) => void
-  onRefresh: () => void
+  onRefresh: (triggeredByUser?: boolean) => void
   refreshing: boolean
+  refreshIndicatorVisible?: boolean
 }
+
+// localStorage keys for collapsed state
+const STORAGE_KEY_QUEUES = 'entityList.collapsed.queues'
+const STORAGE_KEY_TOPICS = 'entityList.collapsed.topics'
 
 export default function EntityList({
   queues,
@@ -36,21 +43,50 @@ export default function EntityList({
   onSelectSubscription,
   onSelectDLQ,
   onRefresh,
-  refreshing
+  refreshing,
+  refreshIndicatorVisible = false
 }: EntityListProps) {
+  const { registerTimer, status } = useSessionV2()
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set())
   const [topicSubscriptions, setTopicSubscriptions] = useState<Record<string, Subscription[]>>({})
   const [loadingTopics, setLoadingTopics] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
+  
+  // Collapsible sections with localStorage persistence
+  const [queuesCollapsed, setQueuesCollapsed] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_QUEUES)
+    return saved === 'true'
+  })
+  
+  const [topicsCollapsed, setTopicsCollapsed] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_TOPICS)
+    return saved === 'true'
+  })
 
-  // Auto-refresh entity counts every 10 seconds
+  // Persist collapse state
   useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_QUEUES, String(queuesCollapsed))
+  }, [queuesCollapsed])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_TOPICS, String(topicsCollapsed))
+  }, [topicsCollapsed])
+
+  // Auto-refresh entity counts every 10 seconds (paused during reconnect)
+  useEffect(() => {
+    if (status !== 'connected') {
+      console.log('[EntityList] Auto-refresh paused: status =', status)
+      return
+    }
+
     const interval = setInterval(() => {
-      onRefresh()
+      onRefresh(false) // false = automatic background refresh
     }, 10000) // 10 seconds
     
+    registerTimer?.('entity-auto-refresh', interval)
+    
     return () => clearInterval(interval)
-  }, [onRefresh])
+  }, [onRefresh, registerTimer, status])
 
   const toggleTopic = async (topicName: string) => {
     const isExpanded = expandedTopics.has(topicName)
@@ -126,17 +162,40 @@ export default function EntityList({
   }
 
   return (
-    <div className="entity-list">
+    <div className="entity-list compact">
       <div className="entity-list-header">
         <h3>Entities</h3>
-        <button
-          className="refresh-btn"
-          onClick={onRefresh}
-          disabled={refreshing}
-          title="Refresh entity counts"
-        >
-          🔄 {refreshing ? 'Refreshing...' : 'Refresh'}
-        </button>
+        <div className="refresh-controls">
+          <button
+            className="refresh-btn"
+            onClick={() => onRefresh(true)} // true = user clicked refresh button
+            disabled={refreshing}
+            title={refreshing ? 'Refreshing entities...' : 'Refresh entity counts'}
+          >
+            {refreshing ? '⟳' : '🔄'}
+          </button>
+          {refreshIndicatorVisible && (
+            <span 
+              className="refresh-indicator"
+              title="Updated"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                backgroundColor: '#10b981',
+                color: 'white',
+                fontSize: '12px',
+                marginLeft: '6px',
+                animation: 'fadeInOut 2s ease-in-out'
+              }}
+            >
+              ✓
+            </span>
+          )}
+        </div>
       </div>
       
       {error && (
@@ -147,46 +206,64 @@ export default function EntityList({
       
       {queues.length > 0 && (
         <section className="entity-group">
-          <h4 className="entity-group-title">
-            🗂️ Queues ({queues.length})
+          <h4 
+            className={`entity-group-title collapsible ${queuesCollapsed ? 'collapsed' : ''}`}
+            onClick={() => setQueuesCollapsed(!queuesCollapsed)}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="collapse-arrow">{queuesCollapsed ? '▶' : '▼'}</span>
+            <span>Queues</span>
+            <span className="entity-count">{queues.length}</span>
           </h4>
-          <ul className="entity-items">
-            {queues.map(queue => (
-              <QueueItemExpandable
-                key={queue.name}
-                entity={queue}
-                isSelected={selectedTarget?.type === 'queue' && selectedTarget.entity?.name === queue.name && !selectedTarget.isDLQ}
-                isDLQSelected={selectedTarget?.type === 'dlq' && selectedTarget.entity?.name === queue.name}
-                onSelectQueue={onSelectEntity}
-                onSelectDLQ={onSelectDLQ}
-              />
-            ))}
-          </ul>
+          {!queuesCollapsed && (
+            <ul className="entity-items">
+              {queues.map(queue => (
+                <QueueItemExpandable
+                  key={queue.name}
+                  entity={queue}
+                  isSelected={selectedTarget?.type === 'queue' && selectedTarget.entity?.name === queue.name && !selectedTarget.isDLQ}
+                  isDLQSelected={selectedTarget?.type === 'dlq' && selectedTarget.entity?.name === queue.name}
+                  onSelectQueue={onSelectEntity}
+                  onSelectDLQ={onSelectDLQ}
+                />
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
       {topics.length > 0 && (
         <section className="entity-group">
-          <h4 className="entity-group-title">
-            📡 Topics ({topics.length})
+          <h4 
+            className={`entity-group-title collapsible ${topicsCollapsed ? 'collapsed' : ''}`}
+            onClick={() => setTopicsCollapsed(!topicsCollapsed)}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="collapse-arrow">{topicsCollapsed ? '▶' : '▼'}</span>
+            <span>Topics</span>
+            <span className="entity-count">{topics.length}</span>
           </h4>
-          <ul className="entity-items">
-            {topics.map(topic => (
-              <TopicItem
-                key={topic.name}
-                topic={topic}
-                isExpanded={expandedTopics.has(topic.name)}
-                subscriptions={topicSubscriptions[topic.name] || []}
-                isLoading={loadingTopics.has(topic.name)}
-                sessionId={sessionId}
-                selectedSubscriptionName={selectedTarget?.type === 'subscription' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
-                onToggle={() => toggleTopic(topic.name)}
-                onCreateTempSubscription={(e) => handleCreateTempSubscription(topic.name, e)}
-                onDeleteSubscription={(subName, e) => handleDeleteSubscription(topic.name, subName, e)}
-                onSelectSubscription={onSelectSubscription}
-              />
-            ))}
-          </ul>
+          {!topicsCollapsed && (
+            <ul className="entity-items">
+              {topics.map(topic => (
+                <TopicItem
+                  key={topic.name}
+                  topic={topic}
+                  isExpanded={expandedTopics.has(topic.name)}
+                  subscriptions={topicSubscriptions[topic.name] || []}
+                  isLoading={loadingTopics.has(topic.name)}
+                  sessionId={sessionId}
+                  selectedSubscriptionName={selectedTarget?.type === 'subscription' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
+                  onToggle={() => toggleTopic(topic.name)}
+                  onCreateTempSubscription={(e) => handleCreateTempSubscription(topic.name, e)}
+                  onDeleteSubscription={(subName, e) => handleDeleteSubscription(topic.name, subName, e)}
+                  onSelectSubscription={onSelectSubscription}
+                />
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
@@ -210,6 +287,16 @@ interface QueueItemExpandableProps {
 function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue, onSelectDLQ }: QueueItemExpandableProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasDLQ = entity.deadLetterMessageCount > 0
+  
+  // Determine status indicator
+  const getStatusIndicator = () => {
+    if (entity.deadLetterMessageCount > 0) return { color: 'red', title: 'DLQ messages' }
+    // if (entity.scheduledMessageCount && entity.scheduledMessageCount > 0) return { color: 'yellow', title: 'Scheduled messages' }
+    if (entity.messageCount > 0) return { color: 'green', title: 'Active messages' }
+    return { color: 'gray', title: 'Empty' }
+  }
+  
+  const statusIndicator = getStatusIndicator()
 
   const handleQueueClick = () => {
     onSelectQueue(entity)
@@ -251,6 +338,7 @@ function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue,
               {isExpanded ? '▼' : '▶'}
             </span>
           )}
+          <span className={`entity-status-dot ${statusIndicator.color}`} title={statusIndicator.title}>●</span>
           <span className="entity-icon">📥</span>
           <span className="entity-name">{entity.name}</span>
           {hasDLQ && (
@@ -349,7 +437,9 @@ function TopicItem({
       {isExpanded && (
         <ul className="subscription-list">
           {isLoading && (
-            <li className="subscription-loading">Loading subscriptions...</li>
+            <li className="subscription-loading-skeleton">
+              <div className="skeleton-line"></div>
+            </li>
           )}
           {!isLoading && subscriptions.length === 0 && (
             <li className="subscription-empty">

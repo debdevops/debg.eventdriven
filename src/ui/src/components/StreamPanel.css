@@ -3,20 +3,68 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  /* overflow: hidden; */ /* Removed to allow MessageDetailPanel to display properly */
   background: #fafbfc;
+}
+
+/* Thin session-expired banner at top */
+.session-expired-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+  border-bottom: 2px solid #ff6b6b;
+  min-height: 42px;
+  max-height: 42px;
+  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.1);
+}
+
+.session-expired-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c92a2a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-expired-reconnect-btn {
+  padding: 4px 12px;
+  background: #ff6b6b;
+  border: 1px solid #fa5252;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.session-expired-reconnect-btn:hover:not(:disabled) {
+  background: #fa5252;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(250, 82, 82, 0.3);
+}
+
+.session-expired-reconnect-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Compact Single-Line Header */
 .stream-controls-compact {
-  padding: 12px 24px;
+  padding: 4px 12px;
   background: white;
   border-bottom: 1px solid #e1e4e8;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+  min-height: 36px;
+  position: relative;
 }
 
 .header-left {
@@ -28,12 +76,46 @@
 
 .header-left h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   color: #24292e;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+}
+
+/* Corner label for read-only mode and timestamps */
+.corner-label {
+  position: absolute;
+  top: 4px;
+  right: 280px; /* Moved left to avoid overlapping Refresh button */
+  font-size: 9px;
+  color: #6a737d;
+  background: #f6f8fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #e1e4e8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 5;
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.corner-label-icon {
+  font-size: 10px;
+}
+
+.read-only-banner {
+  display: none; /* Moved to corner label */
+}
+
+.last-updated-bar {
+  display: none; /* Moved to corner label */
 }
 
 /* DLQ Badge - Compact */
@@ -44,10 +126,10 @@
 
 /* Compact Badges */
 .entity-type-badge {
-  padding: 4px 10px;
+  padding: 2px 8px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: 3px;
+  font-size: 10px;
   font-weight: 700;
   color: white;
   text-transform: uppercase;
@@ -78,23 +160,46 @@
 /* Compact Action Buttons */
 .action-buttons-compact {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
 .btn-compact {
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 600;
   border: none;
-  cursor: not-allowed;
+  cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  opacity: 0.6;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-disabled {
+  background: #e9ecef;
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-disabled:hover {
+  background: #e9ecef;
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-compact:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .btn-compact.btn-primary {
@@ -106,6 +211,100 @@
   background: white;
   color: #495057;
   border: 2px solid #dee2e6;
+}
+
+/* Auto Mode badge - prominent and clean */
+.auto-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  letter-spacing: 0.3px;
+}
+
+.auto-icon {
+  font-size: 14px;
+  animation: glow 2s ease-in-out infinite;
+}
+
+.auto-text {
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.refreshing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  border-radius: 50%;
+  margin-left: 4px;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 1; text-shadow: 0 0 4px rgba(255, 255, 255, 0.5); }
+  50% { opacity: 0.85; text-shadow: 0 0 8px rgba(255, 255, 255, 0.8); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+/* Last updated bar - single line */
+.last-updated-bar {
+  padding: 3px 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  font-size: 10px;
+  color: #6c757d;
+  text-align: center;
+}
+  font-weight: 600;
+}
+
+/* DLQ Banner - simplified one-liner */
+.dlq-banner {
+  padding: 6px 12px;
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  border-bottom: 1px solid #ffe69c;
+  font-size: 11px;
+  color: #856404;
+  text-align: center;
+}
+
+/* Read-only mode banner */
+.read-only-banner {
+  padding: 4px 12px;
+  background: #e7f3ff;
+  border-left: 4px solid #0d6efd;
+  border-bottom: 1px solid #cce5ff;
+  font-size: 10px;
+  color: #084298;
+  text-align: center;
+}
+
+/* Disabled button style */
+.btn-disabled {
+  background: #e9ecef;
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-disabled:hover {
+  background: #e9ecef;
+  color: #6c757d;
+  transform: none;
 }
 
 /* Modern Header Design (legacy - keeping for backwards compatibility) */
@@ -312,6 +511,16 @@
   background-color: #d4edda;
   color: #155724;
   border: 1px solid #c3e6cb;
+}
+
+.alert-danger {
+  padding: 8px 16px;
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  font-size: 13px;
+  margin: 0;
 }
 
 /* Loading Overlay */

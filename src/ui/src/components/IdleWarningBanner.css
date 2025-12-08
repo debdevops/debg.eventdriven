@@ -1,0 +1,55 @@
+/* IdleWarningBanner - Slim, non-intrusive warning */
+
+.idle-warning-banner {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 9000 !important;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  border-bottom: 2px solid #f59e0b !important;
+  padding: 10px 20px !important;
+  cursor: pointer !important;
+  animation: slideDown 300ms ease-out !important;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2) !important;
+}
+
+.idle-warning-banner:hover {
+  background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%) !important;
+}
+
+.idle-warning-content {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+}
+
+.idle-warning-icon {
+  font-size: 18px !important;
+  flex-shrink: 0 !important;
+}
+
+.idle-warning-text {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #92400e !important;
+}
+
+.idle-warning-text strong {
+  font-weight: 700 !important;
+  color: #78350f !important;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

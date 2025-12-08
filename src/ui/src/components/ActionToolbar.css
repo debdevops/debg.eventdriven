@@ -1,0 +1,178 @@
+/* Unified Action Toolbar */
+.action-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 48px;
+  background: var(--bg-primary, #fff);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.toolbar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #1f2937);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dlq-badge {
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.message-count {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.selected-count {
+  color: var(--primary-color, #3b82f6);
+  font-weight: 600;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: flex-end;
+  overflow-x: auto;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.toolbar-group + .toolbar-group {
+  border-left: 1px solid var(--border-color, #e5e7eb);
+  padding-left: 12px;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--bg-secondary, #f9fafb);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 6px;
+  color: var(--text-primary, #1f2937);
+  cursor: pointer;
+  transition: all 200ms;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-hover, #f3f4f6);
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.active {
+  background: var(--primary-color, #3b82f6);
+  color: white;
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.toolbar-btn.primary {
+  background: var(--primary-color, #3b82f6);
+  color: white;
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.toolbar-btn.primary:hover:not(:disabled) {
+  background: var(--primary-hover, #2563eb);
+}
+
+.toolbar-btn.success {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.toolbar-btn.success:hover:not(:disabled) {
+  background: #059669;
+}
+
+.toolbar-btn.warning {
+  background: #f59e0b;
+  color: white;
+  border-color: #f59e0b;
+}
+
+.toolbar-btn.warning:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.toolbar-btn.danger {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+.toolbar-btn.danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .action-toolbar {
+    padding: 0 12px;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 48px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .toolbar-left {
+    flex: 1 1 100%;
+    margin-bottom: 8px;
+  }
+
+  .toolbar-right {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .toolbar-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .toolbar-title {
+    font-size: 14px;
+  }
+
+  .message-count {
+    font-size: 12px;
+  }
+}

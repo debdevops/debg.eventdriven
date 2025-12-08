@@ -1,33 +1,76 @@
 .entity-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing);
+  padding: 6px;
+}
+
+/* Compact mode for 200px sidebar */
+.entity-list.compact {
+  padding: 4px;
+}
+
+.entity-list.compact .entity-list-header h3 {
+  font-size: 13px;
+}
+
+.entity-list.compact .entity-group {
+  margin-bottom: 6px;
 }
 
 .entity-list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
   border-bottom: 2px solid var(--border);
+}
+
+.refresh-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
 }
 
 .entity-list-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
 }
 
 .refresh-btn {
-  padding: 6px 12px;
+  padding: 3px 6px;
   background: white;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .refresh-btn:hover:not(:disabled) {
@@ -51,7 +94,7 @@
 }
 
 .entity-group {
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 
 .entity-group:last-child {
@@ -59,11 +102,48 @@
 }
 
 .entity-group-title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--secondary);
   letter-spacing: 0.5px;
-  margin: 0 0 12px 0;
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Collapsible section titles */
+.entity-group-title.collapsible {
+  cursor: pointer;
+  padding: 6px 8px;
+  background: var(--light);
+  border-radius: var(--radius);
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.entity-group-title.collapsible:hover {
+  background: #e9ecef;
+}
+
+.entity-group-title.collapsible .collapse-arrow {
+  font-size: 10px;
+  transition: transform 0.2s;
+  color: var(--secondary);
+}
+
+.entity-group-title.collapsible.collapsed .collapse-arrow {
+  transform: rotate(0deg);
+}
+
+.entity-group-title .entity-count {
+  margin-left: auto;
+  background: var(--primary);
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 
 .entity-items {
@@ -75,7 +155,7 @@
 .entity-item {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 8px;
+  margin-bottom: 3px;
   transition: all 0.2s;
 }
 
@@ -85,14 +165,13 @@
 }
 
 .queue-header {
-  padding: 12px;
+  padding: 6px 8px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
   transition: background 0.2s;
 }
-
 .queue-header:hover {
   background: var(--light);
   border-color: var(--primary);
@@ -122,7 +201,7 @@
 }
 
 .dlq-item {
-  padding: 10px 12px 10px 36px;
+  padding: 6px 8px 6px 24px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -151,13 +230,13 @@
 }
 
 .dlq-icon {
-  font-size: 18px;
+  font-size: 16px;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
 }
 
 /* Old queue-item for backward compatibility - remove after testing */
 .queue-item {
-  padding: 12px;
+  padding: 6px 8px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -181,7 +260,7 @@
 }
 
 .topic-header {
-  padding: 12px;
+  padding: 6px 8px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -201,21 +280,21 @@
 .entity-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
 }
 
 .entity-icon {
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
 
 .expand-icon {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--secondary);
   transition: transform 0.2s;
-  padding: 4px;
-  margin-right: 4px;
+  padding: 2px;
+  margin-right: 3px;
   border-radius: 3px;
   cursor: pointer;
 }
@@ -226,34 +305,34 @@
 
 .entity-name {
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .dlq-indicator {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #ff6b6b;
   background: #fff5f5;
   border: 1px solid #ffdddd;
-  padding: 2px 6px;
+  padding: 1px 4px;
   border-radius: 3px;
-  margin-left: 8px;
+  margin-left: 6px;
 }
 
 .temp-badge {
-  font-size: 11px;
-  padding: 2px 6px;
+  font-size: 10px;
+  padding: 1px 4px;
   background: #e3f2fd;
   border: 1px solid #90caf9;
   border-radius: 3px;
-  margin-left: 8px;
+  margin-left: 6px;
 }
 
 .entity-stats {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 11px;
 }
 
 .message-count {
@@ -302,7 +381,7 @@
 }
 
 .subscription-item {
-  padding: 10px 12px 10px 36px;
+  padding: 6px 8px 6px 24px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -329,11 +408,28 @@
   color: white;
 }
 
+.subscription-loading-skeleton {
+  padding: 6px 8px 6px 24px;
+}
+
+.skeleton-line {
+  height: 10px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .subscription-loading,
 .subscription-empty {
-  padding: 12px 12px 12px 36px;
+  padding: 6px 8px 6px 24px;
   color: var(--secondary);
-  font-size: 13px;
+  font-size: 12px;
   font-style: italic;
 }
 
@@ -342,10 +438,32 @@
   opacity: 0.7;
 }
 
+/* Entity Status Indicators */
+.entity-status-dot {
+  font-size: 9px;
+  margin-right: 3px;
+}
+
+.entity-status-dot.green {
+  color: #28a745;
+}
+
+.entity-status-dot.yellow {
+  color: #ffc107;
+}
+
+.entity-status-dot.red {
+  color: #dc3545;
+}
+
+.entity-status-dot.gray {
+  color: #adb5bd;
+}
+
 /* Empty State */
 .empty-entities {
   text-align: center;
-  padding: 40px 20px;
+  padding: 24px 12px;
   color: var(--secondary);
 }
 

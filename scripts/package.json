@@ -1,0 +1,12 @@
+{
+  "name": "servicebus-inspector-scripts",
+  "version": "1.0.0",
+  "description": "Testing scripts for Service Bus Inspector",
+  "private": true,
+  "dependencies": {
+    "@azure/service-bus": "^7.9.5"
+  },
+  "scripts": {
+    "send": "node send-sample-messages.js"
+  }
+}

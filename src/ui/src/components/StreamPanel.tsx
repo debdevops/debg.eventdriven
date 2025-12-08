@@ -4,10 +4,13 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useSSE } from '../hooks/useSSE'
+import { useSessionV2 } from '../contexts/SessionContextV2'
 import { apiClient } from '../api/client'
 import { messageStore } from '../services/messageStore'
 import MessageTable from './MessageTable'
-import { CompareModal } from './CompareModal'
+import { MetricsPanel } from './MetricsPanel'
+import RulesPanel from './RulesPanel'
+import { MessageTableSkeleton } from './MessageTableSkeleton'
 import type { Entity, Subscription, MessageEnvelope, StreamMode, AuditEntry } from '../types'
 import './StreamPanel.css'
 
@@ -23,17 +26,20 @@ interface StreamPanelProps {
   sessionId: string
   selectedTarget: SelectedTarget
   onAudit: (entry: AuditEntry) => void
+  isSessionExpired?: boolean
 }
 
-export default function StreamPanel({ sessionId, selectedTarget, onAudit }: StreamPanelProps) {
+export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSessionExpired = false }: StreamPanelProps) {
   const mode: StreamMode = 'peek' // Read-only mode
+  const { status, registerTimer } = useSessionV2()
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [streaming, setStreaming] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  const [showCompare, setShowCompare] = useState(false)
+  const [showRules, setShowRules] = useState(false)
+  const [frozenSnapshot, setFrozenSnapshot] = useState(false)
 
   // Get entity name and subscription name based on target type
   const entityName = selectedTarget.type === 'queue' || selectedTarget.type === 'dlq'
@@ -54,6 +60,65 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit }: Stre
     }
   }, [toast])
 
+  // Reusable function to load messages once
+  const loadMessagesOnce = useCallback(async (silent = false) => {
+    try {
+      const entityType = selectedTarget.type === 'dlq' ? 'dlq' : 
+                        selectedTarget.type === 'subscription' ? 'subscription' : 
+                        selectedTarget.type === 'queue' ? 'queue' : 'topic'
+      
+      // Don't show loading spinner for silent background refreshes
+      if (!silent) {
+        setLoading(true)
+      }
+      
+      // Fetch fresh from backend
+      const response = await apiClient.peekMessages(sessionId, entityName, 20, subscriptionName, isDLQ)
+      
+      // Save to local store with correct entity type
+      await messageStore.saveMessages(
+        response.messages,
+        sessionId,
+        entityName,
+        entityType,
+        'peeked',
+        subscriptionName
+      )
+      
+      // Reload all stored messages for this entity (filtered by type)
+      const updatedMessages = await messageStore.getMessages(sessionId, entityName, entityType)
+      
+      // Only update state if messages actually changed (prevents UI flicker)
+      setMessages(prevMessages => {
+        const prevIds = prevMessages.map(m => m.sequenceNumber).sort().join(',')
+        const newIds = updatedMessages.map(m => m.sequenceNumber).sort().join(',')
+        return prevIds === newIds ? prevMessages : updatedMessages
+      })
+      
+      setError(null)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load messages'
+      console.error('Load messages failed:', err)
+      
+      // Handle 401 Unauthorized - session expired
+      if (errorMsg.includes('401') || errorMsg.toLowerCase().includes('unauthorized')) {
+        // Session expiry is now handled by SessionExpiryModal - don't set error here
+        console.log('[StreamPanel] Session expired detected - modal will handle this')
+      } else if (!silent) {
+        // Only show error for non-silent requests
+        setError(errorMsg)
+      }
+    } finally {
+      if (!silent) {
+        setLoading(false)
+      }
+    }
+  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type])
+
+  // Track last refresh time
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
   // Auto-load messages when entity changes
   useEffect(() => {
     setMessages([])
@@ -61,46 +126,86 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit }: Stre
     setSuccess(null)
     setStreaming(false)
     setToast(null)
+    setLastRefreshTime(null)
+    setIsRefreshing(false)
     
-    // Auto-load messages after clearing
-    const loadMessages = async () => {
+    // Immediate load (not silent for initial load)
+    const initialLoad = async () => {
       try {
-        const entityType = selectedTarget.type === 'dlq' ? 'dlq' : 
-                          selectedTarget.type === 'subscription' ? 'subscription' : 
-                          selectedTarget.type === 'queue' ? 'queue' : 'topic'
-        
-        // Load from IndexedDB first (filtered by entity type)
-        const storedMessages = await messageStore.getMessages(sessionId, entityName, entityType)
-        if (storedMessages.length > 0) {
-          setMessages(storedMessages)
-        }
-        
-        // Then fetch fresh from backend
-        setLoading(true)
-        const response = await apiClient.peekMessages(sessionId, entityName, 10, subscriptionName, isDLQ)
-        
-        // Save to local store with correct entity type
-        await messageStore.saveMessages(
-          response.messages,
-          sessionId,
-          entityName,
-          entityType,
-          'peeked',
-          subscriptionName
-        )
-        
-        // Reload all stored messages for this entity (filtered by type)
-        const updatedMessages = await messageStore.getMessages(sessionId, entityName, entityType)
-        setMessages(updatedMessages)
+        await loadMessagesOnce(false)
+        setLastRefreshTime(new Date()) // Set timestamp only after successful load
       } catch (err) {
-        console.error('Auto-load failed:', err)
-      } finally {
-        setLoading(false)
+        console.error('Initial load failed:', err)
       }
     }
     
-    loadMessages()
-  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type])
+    initialLoad()
+  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type, loadMessagesOnce])
+
+  // Single unified auto-refresh loop with Page Visibility API
+  // Pauses during session expiry or reconnect
+  useEffect(() => {
+    if (frozenSnapshot || status !== 'connected') {
+      console.log('[StreamPanel] Auto-refresh paused:', 
+        frozenSnapshot ? 'Snapshot frozen' : `Session status: ${status}`)
+      return // Don't refresh when paused or not connected
+    }
+
+    let intervalId: ReturnType<typeof setInterval> | null = null
+    let isRefreshInProgress = false
+    
+    const performRefresh = async () => {
+      if (isRefreshInProgress || document.hidden || status !== 'connected') return
+      
+      try {
+        isRefreshInProgress = true
+        setIsRefreshing(true)
+        await loadMessagesOnce(true) // Silent refresh
+        setLastRefreshTime(new Date()) // Update timestamp only after successful fetch
+      } catch (err) {
+        console.error('[StreamPanel] Auto-refresh failed:', err)
+      } finally {
+        setIsRefreshing(false)
+        isRefreshInProgress = false
+      }
+    }
+    
+    const startAutoRefresh = () => {
+      if (intervalId) return // Prevent duplicate intervals
+      console.log('[StreamPanel] Starting auto-refresh (10s interval)')
+      intervalId = setInterval(performRefresh, 10000) // 10 seconds
+      registerTimer?.('stream-auto-refresh', intervalId) // Register with SessionContext
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Pause refresh when tab is hidden
+        if (intervalId) {
+          console.log('[StreamPanel] Pausing auto-refresh (tab hidden)')
+          clearInterval(intervalId)
+          intervalId = null
+        }
+      } else {
+        // Resume refresh when tab becomes visible
+        if (!intervalId && status === 'connected') {
+          console.log('[StreamPanel] Resuming auto-refresh (tab visible)')
+          startAutoRefresh()
+          performRefresh() // Immediate refresh on tab activation
+        }
+      }
+    }
+
+    startAutoRefresh()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (intervalId) {
+        console.log('[StreamPanel] Cleaning up auto-refresh interval')
+        clearInterval(intervalId)
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [frozenSnapshot, status, loadMessagesOnce, registerTimer])
 
   // SSE Stream
   const streamURL = apiClient.getStreamURL(sessionId, entityName, mode, subscriptionName, isDLQ)
@@ -134,68 +239,24 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit }: Stre
     onMessage: handleMessage
   })
 
-  // Peek Now (POST)
+  // Peek Now (POST) - now just calls loadMessagesOnce
   const handlePeekNow = async () => {
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-    setToast(null)
-
-    try {
-      // Determine entity type for proper filtering
-      const entityType = selectedTarget.type === 'dlq' ? 'dlq' : 
-                        selectedTarget.type === 'subscription' ? 'subscription' : 
-                        selectedTarget.type === 'queue' ? 'queue' : 'topic'
-      
-      // First load any stored messages (filtered by entity type)
-      const storedMessages = await messageStore.getMessages(sessionId, entityName, entityType)
-      if (storedMessages.length > 0) {
-        setMessages(storedMessages)
-      }
-      
-      // Then peek new messages from backend
-      const response = await apiClient.peekMessages(sessionId, entityName, 10, subscriptionName, isDLQ)
-      
-      // Save to local store with correct entity type
-      await messageStore.saveMessages(
-        response.messages,
-        sessionId,
-        entityName,
-        entityType,
-        'peeked',
-        subscriptionName
-      )
-      
-      // Reload all stored messages for this entity (filtered by type)
-      const updatedMessages = await messageStore.getMessages(sessionId, entityName, entityType)
-      setMessages(updatedMessages)
-      
-      const successMsg = `Peeked ${response.peekedCount} message(s) - Total stored: ${updatedMessages.length}`
-      setSuccess(successMsg)
-      setToast({ message: successMsg, type: 'success' })
-      
-      onAudit({
-        timestamp: new Date().toISOString(),
-        sessionId,
-        entityName,
-        operation: 'Peek'
-      })
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Peek failed'
-      setError(errorMsg)
-      setToast({ message: errorMsg, type: 'error' })
-    } finally {
-      setLoading(false)
-    }
+    await loadMessagesOnce(false) // Not silent - show loading and errors
+    onAudit({
+      timestamp: new Date().toISOString(),
+      sessionId,
+      entityName,
+      operation: 'Peek'
+    })
   }
 
   // Start streaming
-  const handleStartStream = () => {
+  /* const _handleStartStream = () => {
     setError(null)
     setSuccess(null)
     setToast(null)
     setStreaming(true)
-  }
+  } */
 
   // Display name for header
   const displayName = selectedTarget.type === 'queue' || selectedTarget.type === 'dlq'
@@ -211,7 +272,17 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit }: Stre
 
   return (
     <div className="stream-panel">
-      <div className="stream-controls-compact">
+      {/* Session expired is now handled by SessionExpiryModal in NamespaceView */}
+      
+      {/* Full-width error banner for non-session-expired errors */}
+      {error && !error.includes('Session expired') && (
+        <div className="stream-panel-error">
+          {error}
+          <button onClick={() => setError(null)} className="error-dismiss">×</button>
+        </div>
+      )}
+
+      <div className="action-toolbar">
         <div className="header-left">
           <h3>
             {isDLQ && <span className="dlq-badge" title="Dead Letter Queue">💀</span>}
@@ -225,36 +296,90 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit }: Stre
         </div>
 
         <div className="action-buttons-compact">
+          {/* Disabled primary action buttons */}
+          <button
+            className="btn-compact btn-disabled"
+            disabled
+            title={status === 'connecting' ? "Disabled during reconnect" : isSessionExpired ? "Reconnect to enable this action" : "Feature disabled - Read-only mode active"}
+          >
+            🔍 Peek
+          </button>
+          <button
+            className="btn-compact btn-disabled"
+            disabled
+            title={status === 'connecting' ? "Disabled during reconnect" : isSessionExpired ? "Reconnect to enable this action" : "Feature disabled - Read-only mode active"}
+          >
+            📤 Stream
+          </button>
+          <button
+            className="btn-compact btn-disabled"
+            disabled
+            title={isSessionExpired ? "Reconnect to enable this action" : "Compare available in advanced mode"}
+          >
+            ⚖️ Compare Q/DLQ
+          </button>
+          
+          {/* Auto Mode badge */}
+          {!frozenSnapshot && (
+            <div className="auto-mode-badge" title="Auto-refresh active - refreshes every 10 seconds">
+              <span className="auto-icon">⚡</span>
+              <span className="auto-text">Auto Mode</span>
+              {isRefreshing && <span className="refreshing-dot"></span>}
+            </div>
+          )}
+          
+          {/* Manual refresh button */}
           <button
             onClick={handlePeekNow}
-            disabled={true}
             className="btn-compact btn-primary"
-            title="Disabled — auto-load enabled"
+            disabled={loading || isRefreshing}
+            title="Manually refresh messages now"
           >
-            📖 Peek
+            🔄 Refresh
           </button>
           
+          {/* Pause/Resume toggle */}
           <button
-            onClick={handleStartStream}
-            disabled={true}
-            className="btn-compact btn-primary"
-            title="Disabled — auto-load enabled"
+            onClick={() => setFrozenSnapshot(!frozenSnapshot)}
+            className={`btn-compact ${frozenSnapshot ? 'btn-success' : 'btn-outline'}`}
+            title={frozenSnapshot ? 'Resume auto-refresh' : 'Pause auto-refresh'}
           >
-            ▶️ Stream
+            {frozenSnapshot ? '▶️' : '⏸️'}
           </button>
           
-          <button
-            onClick={() => setShowCompare(true)}
-            disabled={true}
-            className="btn-compact btn-outline"
-            title="Disabled — auto-load enabled"
-          >
-            🔍 Compare
-          </button>
+          {/* Rules button for subscriptions */}
+          {selectedTarget.type === 'subscription' && (
+            <button
+              onClick={() => setShowRules(true)}
+              className="btn-compact btn-outline"
+              title="Manage subscription rules"
+            >
+              ⚙️ Rules
+            </button>
+          )}
         </div>
       </div>
 
-      {error && (
+      {/* Corner label for read-only mode and last updated - positioned absolutely */}
+      <div className="corner-label">
+        <span className="corner-label-icon">📖</span>
+        Read-only
+        {lastRefreshTime && (
+          <span style={{ marginLeft: '8px', borderLeft: '1px solid #e1e4e8', paddingLeft: '8px' }}>
+            {lastRefreshTime.toLocaleTimeString()}
+          </span>
+        )}
+      </div>
+
+      {/* DLQ explanation banner - simplified one-liner */}
+      {isDLQ && (
+        <div className="dlq-banner">
+          💀 <strong>Dead Letter Queue:</strong> These messages failed delivery or exceeded max delivery attempts. Use Replay to reprocess.
+        </div>
+      )}
+
+      {/* Only show error alerts for non-session-expired errors */}
+      {error && !isSessionExpired && (
         <div className="alert alert-danger">
           {error}
         </div>
@@ -273,27 +398,38 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit }: Stre
         </div>
       )}
 
-      {/* Loading Overlay */}
-      {loading && (
-        <div className="loading-overlay">
-          <div className="loading-spinner">
-            <div className="spinner"></div>
-            <p>Loading messages...</p>
-          </div>
-        </div>
+      {/* Metrics Panel */}
+      {!isDLQ && (
+        <MetricsPanel
+          sessionId={sessionId}
+          entityName={entityName}
+          subscriptionName={subscriptionName}
+        />
       )}
 
-      <MessageTable
-        messages={messages}
-      />
-      
-      {/* Compare Modal */}
-      {showCompare && (
-        <CompareModal
+      {/* Show skeleton loader during initial load or reconnect */}
+      {(loading && messages.length === 0) || status === 'connecting' ? (
+        <MessageTableSkeleton />
+      ) : (
+        <MessageTable
+          messages={messages}
           sessionId={sessionId}
-          queueName={entityName}
+          entityName={entityName}
           subscriptionName={subscriptionName}
-          onClose={() => setShowCompare(false)}
+          isDLQ={isDLQ}
+          onRefresh={handlePeekNow}
+          frozenSnapshot={frozenSnapshot}
+          onToggleSnapshot={() => setFrozenSnapshot(!frozenSnapshot)}
+        />
+      )}
+      
+      {/* Rules Panel */}
+      {showRules && selectedTarget.type === 'subscription' && (
+        <RulesPanel
+          sessionId={sessionId}
+          topicName={selectedTarget.topicName!}
+          subscriptionName={selectedTarget.subscription!.name}
+          onClose={() => setShowRules(false)}
         />
       )}
     </div>

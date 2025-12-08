@@ -98,6 +98,143 @@
   font-weight: 500;
 }
 
+/* Compact Namespace Header */
+.namespace-header-compact {
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #e1e4e8;
+}
+
+.namespace-header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.namespace-dropdown {
+  flex: 1;
+  padding: 3px 6px;
+  border: 1px solid #e1e4e8;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #24292e;
+  background: white;
+  cursor: not-allowed;
+}
+
+.btn-reconnect {
+  padding: 2px 6px;
+  background: white;
+  border: 1px solid #e1e4e8;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+}
+
+.btn-reconnect:hover:not(:disabled) {
+  background: #0d6efd;
+  color: white;
+  border-color: #0d6efd;
+  transform: rotate(180deg);
+}
+
+.btn-reconnect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  background: #f0f0f0;
+}
+
+.connection-status.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.connection-status.disconnected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-dot {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.status-text {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.session-expiry-row {
+  font-size: 10px;
+  color: #6c757d;
+  padding: 2px 0;
+  text-align: center;
+}
+
+/* Session Expiry Banner (Stage 2 - 30 seconds warning) */
+.session-expiry-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #fef3c7;
+  border-left: 4px solid #f59e0b;
+  font-size: 14px;
+  color: #92400e;
+  z-index: 100;
+}
+
+.session-expiry-banner.warning {
+  background: #fef3c7;
+  border-left-color: #f59e0b;
+  color: #92400e;
+}
+
+.session-expiry-banner .banner-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.session-expiry-banner .banner-message {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.session-expiry-banner .banner-action {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 200ms;
+}
+
+.session-expiry-banner .banner-action:hover {
+  background: #d97706;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .namespace-view {

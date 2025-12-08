@@ -1,0 +1,160 @@
+/**
+ * Session Health Card Styles
+ */
+
+.session-health-card {
+  padding: 12px;
+  background-color: white;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.session-health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.session-health-namespace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.session-health-dot-green {
+  background-color: #10b981;
+}
+
+.session-health-dot-yellow {
+  background-color: #f59e0b;
+}
+
+.session-health-dot-orange {
+  background-color: #f97316;
+}
+
+.session-health-dot-red {
+  background-color: #ef4444;
+}
+
+.session-health-namespace-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #111827);
+}
+
+.session-health-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.session-health-badge-green {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.session-health-badge-yellow {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.session-health-badge-orange {
+  background-color: #ffedd5;
+  color: #9a3412;
+}
+
+.session-health-badge-red {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.session-health-timer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.session-health-timer-label {
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.session-health-timer-value {
+  font-size: 13px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.session-health-timer-normal {
+  color: var(--text, #111827);
+}
+
+.session-health-timer-warning {
+  color: #f59e0b;
+}
+
+.session-health-timer-critical {
+  color: #f97316;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.session-health-extend-btn {
+  width: 100%;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.session-health-extend-btn:hover {
+  background-color: #2563eb;
+}
+
+.session-health-extend-btn:active {
+  background-color: #1d4ed8;
+}
+
+.session-health-extend-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.session-health-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -3,11 +3,11 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { NamespaceSummary } from './NamespaceSummary'
+import { StatusDot } from './StatusDot'
 import EntityList from './EntityList'
 import StreamPanel from './StreamPanel'
 import { apiClient } from '../api/client'
-import { useSessionExpiry } from '../hooks/useSessionExpiry'
+import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Namespace, Entity, Subscription, AuditEntry } from '../types'
 import './NamespaceView.css'
 
@@ -15,6 +15,8 @@ interface NamespaceViewProps {
   namespace: Namespace
   onUpdateNamespace: (updates: Partial<Namespace>) => void
   onAudit: (entry: AuditEntry) => void
+  onEntitySelect?: (entityName: string) => void
+  toast: any
 }
 
 interface SelectedTarget {
@@ -28,15 +30,20 @@ interface SelectedTarget {
 export function NamespaceView({
   namespace,
   onUpdateNamespace,
-  onAudit
+  onAudit,
+  onEntitySelect,
+  toast
 }: NamespaceViewProps) {
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const [sidebarWidth, setSidebarWidth] = useState(200) // Compact sidebar default
   const [isResizing, setIsResizing] = useState(false)
   
-  const { formatTimeRemaining } = useSessionExpiry(namespace.expiresAtUtc)
+  // Use new robust session context
+  const { status, reconnect } = useSessionV2()
+  
+  const [refreshIndicatorVisible, setRefreshIndicatorVisible] = useState(false)
 
   const handleSelectEntity = (entity: Entity) => {
     setSelectedTarget({
@@ -44,6 +51,7 @@ export function NamespaceView({
       entity,
       isDLQ: false
     })
+    onEntitySelect?.(entity.name)
   }
 
   const handleSelectSubscription = (subscription: Subscription, topicName: string) => {
@@ -54,6 +62,7 @@ export function NamespaceView({
       topicName,
       isDLQ: false
     })
+    onEntitySelect?.(`${topicName}/subscriptions/${subscription.name}`)
   }
 
   const handleSelectDLQ = (entity: Entity) => {
@@ -62,6 +71,7 @@ export function NamespaceView({
       entity,
       isDLQ: true
     })
+    onEntitySelect?.(`${entity.name}/$DeadLetterQueue`)
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -92,7 +102,7 @@ export function NamespaceView({
     }
   }, [isResizing, handleMouseMove, handleMouseUp])
 
-  const handleRefreshEntities = useCallback(async () => {
+  const handleRefreshEntities = useCallback(async (triggeredByUser = false) => {
     setRefreshing(true)
     try {
       const entities = await apiClient.listEntities(namespace.sessionId)
@@ -100,15 +110,48 @@ export function NamespaceView({
         queues: entities.queues,
         topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
       })
+      
+      if (triggeredByUser) {
+        // User clicked refresh button - show toast
+        toast.success('Entities refreshed successfully')
+      } else {
+        // Background auto-refresh - show subtle indicator
+        setRefreshIndicatorVisible(true)
+        setTimeout(() => setRefreshIndicatorVisible(false), 2000)
+      }
     } catch (err) {
       console.error('Failed to refresh entities:', err)
+      // Always show errors
+      toast.error('Failed to refresh entities')
     } finally {
       setRefreshing(false)
     }
-  }, [namespace.sessionId, onUpdateNamespace])
+  }, [namespace.sessionId, onUpdateNamespace, toast])
+
+  /**
+   * Comprehensive reconnect handler using SessionContext
+   * Reloads entities, messages, and metrics after session restoration
+   */
+  const handleReconnect = useCallback(async () => {
+    console.log('[NamespaceView] Reconnect requested')
+    
+    await reconnect(namespace.sessionId, async () => {
+      // Reload entities after successful reconnection
+      console.log('[NamespaceView] Reloading entities after reconnect')
+      const entities = await apiClient.listEntities(namespace.sessionId)
+      onUpdateNamespace({
+        queues: entities.queues,
+        topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
+      })
+      
+      // If there's a selected entity, its messages will auto-reload via StreamPanel effect
+      console.log('[NamespaceView] Reconnect complete - entities reloaded')
+    })
+  }, [reconnect, namespace.sessionId, onUpdateNamespace])
 
   return (
-    <div className={`namespace-view ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <>
+      <div className={`namespace-view ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside 
         className={`left-pane ${sidebarCollapsed ? 'collapsed' : ''}`}
         style={{ width: sidebarCollapsed ? '40px' : `${sidebarWidth}px` }}
@@ -121,19 +164,22 @@ export function NamespaceView({
           {sidebarCollapsed ? '❯' : '❮'}
         </button>
         {!sidebarCollapsed && (
-          <div style={{ 
-            padding: '8px 12px', 
-            background: '#fff3cd', 
-            borderBottom: '1px solid #ffc107',
-            fontSize: '12px',
-            color: '#856404'
-          }}>
-            ⏱️ Session: {formatTimeRemaining()}
+          <div className="namespace-header-compact">
+            <div className="namespace-header-row">
+              <select className="namespace-dropdown" value={namespace.friendlyName} disabled>
+                <option>{namespace.friendlyName || 'Dev'}</option>
+              </select>
+              <StatusDot
+                status={status === 'connected' ? 'connected' : status === 'expired' ? 'expired' : 'connecting'}
+                expiresAtUtc={namespace.expiresAtUtc}
+                namespaceName={namespace.friendlyName || namespace.sessionId}
+                onReconnect={handleReconnect}
+              />
+            </div>
           </div>
         )}
         {!sidebarCollapsed && (
           <>
-            <NamespaceSummary namespace={namespace} />
             <EntityList
               queues={namespace.queues}
               topics={namespace.topics}
@@ -144,6 +190,7 @@ export function NamespaceView({
               onSelectDLQ={handleSelectDLQ}
               onRefresh={handleRefreshEntities}
               refreshing={refreshing}
+              refreshIndicatorVisible={refreshIndicatorVisible}
             />
           </>
         )}
@@ -161,6 +208,7 @@ export function NamespaceView({
             sessionId={namespace.sessionId}
             selectedTarget={selectedTarget}
             onAudit={onAudit}
+            isSessionExpired={status === 'expired'}
           />
         ) : (
           <div className="empty-selection">
@@ -169,7 +217,8 @@ export function NamespaceView({
           </div>
         )}
       </section>
-    </div>
+      </div>
+    </>
   )
 }
 
