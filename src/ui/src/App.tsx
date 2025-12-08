@@ -9,7 +9,7 @@ import { NamespaceTabs } from './components/NamespaceTabs'
 import { NamespaceView } from './components/NamespaceView'
 import { ConnectModal } from './components/ConnectModal'
 import { AuditPanel } from './components/AuditPanel'
-import { MessageSender } from './components/MessageSender'
+import BottomMessageDock from './components/BottomMessageDock'
 import { ToastContainer } from './components/Toast'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
 import { IdleWarningBanner } from './components/IdleWarningBanner'
@@ -206,7 +206,7 @@ function AppContent({
 
       <AuditPanel entries={auditLog} />
 
-      <MessageSender 
+      <BottomMessageDock 
         sessionId={activeNamespace?.sessionId || null}
         entities={activeNamespace ? [...activeNamespace.queues, ...activeNamespace.topics] : []}
         currentEntity={currentEntityName || undefined}
