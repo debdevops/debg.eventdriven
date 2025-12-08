@@ -1,6 +1,7 @@
 /**
- * Bottom Message Dock - Persistent collapsible panel
- * Always visible as a 1-row bar, expands upward into MessageSender on click
+ * Bottom Message Drawer - Enterprise overlay panel
+ * Collapsible button at bottom expands into a modal overlay (38% default height)
+ * Backdrop dims main content, drawer overlays on top with no content push
  */
 
 import React, { useState, useRef } from 'react'
@@ -21,20 +22,6 @@ export default function BottomMessageDock({
   const [isExpanded, setIsExpanded] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
 
-  // Close dock when clicking outside
-  React.useEffect(() => {
-    if (!isExpanded) return
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dockRef.current && !dockRef.current.contains(e.target as Node)) {
-        setIsExpanded(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isExpanded])
-
   // Close on Escape key
   React.useEffect(() => {
     if (!isExpanded) return
@@ -49,48 +36,68 @@ export default function BottomMessageDock({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isExpanded])
 
-  return (
-    <div
-      ref={dockRef}
-      className={`bottom-message-dock ${isExpanded ? 'expanded' : 'collapsed'}`}
-      data-testid="bottom-message-dock"
-    >
-      {/* Collapsed Bar */}
-      {!isExpanded && (
-        <button
-          className="dock-bar"
-          onClick={() => setIsExpanded(true)}
-          title="Click to open Send Message panel (Esc to close)"
-        >
-          <span className="dock-icon">✉</span>
-          <span className="dock-label">Send Message to Service Bus</span>
-          <span className="dock-chevron">▼</span>
-        </button>
-      )}
+  // Handle backdrop click to close
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      setIsExpanded(false)
+    }
+  }
 
-      {/* Expanded Panel */}
-      {isExpanded && (
-        <div className="dock-panel">
-          <div className="dock-header">
-            <h3>Send Message to Service Bus</h3>
-            <button
-              className="dock-close"
-              onClick={() => setIsExpanded(false)}
-              title="Close (Esc)"
-              aria-label="Close message sender"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="dock-content">
-            <MessageSender
-              sessionId={sessionId}
-              entities={entities}
-              currentEntity={currentEntity}
-            />
-          </div>
+  return (
+    <>
+      {/* Collapsed Button Bar - only shown when drawer is closed */}
+      {!isExpanded && (
+        <div className="bottom-dock-bar">
+          <button
+            className="dock-trigger-button"
+            onClick={() => setIsExpanded(true)}
+            title="Click to open Send Message drawer (Esc to close)"
+            aria-label="Open Send Message drawer"
+          >
+            <span className="dock-icon">✉</span>
+            <span className="dock-label">Send Message to Service Bus</span>
+            <span className="dock-chevron">▼</span>
+          </button>
         </div>
       )}
-    </div>
+
+      {/* Drawer Overlay - fixed position overlay with backdrop */}
+      {isExpanded && (
+        <>
+          {/* Backdrop - dims background, allows click-to-close */}
+          <div 
+            className="drawer-backdrop" 
+            onClick={handleBackdropClick}
+            role="presentation"
+          />
+          
+          {/* Drawer Panel */}
+          <div
+            ref={dockRef}
+            className="bottom-drawer-panel"
+            data-testid="bottom-message-drawer"
+          >
+            <div className="drawer-header">
+              <h3 className="drawer-title">Send Message to Service Bus</h3>
+              <button
+                className="drawer-close-button"
+                onClick={() => setIsExpanded(false)}
+                title="Close drawer (Esc)"
+                aria-label="Close Send Message drawer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="drawer-content">
+              <MessageSender
+                sessionId={sessionId}
+                entities={entities}
+                currentEntity={currentEntity}
+              />
+            </div>
+          </div>
+        </>
+      )}
+    </>
   )
 }

@@ -1,33 +1,93 @@
 /**
- * Bottom Message Dock Styles
- * Persistent collapsed bar that expands upward to 60% viewport
+ * Bottom Message Drawer Styles - Enterprise overlay
+ * Two-state UI: 
+ * 1. Collapsed: bottom-dock-bar button at bottom of screen (z:50)
+ * 2. Expanded: backdrop (z:99) + drawer panel (z:100) as true overlay
  */
 
-.bottom-message-dock {
+/* ===== COLLAPSED STATE: Bottom Bar Button ===== */
+.bottom-dock-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 100;
-  background: #fff;
-  border-top: 1px solid #e0e0e0;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  height: 48px;
+  background: linear-gradient(180deg, #f5f5f5 0%, #ececec 100%);
+  border-top: 1px solid #d0d0d0;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  margin: 0;
 }
 
-/* Backdrop overlay when expanded */
-.bottom-message-dock.expanded::before {
-  content: '';
+.dock-trigger-button {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  transition: background-color 0.15s ease;
+  text-align: left;
+  margin: 0;
+  font-family: inherit;
+}
+
+.dock-trigger-button:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.dock-trigger-button:active {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+.dock-icon {
+  display: inline-block;
+  font-size: 16px;
+  min-width: 20px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.dock-label {
+  flex: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.dock-chevron {
+  display: inline-block;
+  font-size: 12px;
+  opacity: 0.6;
+  transition: transform 0.2s ease;
+}
+
+.dock-trigger-button:hover .dock-chevron {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+/* ===== EXPANDED STATE: Backdrop ===== */
+.drawer-backdrop {
   position: fixed;
-  bottom: 60vh;
+  top: 0;
   left: 0;
   right: 0;
-  top: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: -1;
-  animation: fadeIn 0.2s ease-out;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.3);
+  z-index: 99;
+  cursor: pointer;
+  animation: fadeIn 0.15s ease;
 }
 
 @keyframes fadeIn {
@@ -39,166 +99,121 @@
   }
 }
 
-/* Collapsed state */
-.bottom-message-dock.collapsed {
-  height: 48px;
-  overflow: hidden;
-  transition: height 0.2s ease-out;
-}
-
-.dock-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  height: 48px;
-  padding: 0 16px;
-  border: none;
-  background: #f5f5f5;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s ease;
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-}
-
-.dock-bar:hover {
-  background: #ebebeb;
-}
-
-.dock-bar:active {
-  background: #ddd;
-}
-
-.dock-icon {
-  margin-right: 10px;
-  font-size: 16px;
-}
-
-.dock-label {
-  flex: 1;
-  text-align: left;
-}
-
-.dock-chevron {
-  margin-left: 10px;
-  color: #666;
-  font-size: 12px;
-  transition: transform 0.2s ease;
-}
-
-/* Expanded state - limited to 60% of viewport, doesn't cover whole window */
-.bottom-message-dock.expanded {
-  height: 60vh;
-  max-height: 600px;
-  overflow: hidden;
+/* ===== EXPANDED STATE: Drawer Panel ===== */
+.bottom-drawer-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 38vh;
+  max-height: 60vh;
+  background: white;
+  z-index: 100;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.3s ease-out;
+  animation: slideUpDrawer 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
 }
 
-@keyframes slideUp {
+@keyframes slideUpDrawer {
   from {
-    height: 48px;
+    transform: translateY(100%);
+    opacity: 0;
   }
   to {
-    height: 60vh;
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 
-.dock-panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  background: #fff;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+/* Media query for small screens */
+@media (max-height: 600px) {
+  .bottom-drawer-panel {
+    height: 50vh;
+    max-height: 70vh;
+  }
 }
 
-.dock-header {
+/* ===== Drawer Header ===== */
+.drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f9f9f9;
-  height: 48px;
+  padding: 16px;
+  background: linear-gradient(180deg, #f9f9f9 0%, #f2f2f2 100%);
+  border-bottom: 1px solid #e5e5e5;
   flex-shrink: 0;
+  height: 60px;
 }
 
-.dock-header h3 {
+.drawer-title {
   margin: 0;
-  font-size: 14px;
+  padding: 0;
+  font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: #1a1a1a;
+  flex: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.dock-close {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: #666;
-  font-size: 18px;
+.drawer-close-button {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: #666;
+  transition: all 0.15s ease;
+  padding: 0;
+  margin: 0 -4px;
   border-radius: 4px;
-  transition: background-color 0.2s ease, color 0.2s ease;
-  flex-shrink: 0;
-  margin-left: 8px;
 }
 
-.dock-close:hover {
-  background: #e0e0e0;
+.drawer-close-button:hover {
+  background-color: rgba(0, 0, 0, 0.06);
   color: #333;
 }
 
-.dock-content {
+.drawer-close-button:active {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+/* ===== Drawer Content Area ===== */
+.drawer-content {
   flex: 1;
-  overflow: auto;
-  padding: 12px 16px;
-  background: #fff;
-  min-height: 0; /* Allow flex to shrink below content height */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  background: white;
 }
 
-/* Mobile responsiveness - 70% on smaller screens */
-@media (max-width: 768px) {
-  .bottom-message-dock.expanded {
-    height: 70vh;
-    max-height: none;
-  }
-
-  .dock-header {
-    padding: 10px 12px;
-    height: 44px;
-  }
-
-  .dock-header h3 {
-    font-size: 13px;
-  }
-
-  .dock-content {
-    padding: 10px 12px;
-  }
-}
-
-/* Scrollbar styling for dock content */
-.dock-content::-webkit-scrollbar {
+/* Scrollbar styling for overflow content */
+.drawer-content::-webkit-scrollbar {
   width: 8px;
 }
 
-.dock-content::-webkit-scrollbar-track {
+.drawer-content::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.dock-content::-webkit-scrollbar-thumb {
-  background: #ccc;
+.drawer-content::-webkit-scrollbar-thumb {
+  background: #d0d0d0;
   border-radius: 4px;
 }
 
-.dock-content::-webkit-scrollbar-thumb:hover {
+.drawer-content::-webkit-scrollbar-thumb:hover {
   background: #999;
+}
+
+/* Ensure MessageSender fills the drawer content area */
+.drawer-content > * {
+  width: 100%;
 }
