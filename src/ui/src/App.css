@@ -54,19 +54,6 @@ code {
   overflow: hidden;
   background-color: var(--light);
   position: relative;
-  padding-bottom: 48px; /* Space for collapsed dock bar */
-}
-
-/* When dock is expanded, add semi-transparent backdrop */
-.main-content::before {
-  content: '';
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: transparent;
-  pointer-events: none;
-  z-index: 99;
 }
 
 /* Empty State */
