@@ -169,8 +169,10 @@ function AppContent({
       <TopBar
         namespacesCount={namespaces.length}
         currentNamespace={activeNamespace?.friendlyName}
+        expiresAtUtc={activeNamespace?.expiresAtUtc}
         onAddNamespace={() => setShowConnectModal(true)}
         onSwitchNamespace={() => setShowConnectModal(true)}
+        onReconnect={handleReconnectFromModal}
       />
 
       {namespaces.length > 0 && (

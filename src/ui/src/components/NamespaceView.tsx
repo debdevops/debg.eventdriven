@@ -3,7 +3,6 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { StatusDot } from './StatusDot'
 import EntityList from './EntityList'
 import StreamPanel from './StreamPanel'
 import { apiClient } from '../api/client'
@@ -41,7 +40,7 @@ export function NamespaceView({
   const [isResizing, setIsResizing] = useState(false)
   
   // Use new robust session context
-  const { status, reconnect } = useSessionV2()
+  const { status } = useSessionV2()
   
   const [refreshIndicatorVisible, setRefreshIndicatorVisible] = useState(false)
 
@@ -128,26 +127,6 @@ export function NamespaceView({
     }
   }, [namespace.sessionId, onUpdateNamespace, toast])
 
-  /**
-   * Comprehensive reconnect handler using SessionContext
-   * Reloads entities, messages, and metrics after session restoration
-   */
-  const handleReconnect = useCallback(async () => {
-    console.log('[NamespaceView] Reconnect requested')
-    
-    await reconnect(namespace.sessionId, async () => {
-      // Reload entities after successful reconnection
-      console.log('[NamespaceView] Reloading entities after reconnect')
-      const entities = await apiClient.listEntities(namespace.sessionId)
-      onUpdateNamespace({
-        queues: entities.queues,
-        topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
-      })
-      
-      // If there's a selected entity, its messages will auto-reload via StreamPanel effect
-      console.log('[NamespaceView] Reconnect complete - entities reloaded')
-    })
-  }, [reconnect, namespace.sessionId, onUpdateNamespace])
 
   return (
     <>
@@ -161,23 +140,8 @@ export function NamespaceView({
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {sidebarCollapsed ? '❯' : '❮'}
+          {sidebarCollapsed ? '▶' : '◀'}
         </button>
-        {!sidebarCollapsed && (
-          <div className="namespace-header-compact">
-            <div className="namespace-header-row">
-              <select className="namespace-dropdown" value={namespace.friendlyName} disabled>
-                <option>{namespace.friendlyName || 'Dev'}</option>
-              </select>
-              <StatusDot
-                status={status === 'connected' ? 'connected' : status === 'expired' ? 'expired' : 'connecting'}
-                expiresAtUtc={namespace.expiresAtUtc}
-                namespaceName={namespace.friendlyName || namespace.sessionId}
-                onReconnect={handleReconnect}
-              />
-            </div>
-          </div>
-        )}
         {!sidebarCollapsed && (
           <>
             <EntityList
