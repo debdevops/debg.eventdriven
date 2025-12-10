@@ -22,6 +22,14 @@ export default function BottomMessageDock({
   const [isExpanded, setIsExpanded] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
 
+  // Auto-close callback for MessageSender
+  const handleMessageSent = () => {
+    // Close drawer 1 second after successful send
+    setTimeout(() => {
+      setIsExpanded(false)
+    }, 1000)
+  }
+
   // Close on Escape key
   React.useEffect(() => {
     if (!isExpanded) return
@@ -94,6 +102,7 @@ export default function BottomMessageDock({
                 sessionId={sessionId}
                 entities={entities}
                 currentEntity={currentEntity}
+                onMessageSent={handleMessageSent}
               />
             </div>
           </div>

@@ -22,7 +22,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-  z-index: 50;
+  z-index: 150;
   transition: all 0.2s ease;
   font-size: 24px;
   padding: 0;
@@ -73,8 +73,8 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 38vh;
-  max-height: 60vh;
+  height: 70vh;
+  max-height: 85vh;
   background: white;
   z-index: 100;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
@@ -99,8 +99,8 @@
 /* Media query for small screens */
 @media (max-height: 600px) {
   .bottom-drawer-panel {
-    height: 50vh;
-    max-height: 70vh;
+    height: 80vh;
+    max-height: 90vh;
   }
 }
 

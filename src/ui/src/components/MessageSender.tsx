@@ -11,6 +11,7 @@ interface MessageSenderProps {
   sessionId: string | null;
   entities?: Array<{ name: string; type: string }>;
   currentEntity?: string; // Auto-select this entity when provided
+  onMessageSent?: () => void; // Callback when message is successfully sent
 }
 
 interface MessageTemplate {
@@ -179,7 +180,7 @@ const SAMPLE_PAYLOADS = [
   }
 ];
 
-export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entities = [], currentEntity }) => {
+export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entities = [], currentEntity, onMessageSent }) => {
   const [selectedEntity, setSelectedEntity] = useState('');
   const [message, setMessage] = useState('');
   const [showSamples, setShowSamples] = useState(false);
@@ -314,6 +315,11 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
           });
         }
         setMessage('');
+        
+        // Call callback to close drawer
+        if (onMessageSent) {
+          onMessageSent();
+        }
         
         setTimeout(() => {
           setStatusMessage(null);

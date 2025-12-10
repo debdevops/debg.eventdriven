@@ -46,7 +46,7 @@ For custom configurations or troubleshooting.
 The script will:
 1. ✅ Verify Azure CLI authentication
 2. 📦 Create resource group `rg-servicebus-inspector-local`
-3. 🚌 Create Service Bus namespace `sb-inspector-local-dg` (Standard tier)
+3. 🚌 Create Service Bus namespace ` ` (Standard tier)
 4. 📥 Create queue `test-queue` with dead-lettering enabled
 5. 🔐 Create Key Vault `kv-inspector-local-dg` with **RBAC authorization** (best practice)
 6. 🔑 Grant you **"Key Vault Secrets Officer"** RBAC role
