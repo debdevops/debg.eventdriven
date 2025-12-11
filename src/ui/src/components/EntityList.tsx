@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Entity, Topic, Subscription } from '../types'
 import { apiClient } from '../api/client'
+import EntityCard from './EntityCard'
 import './EntityList.css'
 
 interface SelectedTarget {
@@ -217,7 +218,7 @@ export default function EntityList({
             <span className="entity-count">{queues.length}</span>
           </h4>
           {!queuesCollapsed && (
-            <ul className="entity-items">
+            <div className="entity-cards-grid">
               {queues.map(queue => (
                 <QueueItemExpandable
                   key={queue.name}
@@ -228,7 +229,7 @@ export default function EntityList({
                   onSelectDLQ={onSelectDLQ}
                 />
               ))}
-            </ul>
+            </div>
           )}
         </section>
       )}
@@ -246,7 +247,7 @@ export default function EntityList({
             <span className="entity-count">{topics.length}</span>
           </h4>
           {!topicsCollapsed && (
-            <ul className="entity-items">
+            <div className="entity-cards-grid">
               {topics.map(topic => (
                 <TopicItem
                   key={topic.name}
@@ -262,7 +263,7 @@ export default function EntityList({
                   onSelectSubscription={onSelectSubscription}
                 />
               ))}
-            </ul>
+            </div>
           )}
         </section>
       )}
@@ -287,20 +288,6 @@ interface QueueItemExpandableProps {
 function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue, onSelectDLQ }: QueueItemExpandableProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasDLQ = entity.deadLetterMessageCount > 0
-  
-  // Determine status indicator
-  const getStatusIndicator = () => {
-    if (entity.deadLetterMessageCount > 0) return { color: 'red', title: 'DLQ messages' }
-    // if (entity.scheduledMessageCount && entity.scheduledMessageCount > 0) return { color: 'yellow', title: 'Scheduled messages' }
-    if (entity.messageCount > 0) return { color: 'green', title: 'Active messages' }
-    return { color: 'gray', title: 'Empty' }
-  }
-  
-  const statusIndicator = getStatusIndicator()
-
-  const handleQueueClick = () => {
-    onSelectQueue(entity)
-  }
 
   const handleExpandClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -308,72 +295,39 @@ function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue,
   }
 
   return (
-    <li className="entity-item queue-item-expandable">
-      <div
-        className={`queue-header ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}`}
-        onClick={handleQueueClick}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            handleQueueClick()
-          }
-        }}
-      >
-        <div className="entity-info">
-          {hasDLQ && (
-            <span 
-              className="expand-icon" 
-              onClick={handleExpandClick}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  handleExpandClick(e as any)
-                }
-              }}
-            >
-              {isExpanded ? '▼' : '▶'}
-            </span>
-          )}
-          <span className={`entity-status-dot ${statusIndicator.color}`} title={statusIndicator.title}>●</span>
-          <span className="entity-icon">📥</span>
-          <span className="entity-name">{entity.name}</span>
-          {hasDLQ && (
-            <span className="dlq-indicator" title="Has dead letter messages">
-              ⚠️ DLQ
-            </span>
+    <div className="queue-card-container">
+      <EntityCard
+        type="queue"
+        name={entity.name}
+        messageCount={entity.messageCount}
+        isSelected={isSelected}
+        isDLQ={false}
+        hasWarning={hasDLQ}
+        onSelect={() => onSelectQueue(entity)}
+      />
+      
+      {hasDLQ && (
+        <div className="dlq-expansion">
+          <button
+            className="dlq-expand-btn"
+            onClick={handleExpandClick}
+            aria-expanded={isExpanded}
+          >
+            {isExpanded ? '▼' : '▶'} DLQ ({entity.deadLetterMessageCount})
+          </button>
+          {isExpanded && (
+            <EntityCard
+              type="queue"
+              name={`${entity.name} (DLQ)`}
+              messageCount={entity.deadLetterMessageCount}
+              isSelected={isDLQSelected}
+              isDLQ={true}
+              onSelect={() => onSelectDLQ(entity)}
+            />
           )}
         </div>
-      </div>
-      
-      {isExpanded && hasDLQ && (
-        <ul className="dlq-list">
-          <li
-            className={`dlq-item ${isDLQSelected ? 'selected' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onSelectDLQ(entity)
-            }}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onSelectDLQ(entity)
-              }
-            }}
-          >
-            <div className="entity-info">
-              <span className="entity-icon dlq-icon">💀</span>
-              <span className="entity-name">Dead Letter Queue</span>
-            </div>
-          </li>
-        </ul>
       )}
-    </li>
+    </div>
   )
 }
 
@@ -401,64 +355,60 @@ function TopicItem({
   onDeleteSubscription,
   onSelectSubscription
 }: TopicItemProps) {
+  const totalMessages = subscriptions.reduce((sum, sub) => sum + sub.messageCount, 0)
+  
   return (
-    <li className="entity-item topic-item">
-      <div
-        className={`topic-header ${isExpanded ? 'expanded' : ''}`}
-        onClick={onToggle}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onToggle()
-          }
-        }}
-      >
-        <div className="entity-info">
-          <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-          <span className="entity-icon">📢</span>
-          <span className="entity-name">{topic.name}</span>
-        </div>
-        <div className="entity-stats">
-          <span className="subscription-count" title="Subscriptions">
-            🔔 {subscriptions.length}
-          </span>
-          <button
-            className="create-temp-sub-btn"
-            onClick={onCreateTempSubscription}
-            title="Create temporary subscription for debugging"
-          >
-            ➕
-          </button>
-        </div>
-      </div>
+    <div className="topic-card-container">
+      <EntityCard
+        type="topic"
+        name={topic.name}
+        messageCount={totalMessages}
+        isSelected={false}
+        isDLQ={false}
+        subscriptionCount={subscriptions.length}
+        onSelect={onToggle}
+        isExpanded={isExpanded}
+      />
       
       {isExpanded && (
-        <ul className="subscription-list">
-          {isLoading && (
-            <li className="subscription-loading-skeleton">
-              <div className="skeleton-line"></div>
-            </li>
-          )}
+        <div className="subscriptions-container">
+          <div className="subscriptions-header">
+            <span className="subscriptions-label">
+              {isLoading ? 'Loading...' : `${subscriptions.length} Subscriptions`}
+            </span>
+            <button
+              className="create-temp-sub-btn-v2"
+              onClick={onCreateTempSubscription}
+              title="Create temporary subscription"
+            >
+              ➕ Temp Sub
+            </button>
+          </div>
+          
           {!isLoading && subscriptions.length === 0 && (
-            <li className="subscription-empty">
-              No subscriptions. Click ➕ to create a temp subscription.
-            </li>
+            <div className="subscriptions-empty">
+              <p>No subscriptions yet</p>
+              <span className="subscriptions-empty-hint">Click ➕ above to create</span>
+            </div>
           )}
-          {!isLoading && subscriptions.map(sub => (
-            <SubscriptionItem
-              key={sub.name}
-              subscription={sub}
-              topicName={topic.name}
-              isSelected={sub.name === selectedSubscriptionName}
-              onSelect={onSelectSubscription}
-              onDelete={onDeleteSubscription}
-            />
-          ))}
-        </ul>
+          
+          {!isLoading && subscriptions.length > 0 && (
+            <div className="subscriptions-list">
+              {subscriptions.map(sub => (
+                <SubscriptionItem
+                  key={sub.name}
+                  subscription={sub}
+                  topicName={topic.name}
+                  isSelected={sub.name === selectedSubscriptionName}
+                  onSelect={onSelectSubscription}
+                  onDelete={onDeleteSubscription}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
-    </li>
+    </div>
   )
 }
 
@@ -472,39 +422,30 @@ interface SubscriptionItemProps {
 
 function SubscriptionItem({ subscription, topicName, isSelected, onSelect, onDelete }: SubscriptionItemProps) {
   const isTemp = subscription.name.startsWith('temp-sub-')
+  const hasDLQ = subscription.deadLetterMessageCount > 0
   
   return (
-    <li
-      className={`subscription-item ${isSelected ? 'selected' : ''}`}
-      onClick={() => onSelect(subscription, topicName)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onSelect(subscription, topicName)
-        }
-      }}
-    >
-      <div className="entity-info">
-        <span className="entity-icon">🔔</span>
-        <span className="entity-name">{subscription.name}</span>
-        {isTemp && <span className="temp-badge" title="Auto-deletes in 15 minutes">⏱️</span>}
-        {subscription.deadLetterMessageCount > 0 && (
-          <span className="dlq-indicator" title="Has dead letter messages">
-            ⚠️ DLQ
-          </span>
-        )}
-      </div>
-      <div className="entity-stats">
-        <button
-          className="delete-sub-btn"
-          onClick={(e) => onDelete(subscription.name, e)}
-          title="Delete subscription"
-        >
-          🗑️
-        </button>
-      </div>
-    </li>
+    <div className="subscription-card-wrapper">
+      <EntityCard
+        type="subscription"
+        name={subscription.name}
+        messageCount={subscription.messageCount}
+        isSelected={isSelected}
+        isDLQ={false}
+        isTemp={isTemp}
+        hasWarning={hasDLQ}
+        onSelect={() => onSelect(subscription, topicName)}
+      />
+      <button
+        className="delete-sub-btn-v2"
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete(subscription.name, e)
+        }}
+        title="Delete subscription"
+      >
+        🗑️
+      </button>
+    </div>
   )
 }

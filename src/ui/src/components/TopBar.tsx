@@ -1,10 +1,12 @@
 /**
- * Top Navigation Bar with Namespace Switcher and Session Status
+ * Top Navigation Bar with Gradient Background and Session Status
+ * Enhanced with vibrant gradients, circular timer, pulsing connection indicator
  */
 
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import { StatusDot } from './StatusDot'
 import { NamespaceSwitcher } from './NamespaceSwitcher'
+import { GradientButton } from './GradientButton'
 import './TopBar.css'
 
 interface TopBarProps {
@@ -27,10 +29,10 @@ export function TopBar({
   const { status } = useSessionV2()
 
   return (
-    <header className="topbar">
+    <header className="topbar-gradient">
       <div className="topbar-content">
         <div className="topbar-left">
-          <h1 className="app-title">Service Bus Inspector</h1>
+          <h1 className="app-title-gradient">Service Bus Inspector</h1>
           {currentNamespace && onSwitchNamespace && (
             <NamespaceSwitcher
               currentNamespace={currentNamespace}
@@ -39,13 +41,13 @@ export function TopBar({
             />
           )}
           {!currentNamespace && (
-            <span className="namespace-count">{namespacesCount} namespace{namespacesCount !== 1 ? 's' : ''}</span>
+            <span className="namespace-count-badge">{namespacesCount} namespace{namespacesCount !== 1 ? 's' : ''}</span>
           )}
         </div>
         <div className="topbar-right">
           {currentNamespace && (
-            <div className="session-status-bar">
-              <span className="session-name">{currentNamespace}</span>
+            <div className="session-status-modern">
+              <span className="session-name-modern">{currentNamespace}</span>
               <StatusDot
                 status={status === 'connected' ? 'connected' : status === 'expired' ? 'expired' : 'connecting'}
                 expiresAtUtc={expiresAtUtc || null}
@@ -54,15 +56,16 @@ export function TopBar({
               />
             </div>
           )}
-          <button
+          <GradientButton
+            variant="primary"
             onClick={onAddNamespace}
-            className="btn-primary"
-            aria-label="Add namespace"
+            icon={<span>+</span>}
           >
-            + Add Namespace
-          </button>
+            Add Namespace
+          </GradientButton>
         </div>
       </div>
     </header>
   )
 }
+

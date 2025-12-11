@@ -1,4 +1,56 @@
-/* Delivery Badge - Color-coded delivery count */
+/* Delivery Badge - Enhanced with emoji indicators */
+.delivery-badge-v2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.delivery-badge-v2:hover {
+  transform: scale(1.05);
+}
+
+.delivery-badge-small {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.delivery-badge-large {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.delivery-badge-green {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.delivery-badge-yellow {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.delivery-badge-red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.delivery-badge-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.delivery-badge-label {
+  font-weight: 600;
+  letter-spacing: 0.025em;
+}
+
+/* Legacy Delivery Badge - Color-coded delivery count */
 .delivery-badge {
   display: inline-flex;
   align-items: center;
@@ -67,3 +119,4 @@
 .delivery-badge.red:hover {
   background: #fecaca;
 }
+
