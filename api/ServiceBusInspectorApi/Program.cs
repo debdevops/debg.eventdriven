@@ -25,7 +25,7 @@ app.MapPost("/api/v1/services/register", (HttpContext ctx) => Results.Ok(new { o
 app.MapPost("/api/v1/sessions/connect", async (KeyVaultService kv, ServiceBusProxy sb, HttpContext ctx) =>
 {
     // Stub: read JSON body { secretName?: string, raw?: string }
-    var req = await System.Text.Json.JsonSerializer.DeserializeAsync<Credentials>(ctx.Request.Body, new System.Text.Json.JsonSerializerOptions
+    var req = await System.Text.Json.JsonSerializer.DeserializeAsync<SessionConnectRequest>(ctx.Request.Body, new System.Text.Json.JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
     });
@@ -33,7 +33,7 @@ app.MapPost("/api/v1/sessions/connect", async (KeyVaultService kv, ServiceBusPro
     var connStr = req?.Raw ?? (req?.SecretName is not null ? kv.GetSecret(req.SecretName) : null);
     // Stub: create session id
     var sessionId = Guid.NewGuid().ToString("N");
-    return Results.Ok(new { sessionId });
+    return Results.Ok(new SessionConnectResponse { SessionId = sessionId });
 });
 
 app.MapGet("/api/v1/session/{id}/entities", (string id) =>
@@ -83,8 +83,13 @@ public class ServiceBusProxy
     }
 }
 
-public class Credentials
+public class SessionConnectRequest
 {
     public string? SecretName { get; set; }
     public string? Raw { get; set; }
+}
+
+public class SessionConnectResponse
+{
+    public string SessionId { get; set; } = string.Empty;
 }
