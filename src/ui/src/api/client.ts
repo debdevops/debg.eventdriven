@@ -39,6 +39,7 @@ class ApiClient {
   }
 
   private currentConnectionString: string | null = null
+  private activeControllers: Set<AbortController> = new Set()
 
   /**
    * Store connection session info
@@ -74,12 +75,24 @@ class ApiClient {
     this.refreshPromise = null
   }
 
+  /** Abort all in-flight HTTP requests */
+  private abortAllRequests() {
+    try {
+      this.activeControllers.forEach(c => {
+        try { c.abort('reconnect:abort') } catch {}
+      })
+    } finally {
+      this.activeControllers.clear()
+    }
+  }
+
   /**
    * Reset client state completely (for reconnect after 401)
    * Clears all cached state and prepares for fresh connection
    */
   resetClient() {
     console.log('[ApiClient] Resetting client state')
+    this.abortAllRequests()
     this.clearCredentials()
     this.lastHeartbeatTime = Date.now()
     this.consecutiveMissedHeartbeats = 0
@@ -154,12 +167,15 @@ class ApiClient {
         // Record heartbeat on successful request
         this.recordHeartbeat()
 
+        const controller = new AbortController()
+        this.activeControllers.add(controller)
         const response = await fetch(url, {
           ...options,
           headers: {
             'Content-Type': 'application/json',
             ...options.headers
-          }
+          },
+          signal: controller.signal
         })
 
         // Handle 401 Unauthorized - trigger single-flight refresh (which throws AuthError)
@@ -233,6 +249,17 @@ class ApiClient {
           console.warn(`[ApiClient] ⚠️  Error on ${endpoint}, retrying in ${backoff}ms...`, error)
           await new Promise(resolve => setTimeout(resolve, backoff))
         }
+      } finally {
+        // cleanup controller from active set
+        this.activeControllers.forEach(c => {
+          if (c.signal === (undefined as any)) return
+        })
+        // remove the last added controller (best-effort)
+        this.activeControllers.forEach(c => {
+          if (c.signal.aborted) {
+            this.activeControllers.delete(c)
+          }
+        })
       }
     }
 

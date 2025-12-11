@@ -22,7 +22,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-  z-index: 150;
+  z-index: 1001;
   transition: all 0.2s ease;
   font-size: 24px;
   padding: 0;
@@ -53,7 +53,7 @@
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.3);
-  z-index: 99;
+  z-index: 1002;
   cursor: pointer;
   animation: fadeIn 0.15s ease;
 }
@@ -76,7 +76,7 @@
   height: 70vh;
   max-height: 85vh;
   background: white;
-  z-index: 100;
+  z-index: 1003;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
@@ -110,8 +110,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  background: linear-gradient(180deg, #f9f9f9 0%, #f2f2f2 100%);
-  border-bottom: 1px solid #e5e5e5;
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+  color: #fff;
+  border-bottom: none;
   flex-shrink: 0;
   height: 60px;
 }
@@ -121,7 +122,7 @@
   padding: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #fff;
   flex: 1;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -134,11 +135,11 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: transparent;
+  background: rgba(255,255,255,0.12);
   border: none;
   cursor: pointer;
   font-size: 20px;
-  color: #666;
+  color: #fff;
   transition: all 0.15s ease;
   padding: 0;
   margin: 0 -4px;
@@ -146,12 +147,12 @@
 }
 
 .drawer-close-button:hover {
-  background-color: rgba(0, 0, 0, 0.06);
-  color: #333;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .drawer-close-button:active {
-  background-color: rgba(0, 0, 0, 0.12);
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
 /* ===== Drawer Content Area ===== */
