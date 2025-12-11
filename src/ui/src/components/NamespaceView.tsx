@@ -163,7 +163,7 @@ export function NamespaceView({
       <div className={`namespace-view ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside 
         className={`left-pane ${sidebarCollapsed ? 'collapsed' : ''}`}
-        style={{ width: sidebarCollapsed ? '64px' : `${sidebarWidth}px` }}
+        style={{ width: sidebarCollapsed ? '40px' : `${sidebarWidth}px` }}
       >
         <button 
           className="sidebar-toggle" 

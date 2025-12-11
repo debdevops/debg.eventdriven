@@ -359,6 +359,17 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
     clearAllTimers
   }
 
+  // Test-only hook: allow forcing session expiry via window event
+  useEffect(() => {
+    if (import.meta.env.VITE_TEST_MODE !== 'true') return
+    const handler = () => {
+      console.log('[Session] Test hook: force session expire')
+      markExpired()
+    }
+    window.addEventListener('sb-expire-session', handler)
+    return () => window.removeEventListener('sb-expire-session', handler)
+  }, [markExpired])
+
   return (
     <SessionContextV2.Provider value={value}>
       {children}

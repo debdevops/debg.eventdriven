@@ -73,8 +73,6 @@ function AppContent({
         }
         
         console.log('[App] Re-establishing connection with backend')
-          // Abort any in-flight requests before reconnect
-          apiClient.resetClient()
         const connectResponse = await apiClient.connect(credentials.connectionString)
         
         // Update apiClient with fresh session credentials
@@ -89,24 +87,12 @@ function AppContent({
         // Now reload entities with the NEW sessionId
         console.log('[App] Loading entities with fresh session')
         const entities = await apiClient.listEntities(connectResponse.sessionId)
-
-        // Hydrate subscriptions for each topic
-        const topicsWithSubs = await Promise.all(
-          entities.topics.map(async (t: any) => {
-            try {
-              const subs = await apiClient.listSubscriptions(connectResponse.sessionId, t.name)
-              return { ...t, type: 'Topic' as const, subscriptions: subs.subscriptions || [] }
-            } catch {
-              return { ...t, type: 'Topic' as const, subscriptions: [] }
-            }
-          })
-        )
-
+        
         // Update namespace with fresh entities
         handleUpdateNamespace(activeNamespace.sessionId, {
           sessionId: connectResponse.sessionId,
           queues: entities.queues,
-          topics: topicsWithSubs
+          topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
         })
         
         console.log('[App] ✓ Metadata reloaded successfully')

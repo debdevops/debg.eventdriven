@@ -43,6 +43,7 @@ export function SessionExpiredModal({
             className="btn btn-primary"
             onClick={onReconnect}
             disabled={isReconnecting}
+            data-test="btn-reconnect"
           >
             {isReconnecting ? (
               <>
@@ -57,6 +58,7 @@ export function SessionExpiredModal({
             className="btn btn-secondary"
             onClick={onSwitchNamespace}
             disabled={isReconnecting}
+            data-test="btn-switch-namespace"
           >
             Switch Namespace
           </button>
