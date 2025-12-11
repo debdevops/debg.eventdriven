@@ -1,97 +1,103 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "build-backend",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/ServiceBusInspectorApi/ServiceBusInspectorApi.csproj",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary;ForceNoAlign"
-      ],
-      "problemMatcher": "$msCompile",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
-    },
-    {
-      "label": "publish-backend",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "publish",
-        "${workspaceFolder}/src/ServiceBusInspectorApi/ServiceBusInspectorApi.csproj",
-        "-c",
-        "Release",
-        "-o",
-        "${workspaceFolder}/src/ServiceBusInspectorApi/bin/Release/net9.0/publish"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": "watch-backend",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "watch",
-        "run",
-        "--project",
-        "${workspaceFolder}/src/ServiceBusInspectorApi/ServiceBusInspectorApi.csproj"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": "install-frontend-dependencies",
-      "type": "shell",
-      "command": "npm install",
-      "options": {
-        "cwd": "${workspaceFolder}/src/ui"
-      }
-    },
-    {
-      "label": "run-frontend",
-      "type": "shell",
-      "command": "npm run dev",
-      "options": {
-        "cwd": "${workspaceFolder}/src/ui"
-      },
-      "problemMatcher": [],
-      "isBackground": true
-    },
-    {
-      "label": "build-frontend",
-      "type": "shell",
-      "command": "npm run build",
-      "options": {
-        "cwd": "${workspaceFolder}/src/ui"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "send-test-messages",
-      "type": "shell",
-      "command": "node send-sample-messages.js ${input:queueName} ${input:messageCount}",
-      "options": {
-        "cwd": "${workspaceFolder}/scripts"
-      },
-      "problemMatcher": []
-    }
-  ],
-  "inputs": [
-    {
-      "id": "queueName",
-      "type": "promptString",
-      "description": "Enter the queue name",
-      "default": "test-queue"
-    },
-    {
-      "id": "messageCount",
-      "type": "promptString",
-      "description": "Enter the number of messages to send",
-      "default": "10"
-    }
-  ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build-backend",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"build",
+				"${workspaceFolder}/src/ServiceBusInspectorApi/ServiceBusInspectorApi.csproj",
+				"/property:GenerateFullPaths=true",
+				"/consoleloggerparameters:NoSummary;ForceNoAlign"
+			],
+			"problemMatcher": "$msCompile",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "publish-backend",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"publish",
+				"${workspaceFolder}/src/ServiceBusInspectorApi/ServiceBusInspectorApi.csproj",
+				"-c",
+				"Release",
+				"-o",
+				"${workspaceFolder}/src/ServiceBusInspectorApi/bin/Release/net9.0/publish"
+			],
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "watch-backend",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"watch",
+				"run",
+				"--project",
+				"${workspaceFolder}/src/ServiceBusInspectorApi/ServiceBusInspectorApi.csproj"
+			],
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "install-frontend-dependencies",
+			"type": "shell",
+			"command": "npm install",
+			"options": {
+				"cwd": "${workspaceFolder}/src/ui"
+			}
+		},
+		{
+			"label": "run-frontend",
+			"type": "shell",
+			"command": "npm run dev",
+			"options": {
+				"cwd": "${workspaceFolder}/src/ui"
+			},
+			"problemMatcher": [],
+			"isBackground": true
+		},
+		{
+			"label": "build-frontend",
+			"type": "shell",
+			"command": "npm run build",
+			"options": {
+				"cwd": "${workspaceFolder}/src/ui"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "send-test-messages",
+			"type": "shell",
+			"command": "node send-sample-messages.js ${input:queueName} ${input:messageCount}",
+			"options": {
+				"cwd": "${workspaceFolder}/scripts"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "free-port-5000-and-restart-backend",
+			"type": "shell",
+			"command": "lsof -ti tcp:5000 | xargs -r kill -9 && sleep 1 && dotnet watch run --project ${workspaceFolder}/src/ServiceBusInspectorApi/ServiceBusInspectorApi.csproj",
+			"isBackground": false
+		}
+	],
+	"inputs": [
+		{
+			"id": "queueName",
+			"type": "promptString",
+			"description": "Enter the queue name",
+			"default": "test-queue"
+		},
+		{
+			"id": "messageCount",
+			"type": "promptString",
+			"description": "Enter the number of messages to send",
+			"default": "10"
+		}
+	]
 }
