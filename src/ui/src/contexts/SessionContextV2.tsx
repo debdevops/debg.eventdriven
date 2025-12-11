@@ -287,13 +287,30 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
         lastError = err as Error
         console.error(`[Session] ✗ Attempt ${attempt} failed:`, err)
 
-        // If it's auth error, don't retry
-        if (err instanceof AuthError && err.reason === 'unauthorized') {
-          console.error('[Session] Auth error - not retrying')
-          break
+        // If it's auth error (401), don't retry - set status immediately
+        if (err instanceof AuthError) {
+          console.error('[Session] Auth error detected - credentials invalid, no retries')
+          
+          const authError: SessionError = {
+            message: err.getUserFriendlyMessage(),
+            reason: err.reason,
+            isAuthError: true,
+            statusCode: err.statusCode,
+            timestamp: err.timestamp
+          }
+          setError(authError)
+          setStatus('auth_required')  // Trigger fresh auth flow
+          setLastErrorTime(Date.now())
+          toast.error(`🔐 ${authError.message}`)
+          
+          reconnectInProgressRef.current = false
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+          console.log('[Session] RECONNECT FLOW END (AUTH ERROR)')
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+          return
         }
 
-        // Continue to next attempt
+        // Continue to next attempt for network errors
         if (attempt < maxAttempts) {
           console.log(`[Session] Retrying (${attempt}/${maxAttempts})...`)
           continue
@@ -301,40 +318,27 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
       }
     }
 
-    // All attempts failed
+    // All attempts failed with network error (AuthError already handled above)
     console.error('[Session] ✗ RECONNECT FAILED after all attempts:', lastError)
 
-    // Handle final error - set timestamp
+    // Set timestamp for error display
     setLastErrorTime(Date.now())
 
-    // Handle final error
-    if (lastError instanceof AuthError) {
-      const authError: SessionError = {
-        message: lastError.getUserFriendlyMessage(),
-        reason: lastError.reason,
-        isAuthError: true,
-        statusCode: lastError.statusCode,
-        timestamp: lastError.timestamp
-      }
-      setError(authError)
-      setStatus('auth_required')  // Changed to auth_required - triggers fresh auth modal
-      toast.error(`🔐 ${authError.message}`)
-    } else {
-      const errorMsg = lastError?.message || 'Unknown error'
-      const genericError: SessionError = {
-        message: `Reconnect failed: ${errorMsg}. Click the Reconnect button to try again.`,
-        reason: 'network_error',
-        isAuthError: false,
-        timestamp: new Date()
-      }
-      setError(genericError)
-      setStatus('disconnected')
-      toast.error(`⚠️ ${genericError.message}`)
+    // Generic network error
+    const errorMsg = lastError?.message || 'Unknown error'
+    const genericError: SessionError = {
+      message: `Reconnect failed: ${errorMsg}. Click the Reconnect button to try again.`,
+      reason: 'network_error',
+      isAuthError: false,
+      timestamp: new Date()
     }
+    setError(genericError)
+    setStatus('disconnected')
+    toast.error(`⚠️ ${genericError.message}`)
 
     reconnectInProgressRef.current = false
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('[Session] RECONNECT FLOW END (FAILED)')
+    console.log('[Session] RECONNECT FLOW END (NETWORK ERROR)')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   }, [status, toast, clearAllTimers, resetIdleActivity])
 

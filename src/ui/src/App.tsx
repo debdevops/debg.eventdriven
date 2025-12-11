@@ -42,95 +42,92 @@ function AppContent({
   handleAddNamespace
 }: any) {
   const { status, error, showIdleCritical, idleSeconds, reconnect, clearError } = useSessionV2()
-  const [dismissedWarning, setDismissedWarning] = useState(false)
-  const [showExpiredModal, setShowExpiredModal] = useState(false)
-  const [showAuthError, setShowAuthError] = useState(false)
+  
+  // Local state for dismissing warnings only
+  const [dismissedIdleWarning, setDismissedIdleWarning] = useState(false)
 
   const activeNamespace = namespaces.find((ns: Namespace) => ns.sessionId === activeNamespaceId)
-  const secondsRemaining = Math.max(0, 180 - idleSeconds) // 3 minutes = 180 seconds
 
-  // Auto-show/hide auth error banner based on session status
-  useEffect(() => {
-    if (error && error.isAuthError) {
-      setShowAuthError(true)
-    } else {
-      setShowAuthError(false)
-    }
-  }, [error])
-
-  // Reset dismissed flag when warning state changes
+  // Auto-close idle warning when activity resumes
   useEffect(() => {
     if (!showIdleCritical) {
-      setDismissedWarning(false)
-    } else {
-      // When critical idle triggered, show expired modal after 2 seconds
-      const timer = setTimeout(() => {
-        setShowExpiredModal(true)
-      }, 2000)
-      return () => clearTimeout(timer)
+      setDismissedIdleWarning(false)
     }
   }, [showIdleCritical])
 
   // Handle reconnect from modal or auth banner
   const handleReconnectFromModal = useCallback(async () => {
-    if (activeNamespace) {
-      // If it's an auth error, require fresh authentication
-      const isAuthError = error?.isAuthError ?? false
-      
-      if (isAuthError) {
-        // For auth errors, force user to enter credentials again
-        console.log('[App] Auth error detected - prompting for fresh credentials')
-        setShowAuthError(false)
-        setShowExpiredModal(false)
-        setShowConnectModal(true)  // Open connect modal for fresh auth
-        // Close the old namespace since credentials are invalid
-        handleCloseNamespace(activeNamespace.sessionId)
-        return
-      }
-      
-      // For network errors, try to reconnect with existing credentials
-      try {
-        await reconnect(activeNamespace.sessionId, async () => {
-          // Reload entities
-          const { apiClient } = await import('./api/client')
-          const entities = await apiClient.listEntities(activeNamespace.sessionId)
-          // Update will happen via handleUpdateNamespace
-          handleUpdateNamespace(activeNamespace.sessionId, {
-            queues: entities.queues,
-            topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
-          })
+    if (!activeNamespace) return
+
+    console.log('[App] Reconnect triggered from modal/banner')
+    
+    try {
+      await reconnect(activeNamespace.sessionId, async () => {
+        // Reload entities
+        const { apiClient } = await import('./api/client')
+        const entities = await apiClient.listEntities(activeNamespace.sessionId)
+        
+        // Update namespace with fresh entities
+        handleUpdateNamespace(activeNamespace.sessionId, {
+          queues: entities.queues,
+          topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
         })
-        setShowExpiredModal(false)
-        setShowAuthError(false)
-      } catch (err) {
-        console.error('Reconnect failed:', err)
-        // Error will be shown in auth banner
-      }
+      })
+      
+      // On success, all modals auto-close via session status change
+      console.log('[App] Reconnect successful')
+      
+    } catch (err) {
+      console.error('[App] Reconnect failed:', err)
+      // Error already handled in SessionContext - will show auth banner or modal
     }
-  }, [activeNamespace, error, reconnect, handleUpdateNamespace, handleCloseNamespace])
+  }, [activeNamespace, reconnect, handleUpdateNamespace])
+
+  // Handle switch namespace - close current and open connect modal
+  const handleSwitchNamespace = useCallback(() => {
+    if (activeNamespace) {
+      handleCloseNamespace(activeNamespace.sessionId)
+    }
+    setShowConnectModal(true)
+  }, [activeNamespace, handleCloseNamespace])
 
   return (
     <div className="app">
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       
-      {/* Auth error banner - shown when 401 or auth failures occur */}
-      {error && error.isAuthError && showAuthError && (
+      {/* Auth error banner - shown when auth fails (status='auth_required') */}
+      {status === 'auth_required' && error && error.isAuthError && (
         <AuthErrorBanner
-          isVisible={showAuthError}
+          isVisible={true}
           message={error.message}
           reason={error.reason}
           statusCode={error.statusCode}
           timestamp={error.timestamp}
           onDismiss={() => {
-            setShowAuthError(false)
             clearError()
+            // Clear error but keep status as auth_required to show fresh auth modal
           }}
           onRetryReconnect={handleReconnectFromModal}
-          isReconnecting={status === 'connecting'}
+          isReconnecting={false}
         />
       )}
       
-      {/* Modal shown when credentials are invalid - requires fresh auth */}
+      {/* Idle warning banner - shown when user is idle but not expired yet */}
+      {showIdleCritical && !dismissedIdleWarning && status === 'connected' && (
+        <IdleWarningBanner
+          secondsRemaining={Math.max(0, 180 - idleSeconds)}
+          onDismiss={() => setDismissedIdleWarning(true)}
+        />
+      )}
+
+      {/* Session Expired Modal - shown when idle timeout expires */}
+      <SessionExpiredModal
+        isOpen={showIdleCritical && status !== 'auth_required'}
+        onReconnect={handleReconnectFromModal}
+        onSwitchNamespace={handleSwitchNamespace}
+      />
+      
+      {/* Re-auth Modal - shown when credentials are invalid (status='auth_required') */}
       {status === 'auth_required' && activeNamespace && !showConnectModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ textAlign: 'center' }}>
@@ -138,11 +135,16 @@ function AppContent({
             <p>Your session credentials are no longer valid. Please provide a fresh connection string.</p>
             <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button className="btn-primary" onClick={() => {
+                // Close current namespace and open fresh connect modal
+                handleCloseNamespace(activeNamespace.sessionId)
                 setShowConnectModal(true)
               }}>
                 Enter Connection String
               </button>
-              <button className="btn-secondary" onClick={() => handleCloseNamespace(activeNamespace.sessionId)}>
+              <button className="btn-secondary" onClick={() => {
+                handleCloseNamespace(activeNamespace.sessionId)
+                clearError()
+              }}>
                 Close Namespace
               </button>
             </div>
@@ -150,28 +152,12 @@ function AppContent({
         </div>
       )}
       
-      {showIdleCritical && !dismissedWarning && (
-        <IdleWarningBanner
-          secondsRemaining={secondsRemaining}
-          onDismiss={() => setDismissedWarning(true)}
-        />
-      )}
-
-      <SessionExpiredModal
-        isOpen={showExpiredModal}
-        onReconnect={handleReconnectFromModal}
-        onSwitchNamespace={() => {
-          setShowExpiredModal(false)
-          setShowConnectModal(true)
-        }}
-      />
-      
       <TopBar
         namespacesCount={namespaces.length}
         currentNamespace={activeNamespace?.friendlyName}
         expiresAtUtc={activeNamespace?.expiresAtUtc}
         onAddNamespace={() => setShowConnectModal(true)}
-        onSwitchNamespace={() => setShowConnectModal(true)}
+        onSwitchNamespace={handleSwitchNamespace}
         onReconnect={handleReconnectFromModal}
       />
 

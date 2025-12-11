@@ -77,7 +77,9 @@ class ApiClient {
 
   /**
    * Single-flight token refresh: ensure only one refresh happens when multiple
-   * requests hit 401 simultaneously. Other requests wait and retry.
+   * requests hit 401 simultaneously. Other requests wait and then throw AuthError.
+   * 
+   * This forces all callers to handle re-authentication at the SessionContext level.
    */
   private async singleFlightRefresh(): Promise<void> {
     if (this.refreshPromise) {
@@ -88,13 +90,13 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        console.log('[ApiClient] 🔄 Starting single-flight token refresh...')
-        // Note: 401 means credentials are invalid. We clear them and let SessionContext handle re-auth.
+        console.log('[ApiClient] 🔄 401 detected - credentials are invalid')
+        // Clear credentials immediately
         this.clearCredentials()
-        console.log('[ApiClient] ✓ Refresh completed (credentials cleared, re-auth required)')
-      } catch (err) {
-        console.error('[ApiClient] ✗ Refresh failed:', err)
-        throw err
+        console.log('[ApiClient] ✓ Credentials cleared - re-authentication required')
+        
+        // Throw AuthError to propagate to SessionContext
+        throw new AuthError('Session credentials are invalid. Re-authentication required.', 'auth', 'unauthorized')
       } finally {
         this.refreshPromise = null
       }
@@ -133,24 +135,21 @@ class ApiClient {
           }
         })
 
-        // Handle 401 Unauthorized - trigger single-flight refresh then retry once
+        // Handle 401 Unauthorized - trigger single-flight refresh (which throws AuthError)
         if (response.status === 401) {
           console.error(`[ApiClient] ⚠️  401 Unauthorized on ${endpoint}`)
           
-          // Single-flight refresh (only one actually happens, others wait)
-          await this.singleFlightRefresh()
-          
-          // After refresh, allow ONE retry of the original request
-          if (attempt === 0) {
-            console.log('[ApiClient] Retrying request after refresh...')
-            attempt++
-            continue
-          } else {
-            // Already retried once, don't retry again
-            console.error('[ApiClient] Still 401 after refresh - authentication failed')
-            const errorText = await response.text().catch(() => 'Unauthorized')
-            throw new AuthError(errorText, endpoint, 'unauthorized')
+          // Single-flight refresh will throw AuthError - don't retry
+          try {
+            await this.singleFlightRefresh()
+          } catch (authErr) {
+            // Propagate AuthError immediately - no retries
+            throw authErr
           }
+          
+          // If we get here, refresh didn't throw (shouldn't happen), still throw 401 error
+          const errorText = await response.text().catch(() => 'Unauthorized')
+          throw new AuthError(errorText, endpoint, 'unauthorized')
         }
 
         // Handle other errors
