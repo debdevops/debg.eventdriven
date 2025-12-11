@@ -49,18 +49,17 @@ app.MapGet("/api/v1/session/{id}/entities", (string id) =>
 
 app.MapGet("/api/v1/stream/{sessionId}/{entityName}", async (string sessionId, string entityName, HttpContext ctx) =>
 {
-    ctx.Response.Headers.Add("Content-Type", "text/event-stream");
+    ctx.Response.Headers.Append("Content-Type", "text/event-stream");
     for (var i = 0; i < 5; i++)
     {
-        await ctx.Response.WriteAsync($"data: {{\\"sequence\\":{i}, \\"entity\\":\\"{entityName}\\"}}\n\n");
+        var payload = System.Text.Json.JsonSerializer.Serialize(new { sequence = i, entity = entityName });
+        await ctx.Response.WriteAsync($"data: {payload}\n\n");
         await ctx.Response.Body.FlushAsync();
         await Task.Delay(1000);
     }
 });
 
 app.Run();
-
-public record Credentials(string? SecretName, string? Raw);
 
 public class KeyVaultService
 {
@@ -82,4 +81,10 @@ public class ServiceBusProxy
     {
         return new[] { "sample-1", "sample-2" };
     }
+}
+
+public class Credentials
+{
+    public string? SecretName { get; set; }
+    public string? Raw { get; set; }
 }
