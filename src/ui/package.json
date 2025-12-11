@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test:e2e": "npx playwright test --project=chromium",
-    "playwright:install": "npx playwright install"
+    "playwright:install": "npx playwright install",
+    "test:unit": "jest --passWithNoTests"
   },
   "dependencies": {
     "axios": "^1.7.7",
@@ -19,6 +20,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -30,7 +32,17 @@
     "eslint": "^9.12.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.12",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.6.2",
     "vite": "^5.4.9"
-  }
+  },
+  "description": "React + TypeScript frontend for the Dynamic Azure Service Bus Inspector.",
+  "main": "jest.config.js",
+  "directories": {
+    "test": "tests"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

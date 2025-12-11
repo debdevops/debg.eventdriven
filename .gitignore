@@ -135,6 +135,8 @@ ipch/
 
 # Visual Studio Trace Files
 *.e2e
+# Local Playwright test env (do not commit)
+.env.test.local
 
 # TFS 2012 Local Workspace
 $tf/

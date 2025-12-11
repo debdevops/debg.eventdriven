@@ -360,16 +360,7 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
         </div>
       </div>
 
-      {/* Corner label for read-only mode and last updated - positioned absolutely */}
-      <div className="corner-label">
-        <span className="corner-label-icon">📖</span>
-        Read-only
-        {lastRefreshTime && (
-          <span style={{ marginLeft: '8px', borderLeft: '1px solid #e1e4e8', paddingLeft: '8px' }}>
-            {lastRefreshTime.toLocaleTimeString()}
-          </span>
-        )}
-      </div>
+      {/* Read-only badge removed intentionally; auto-refresh/pause logic remains intact */}
 
       {/* DLQ explanation banner - simplified one-liner */}
       {isDLQ && (

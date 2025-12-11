@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
+import path from 'path'
+import dotenv from 'dotenv'
+
+// Load optional repo-root test env
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env.test.local') })
 
 export default defineConfig({
   testDir: './tests',
