@@ -45,6 +45,13 @@ export function NamespaceView({
   const [refreshIndicatorVisible, setRefreshIndicatorVisible] = useState(false)
 
   const handleSelectEntity = (entity: Entity) => {
+    // Guard: Prevent navigation if session is not ready
+    if (status === 'connecting' || status === 'auth_required') {
+      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      toast?.warning('Please wait for reconnection to complete')
+      return
+    }
+    
     setSelectedTarget({
       type: 'queue',
       entity,
@@ -54,6 +61,13 @@ export function NamespaceView({
   }
 
   const handleSelectSubscription = (subscription: Subscription, topicName: string) => {
+    // Guard: Prevent navigation if session is not ready
+    if (status === 'connecting' || status === 'auth_required') {
+      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      toast?.warning('Please wait for reconnection to complete')
+      return
+    }
+    
     setSelectedTarget({
       type: 'subscription',
       entity: null,
@@ -65,6 +79,13 @@ export function NamespaceView({
   }
 
   const handleSelectDLQ = (entity: Entity) => {
+    // Guard: Prevent navigation if session is not ready
+    if (status === 'connecting' || status === 'auth_required') {
+      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      toast?.warning('Please wait for reconnection to complete')
+      return
+    }
+    
     setSelectedTarget({
       type: 'dlq',
       entity,
@@ -102,6 +123,15 @@ export function NamespaceView({
   }, [isResizing, handleMouseMove, handleMouseUp])
 
   const handleRefreshEntities = useCallback(async (triggeredByUser = false) => {
+    // Guard: Prevent refresh if session is not ready
+    if (status === 'connecting' || status === 'auth_required') {
+      console.log('[NamespaceView] Refresh blocked: session not ready (status=' + status + ')')
+      if (triggeredByUser) {
+        toast.warning('Please wait for reconnection to complete')
+      }
+      return
+    }
+    
     setRefreshing(true)
     try {
       const entities = await apiClient.listEntities(namespace.sessionId)
@@ -125,7 +155,7 @@ export function NamespaceView({
     } finally {
       setRefreshing(false)
     }
-  }, [namespace.sessionId, onUpdateNamespace, toast])
+  }, [namespace.sessionId, onUpdateNamespace, toast, status])
 
 
   return (

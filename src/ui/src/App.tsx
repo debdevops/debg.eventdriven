@@ -63,15 +63,39 @@ function AppContent({
     
     try {
       await reconnect(activeNamespace.sessionId, async () => {
-        // Reload entities
         const { apiClient } = await import('./api/client')
-        const entities = await apiClient.listEntities(activeNamespace.sessionId)
+        
+        // CRITICAL FIX: Re-establish connection with fresh credentials
+        // This ensures ApiClient has valid sessionId/token for all subsequent requests
+        const credentials = apiClient.getCredentials()
+        if (!credentials?.connectionString) {
+          throw new Error('No connection string available for reconnect')
+        }
+        
+        console.log('[App] Re-establishing connection with backend')
+        const connectResponse = await apiClient.connect(credentials.connectionString)
+        
+        // Update apiClient with fresh session credentials
+        apiClient.setCredentials(connectResponse.sessionId, credentials.connectionString)
+        console.log('[App] ✓ Fresh session established:', connectResponse.sessionId)
+        
+        // Update namespace with new sessionId
+        handleUpdateNamespace(activeNamespace.sessionId, {
+          sessionId: connectResponse.sessionId
+        })
+        
+        // Now reload entities with the NEW sessionId
+        console.log('[App] Loading entities with fresh session')
+        const entities = await apiClient.listEntities(connectResponse.sessionId)
         
         // Update namespace with fresh entities
         handleUpdateNamespace(activeNamespace.sessionId, {
+          sessionId: connectResponse.sessionId,
           queues: entities.queues,
           topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
         })
+        
+        console.log('[App] ✓ Metadata reloaded successfully')
       })
       
       // On success, all modals auto-close via session status change

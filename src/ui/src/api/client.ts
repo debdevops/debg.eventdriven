@@ -38,24 +38,51 @@ class ApiClient {
     this.baseURL = baseURL
   }
 
+  private currentConnectionString: string | null = null
+
   /**
    * Store connection session info
-   * NOTE: We intentionally do NOT store the connection string anymore
-   * When 401 occurs, we throw immediately and let SessionContext handle re-auth flow
-   * This prevents the cascading retry problem where invalid credentials cause infinite loops
+   * IMPORTANT: Store BOTH sessionId AND connectionString
+   * The connectionString is needed to re-establish connection after 401/reconnect
    */
-  setCredentials(sessionId: string, _connectionString: string) {
+  setCredentials(sessionId: string, connectionString: string) {
     this.currentSessionId = sessionId
-    console.log('[ApiClient] Session ID stored:', sessionId)
+    this.currentConnectionString = connectionString
+    console.log('[ApiClient] Credentials stored for session:', sessionId)
   }
 
   /**
-   * Clear stored session info (e.g., on logout)
+   * Get current credentials (for reconnect flow)
+   */
+  getCredentials(): { sessionId: string; connectionString: string } | null {
+    if (this.currentSessionId && this.currentConnectionString) {
+      return {
+        sessionId: this.currentSessionId,
+        connectionString: this.currentConnectionString
+      }
+    }
+    return null
+  }
+
+  /**
+   * Clear stored session info (e.g., on logout or 401)
    */
   clearCredentials() {
     console.log('[ApiClient] Clearing credentials for session:', this.currentSessionId)
     this.currentSessionId = null
+    this.currentConnectionString = null
     this.refreshPromise = null
+  }
+
+  /**
+   * Reset client state completely (for reconnect after 401)
+   * Clears all cached state and prepares for fresh connection
+   */
+  resetClient() {
+    console.log('[ApiClient] Resetting client state')
+    this.clearCredentials()
+    this.lastHeartbeatTime = Date.now()
+    this.consecutiveMissedHeartbeats = 0
   }
 
   /**
