@@ -54,8 +54,8 @@ code {
   overflow: hidden;
   background-color: var(--light);
   position: relative;
-  /* Ensure floating FAB doesn't cover bottom-most content */
-  padding-bottom: 24px;
+  /* Reserve space so FAB/drawer never hides content */
+  padding-bottom: 96px;
 }
 
 /* Empty State */
