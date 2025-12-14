@@ -116,7 +116,6 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
   }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type])
 
   // Track last refresh time
-  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Auto-load messages when entity changes
@@ -126,14 +125,12 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
     setSuccess(null)
     setStreaming(false)
     setToast(null)
-    setLastRefreshTime(null)
     setIsRefreshing(false)
     
     // Immediate load (not silent for initial load)
     const initialLoad = async () => {
       try {
         await loadMessagesOnce(false)
-        setLastRefreshTime(new Date()) // Set timestamp only after successful load
       } catch (err) {
         console.error('Initial load failed:', err)
       }
@@ -161,7 +158,6 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
         isRefreshInProgress = true
         setIsRefreshing(true)
         await loadMessagesOnce(true) // Silent refresh
-        setLastRefreshTime(new Date()) // Update timestamp only after successful fetch
       } catch (err) {
         console.error('[StreamPanel] Auto-refresh failed:', err)
       } finally {

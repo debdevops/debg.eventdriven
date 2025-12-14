@@ -9,25 +9,18 @@ echo "Cleaning up existing processes..."
 pkill -9 -f "dotnet run" 2>/dev/null || true
 pkill -9 -f "node.*vite" 2>/dev/null || true
 
-echo "Cleaning up ports 5000, 5001, 5174, and 7001..."
-lsof -ti :5000 | xargs kill -9 2>/dev/null || true
-lsof -ti :5001 | xargs kill -9 2>/dev/null || true
+echo "Cleaning up ports 5002, 5174, and 7002 (avoiding macOS port 5000)..."
+lsof -ti :5002 | xargs kill -9 2>/dev/null || true
 lsof -ti :5174 | xargs kill -9 2>/dev/null || true
-lsof -ti :7001 | xargs kill -9 2>/dev/null || true
+lsof -ti :7002 | xargs kill -9 2>/dev/null || true
 
 # Wait for ports to be released
 sleep 3
 
 # Verify ports are free
-if lsof -i :5000 > /dev/null 2>&1; then
-    echo "❌ Port 5000 is still in use. Forcing cleanup..."
-    lsof -ti :5000 | xargs kill -9 2>/dev/null || true
-    sleep 2
-fi
-
-if lsof -i :5001 > /dev/null 2>&1; then
-    echo "❌ Port 5001 is still in use. Forcing cleanup..."
-    lsof -ti :5001 | xargs kill -9 2>/dev/null || true
+if lsof -i :5002 > /dev/null 2>&1; then
+    echo "❌ Port 5002 is still in use. Forcing cleanup..."
+    lsof -ti :5002 | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
 
@@ -37,9 +30,9 @@ if lsof -i :5174 > /dev/null 2>&1; then
     sleep 2
 fi
 
-if lsof -i :7001 > /dev/null 2>&1; then
-    echo "❌ Port 7001 is still in use. Forcing cleanup..."
-    lsof -ti :7001 | xargs kill -9 2>/dev/null || true
+if lsof -i :7002 > /dev/null 2>&1; then
+    echo "❌ Port 7002 is still in use. Forcing cleanup..."
+    lsof -ti :7002 | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
 
@@ -60,6 +53,7 @@ fi
 echo "\nStarting Backend API from $BACKEND_DIR..."
 cd "$BACKEND_DIR"
 export ASPNETCORE_ENVIRONMENT=Development
+export ASPNETCORE_URLS="http://localhost:5002;https://localhost:7002"
 dotnet run > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "Backend PID: $BACKEND_PID"
@@ -69,8 +63,8 @@ echo "Waiting for backend to initialize..."
 sleep 5
 
 # Check if backend started successfully
-if grep -q "Now listening on.*:5001" /tmp/backend.log; then
-    echo "✅ Backend started successfully on http://localhost:5001 (HTTP) and https://localhost:7001 (HTTPS)"
+if grep -q "Now listening on.*:5002" /tmp/backend.log; then
+    echo "✅ Backend started successfully on http://localhost:5002 (HTTP) and https://localhost:7002 (HTTPS)"
 else
     echo "❌ Backend failed to start. Check /tmp/backend.log"
     cat /tmp/backend.log
@@ -112,8 +106,14 @@ echo ""
 echo "=========================================="
 echo "✅ All Services Running!"
 echo "=========================================="
-echo "Backend API:  http://localhost:5001 (HTTP) / https://localhost:7001 (HTTPS)"
+echo "Backend API:  http://localhost:5002 (HTTP) / https://localhost:7002 (HTTPS)"
 echo "Frontend UI:  http://localhost:5174"
+echo ""
+echo "📝 Next Steps:"
+echo "1. Open: http://localhost:5174 in your browser"
+echo "2. You will see a form to enter your Service Bus connection string"
+echo "3. Paste your connection string (e.g., Endpoint=sb://...)"
+echo "4. Click 'Connect'"
 echo ""
 echo "Logs:"
 echo "  Backend:  tail -f /tmp/backend.log"

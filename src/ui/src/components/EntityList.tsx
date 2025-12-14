@@ -89,7 +89,24 @@ export default function EntityList({
     return () => clearInterval(interval)
   }, [onRefresh, registerTimer, status])
 
+  // When we regain connection, trigger an immediate refresh to clear any stale errors
+  useEffect(() => {
+    if (status === 'connected') {
+      // Clear local error and force a visible refresh to update counts
+      setError(null)
+      onRefresh(true)
+      // Reload subscriptions for expanded topics to ensure they are fresh
+      expandedTopics.forEach((t) => {
+        loadSubscriptions(t)
+      })
+    }
+  }, [status])
+
   const toggleTopic = async (topicName: string) => {
+    // Prevent toggling while disconnected to avoid errors
+    if (status !== 'connected') {
+      return
+    }
     const isExpanded = expandedTopics.has(topicName)
     
     if (isExpanded) {
@@ -133,6 +150,9 @@ export default function EntityList({
 
   const handleCreateTempSubscription = async (topicName: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (status !== 'connected') {
+      return
+    }
     setError(null)
     
     try {
@@ -146,6 +166,9 @@ export default function EntityList({
 
   const handleDeleteSubscription = async (topicName: string, subscriptionName: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (status !== 'connected') {
+      return
+    }
     
     if (!confirm(`Delete subscription "${subscriptionName}"?`)) {
       return
@@ -218,7 +241,7 @@ export default function EntityList({
             <span className="entity-count">{queues.length}</span>
           </h4>
           {!queuesCollapsed && (
-            <div className="entity-cards-grid">
+            <div className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
               {queues.map(queue => (
                 <QueueItemExpandable
                   key={queue.name}
@@ -247,7 +270,7 @@ export default function EntityList({
             <span className="entity-count">{topics.length}</span>
           </h4>
           {!topicsCollapsed && (
-            <div className="entity-cards-grid">
+            <div className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
               {topics.map(topic => (
                 <TopicItem
                   key={topic.name}
@@ -288,9 +311,11 @@ interface QueueItemExpandableProps {
 function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue, onSelectDLQ }: QueueItemExpandableProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasDLQ = entity.deadLetterMessageCount > 0
+  const { status } = useSessionV2()
 
   const handleExpandClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (status !== 'connected') return
     setIsExpanded(!isExpanded)
   }
 
@@ -303,7 +328,10 @@ function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue,
         isSelected={isSelected}
         isDLQ={false}
         hasWarning={hasDLQ}
-        onSelect={() => onSelectQueue(entity)}
+        onSelect={() => {
+          if (status !== 'connected') return
+          onSelectQueue(entity)
+        }}
       />
       
       {hasDLQ && (
@@ -322,7 +350,10 @@ function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue,
               messageCount={entity.deadLetterMessageCount}
               isSelected={isDLQSelected}
               isDLQ={true}
-              onSelect={() => onSelectDLQ(entity)}
+              onSelect={() => {
+                if (status !== 'connected') return
+                onSelectDLQ(entity)
+              }}
             />
           )}
         </div>
@@ -355,6 +386,7 @@ function TopicItem({
   onDeleteSubscription,
   onSelectSubscription
 }: TopicItemProps) {
+  const { status } = useSessionV2()
   const totalMessages = subscriptions.reduce((sum, sub) => sum + sub.messageCount, 0)
   
   return (
@@ -366,7 +398,10 @@ function TopicItem({
         isSelected={false}
         isDLQ={false}
         subscriptionCount={subscriptions.length}
-        onSelect={onToggle}
+        onSelect={() => {
+          if (status !== 'connected') return
+          onToggle()
+        }}
         isExpanded={isExpanded}
       />
       
@@ -378,7 +413,10 @@ function TopicItem({
             </span>
             <button
               className="create-temp-sub-btn-v2"
-              onClick={onCreateTempSubscription}
+              onClick={(e) => {
+                if (status !== 'connected') return
+                onCreateTempSubscription(e)
+              }}
               title="Create temporary subscription"
             >
               ➕ Temp Sub
@@ -400,8 +438,14 @@ function TopicItem({
                   subscription={sub}
                   topicName={topic.name}
                   isSelected={sub.name === selectedSubscriptionName}
-                  onSelect={onSelectSubscription}
-                  onDelete={onDeleteSubscription}
+                  onSelect={(subscription, topicName) => {
+                    if (status !== 'connected') return
+                    onSelectSubscription(subscription, topicName)
+                  }}
+                  onDelete={(subscriptionName, e) => {
+                    if (status !== 'connected') return
+                    onDeleteSubscription(subscriptionName, e)
+                  }}
                 />
               ))}
             </div>

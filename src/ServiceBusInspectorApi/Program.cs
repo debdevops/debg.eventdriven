@@ -240,7 +240,25 @@ app.MapGet("/api/namespace/{sessionId}/entities", async (string sessionId) =>
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "Failed to list entities for session {SessionId}", sessionId);
-        return Results.Problem("Failed to list entities");
+        
+        // Provide more specific error messages for common issues
+        var errorMessage = ex.InnerException?.Message ?? ex.Message;
+        if (errorMessage.Contains("No such host is known") || errorMessage.Contains("Name or service not known"))
+        {
+            return Results.Problem("Unable to connect to Service Bus namespace. Please check the connection string and ensure the namespace exists.");
+        }
+        else if (errorMessage.Contains("Connection refused") || errorMessage.Contains("actively refused"))
+        {
+            return Results.Problem("Connection refused by Service Bus. Please check your network connectivity and firewall settings.");
+        }
+        else if (errorMessage.Contains("401") || errorMessage.Contains("Unauthorized"))
+        {
+            return Results.Problem("Authentication failed. Please check your connection string credentials.");
+        }
+        else
+        {
+            return Results.Problem($"Failed to list entities: {errorMessage}");
+        }
     }
 })
 .WithName("ListEntities")

@@ -41,23 +41,19 @@ function AppContent({
   handleUpdateNamespace,
   handleAddNamespace
 }: any) {
-  const { status, error, showIdleCritical, idleSeconds, reconnect, clearError } = useSessionV2()
+  const { status, error, showIdleCritical, idleSeconds, reconnect, clearError, markConnected } = useSessionV2()
   
   // Local state for dismissing warnings only
   const [dismissedIdleWarning, setDismissedIdleWarning] = useState(false)
 
   const activeNamespace = namespaces.find((ns: Namespace) => ns.sessionId === activeNamespaceId)
 
-  // Auto-close idle warning when activity resumes
-  useEffect(() => {
-    if (!showIdleCritical) {
-      setDismissedIdleWarning(false)
-    }
-  }, [showIdleCritical])
-
   // Handle reconnect from modal or auth banner
   const handleReconnectFromModal = useCallback(async () => {
-    if (!activeNamespace) return
+    if (!activeNamespace) {
+      console.warn('[App] No active namespace for reconnect')
+      return
+    }
 
     console.log('[App] Reconnect triggered from modal/banner')
     
@@ -79,18 +75,19 @@ function AppContent({
         apiClient.setCredentials(connectResponse.sessionId, credentials.connectionString)
         console.log('[App] ✓ Fresh session established:', connectResponse.sessionId)
         
-        // Update namespace with new sessionId
+        // Update namespace with new sessionId and also set activeNamespaceId
         handleUpdateNamespace(activeNamespace.sessionId, {
-          sessionId: connectResponse.sessionId
+          sessionId: connectResponse.sessionId,
+          expiresAtUtc: connectResponse.expiresAtUtc
         })
+        setActiveNamespaceId(connectResponse.sessionId)
         
         // Now reload entities with the NEW sessionId
         console.log('[App] Loading entities with fresh session')
         const entities = await apiClient.listEntities(connectResponse.sessionId)
         
-        // Update namespace with fresh entities
-        handleUpdateNamespace(activeNamespace.sessionId, {
-          sessionId: connectResponse.sessionId,
+        // Update namespace with fresh entities against the NEW sessionId
+        handleUpdateNamespace(connectResponse.sessionId, {
           queues: entities.queues,
           topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
         })
@@ -100,12 +97,43 @@ function AppContent({
       
       // On success, all modals auto-close via session status change
       console.log('[App] Reconnect successful')
+      toast.success('Reconnected successfully')
       
     } catch (err) {
       console.error('[App] Reconnect failed:', err)
+      toast.error('Reconnect failed. Please try again.')
       // Error already handled in SessionContext - will show auth banner or modal
     }
-  }, [activeNamespace, reconnect, handleUpdateNamespace])
+  }, [activeNamespace, reconnect, handleUpdateNamespace, setActiveNamespaceId, toast])
+
+  // Wire up API client auth error handler to trigger reconnect automatically
+  useEffect(() => {
+    const setupAuthHandler = async () => {
+      const { apiClient } = await import('./api/client')
+      apiClient.setAuthErrorHandler(() => {
+        console.log('[App] Auth error detected by API client, triggering reconnect')
+        if (activeNamespace) {
+          setTimeout(() => handleReconnectFromModal(), 100)
+        }
+      })
+    }
+    setupAuthHandler()
+  }, [activeNamespace, handleReconnectFromModal])
+
+  // Mark connected when we have an active namespace and status is disconnected
+  useEffect(() => {
+    if (activeNamespace && status === 'disconnected') {
+      console.log('[App] Active namespace exists, marking connected')
+      markConnected()
+    }
+  }, [activeNamespace, status, markConnected])
+
+  // Auto-close idle warning when activity resumes
+  useEffect(() => {
+    if (!showIdleCritical) {
+      setDismissedIdleWarning(false)
+    }
+  }, [showIdleCritical])
 
   // Handle switch namespace - close current and open connect modal
   const handleSwitchNamespace = useCallback(() => {
@@ -246,6 +274,7 @@ function App() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
   const [currentEntityName, setCurrentEntityName] = useState<string | null>(null)
+  const [reconnecting, setReconnecting] = useState(false)
   const toast = useToast()
 
   // Global keyboard shortcut listener

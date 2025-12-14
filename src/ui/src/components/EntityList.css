@@ -482,6 +482,13 @@
   padding: 4px 0;
 }
 
+/* Disable interactions visually while disconnected */
+.entity-list.compact .entity-cards-grid.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 /* Queue Card Container with DLQ Expansion */
 .queue-card-container {
   display: flex;

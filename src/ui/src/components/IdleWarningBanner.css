@@ -2,10 +2,10 @@
 
 .idle-warning-glassmorphic {
   position: fixed !important;
-  top: 80px !important;
+  top: 68px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  z-index: 9000 !important;
+  z-index: 9999 !important;
   width: 600px !important;
   max-width: 90vw !important;
   background: rgba(255, 255, 255, 0.95) !important;

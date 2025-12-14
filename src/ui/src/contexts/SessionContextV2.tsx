@@ -44,6 +44,8 @@ interface SessionContextType {
   clearError: () => void
   resetActivity: () => void
   markExpired: () => void
+  markConnected: () => void
+  triggerReconnect: () => void  // Simple reconnect trigger for components
   
   // Timer management
   registerTimer: (name: string, timerId: NodeJS.Timeout) => void
@@ -70,9 +72,10 @@ const RECONNECT_BACKOFF_MAX = 8000 // 8 seconds
 
 export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   // Core connection state
-  const [status, setStatus] = useState<SessionStatus>('connected')
+  // Start in 'disconnected' until a successful connect occurs to avoid premature expiry/heartbeats
+  const [status, setStatus] = useState<SessionStatus>('disconnected')
   const [error, setError] = useState<SessionError | null>(null)
-  const [connectedAt, setConnectedAt] = useState<Date | null>(new Date())
+  const [connectedAt, setConnectedAt] = useState<Date | null>(null)
   const [lastErrorTime, setLastErrorTime] = useState<number | null>(null)
   
   // Idle state
@@ -149,6 +152,24 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
 
   // Mark session expired
   const markExpired = useCallback(() => {
+    setStatus('expired')
+  }, [])
+
+  // Mark session connected (after successful connect)
+  const markConnected = useCallback(() => {
+    setStatus('connected')
+    setConnectedAt(new Date())
+    setShowIdleWarning(false)
+    setShowIdleCritical(false)
+    toastShownRef.current = false
+    criticalShownRef.current = false
+  }, [])
+
+  // Trigger reconnect (simple wrapper that components can call)
+  const triggerReconnect = useCallback(() => {
+    console.log('[Session] triggerReconnect() called')
+    // This will be wired up by AppContent to call handleReconnectFromModal
+    // For now, just mark as expired to show modal
     setStatus('expired')
   }, [])
 
@@ -234,24 +255,13 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
     setShowIdleWarning(false)
     setShowIdleCritical(false)
 
-    const maxAttempts = 5
+    const maxAttempts = 1 // Single attempt only - no retries to avoid toast spam
     let lastError: Error | null = null
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        // Calculate backoff: 500ms, 1s, 2s, 4s, 8s
-        const backoff = Math.min(
-          RECONNECT_BACKOFF_INITIAL * Math.pow(2, attempt - 1),
-          RECONNECT_BACKOFF_MAX
-        )
-
-        if (attempt > 1) {
-          console.log(`[Session] Attempt ${attempt}/${maxAttempts}, waiting ${backoff}ms...`)
-          await new Promise(resolve => setTimeout(resolve, backoff))
-        }
-
         console.log(`[Session] Attempt ${attempt}/${maxAttempts}: Reconnecting...`)
-        toast.info(`Reconnecting... (attempt ${attempt}/${maxAttempts})`)
+        // Don't show toast for every attempt - only show final success/failure
 
         // Step 1: Clear all existing timers/intervals
         clearAllTimers()
@@ -355,6 +365,8 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
     clearError,
     resetActivity,
     markExpired,
+    markConnected,
+    triggerReconnect,
     registerTimer,
     clearAllTimers
   }

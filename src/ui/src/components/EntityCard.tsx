@@ -3,7 +3,6 @@
  * Gradient backgrounds, message count badges, pulsing status indicators
  */
 
-import { StatusDot } from './StatusDot'
 import './EntityCard.css'
 
 interface EntityCardProps {
@@ -61,23 +60,15 @@ export default function EntityCard({
     }
   }
 
-  const getStatusColor = (): 'green' | 'gray' | 'red' => {
-    if (hasWarning) return 'red'
-    if (messageCount > 0) return 'green'
-    return 'gray'
-  }
-
   return (
     <div
       onClick={onSelect}
       className={`entity-card ${getGradientClass()} ${isSelected ? 'entity-card-selected' : ''} ${isExpanded ? 'entity-card-expanded' : ''}`}
       title={name}
     >
-      {/* Status dot with pulse */}
-      <div className="entity-card-status-dot">
-        <StatusDot color={getStatusColor()} pulse={messageCount > 0} />
-      </div>
-
+      {isSelected && (
+        <span className="entity-card-selected-badge" aria-label="Selected">✓</span>
+      )}
       {/* Message count badge */}
       {messageCount > 0 && (
         <div className="entity-card-badge">

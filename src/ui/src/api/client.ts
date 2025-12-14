@@ -33,12 +33,22 @@ class ApiClient {
   private refreshPromise: Promise<void> | null = null
   private lastHeartbeatTime: number = Date.now()
   private consecutiveMissedHeartbeats: number = 0
+  private onAuthError: (() => void) | null = null  // Callback to trigger reconnect
 
   constructor(baseURL: string) {
     this.baseURL = baseURL
   }
 
   private currentConnectionString: string | null = null
+
+  /**
+   * Register callback for auth errors (401)
+   * This will be called when 401 is detected to trigger reconnect flow
+   */
+  setAuthErrorHandler(handler: () => void) {
+    this.onAuthError = handler
+    console.log('[ApiClient] Auth error handler registered')
+  }
 
   /**
    * Store connection session info
@@ -118,9 +128,16 @@ class ApiClient {
     this.refreshPromise = (async () => {
       try {
         console.log('[ApiClient] 🔄 401 detected - credentials are invalid')
-        // Clear credentials immediately
-        this.clearCredentials()
-        console.log('[ApiClient] ✓ Credentials cleared - re-authentication required')
+        
+        // Trigger reconnect if handler is registered
+        if (this.onAuthError) {
+          console.log('[ApiClient] Triggering reconnect via registered handler')
+          this.onAuthError()
+        }
+        
+        // DON'T clear credentials here - let reconnect flow handle it
+        // Reconnect needs access to the connection string
+        console.log('[ApiClient] Waiting for reconnect to complete...')
         
         // Throw AuthError to propagate to SessionContext
         throw new AuthError('Session credentials are invalid. Re-authentication required.', 'auth', 'unauthorized')
