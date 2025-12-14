@@ -292,29 +292,6 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
         </div>
 
         <div className="action-buttons-compact">
-          {/* Disabled primary action buttons */}
-          <button
-            className="btn-compact btn-disabled"
-            disabled
-            title={status === 'connecting' ? "Disabled during reconnect" : isSessionExpired ? "Reconnect to enable this action" : "Feature disabled - Read-only mode active"}
-          >
-            🔍 Peek
-          </button>
-          <button
-            className="btn-compact btn-disabled"
-            disabled
-            title={status === 'connecting' ? "Disabled during reconnect" : isSessionExpired ? "Reconnect to enable this action" : "Feature disabled - Read-only mode active"}
-          >
-            📤 Stream
-          </button>
-          <button
-            className="btn-compact btn-disabled"
-            disabled
-            title={isSessionExpired ? "Reconnect to enable this action" : "Compare available in advanced mode"}
-          >
-            ⚖️ Compare Q/DLQ
-          </button>
-          
           {/* Auto Mode badge */}
           {!frozenSnapshot && (
             <div className="auto-mode-badge" title="Auto-refresh active - refreshes every 10 seconds">
@@ -329,7 +306,7 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
             onClick={handlePeekNow}
             className="btn-compact btn-primary"
             disabled={loading || isRefreshing}
-            title="Manually refresh messages now"
+            title="Manually refresh messages now (R)"
           >
             🔄 Refresh
           </button>

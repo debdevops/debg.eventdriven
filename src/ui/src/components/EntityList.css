@@ -288,6 +288,8 @@
   align-items: center;
   gap: 6px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .entity-icon {
@@ -312,6 +314,10 @@
 .entity-name {
   font-weight: 500;
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .dlq-indicator {

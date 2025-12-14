@@ -105,18 +105,9 @@ export function ActionToolbar({
           </div>
         )}
 
-        {/* Message actions */}
-        <div className="toolbar-group">
-          <button
-            className="toolbar-btn primary"
-            onClick={onRefresh}
-            disabled={refreshing || loading}
-            title="Refresh messages (R)"
-          >
-            {refreshing ? '⟳' : '🔄'} Refresh
-          </button>
-
-          {onToggleSnapshot && (
+        {/* Snapshot control */}
+        {onToggleSnapshot && (
+          <div className="toolbar-group">
             <button
               className={`toolbar-btn ${frozenSnapshot ? 'active' : ''}`}
               onClick={onToggleSnapshot}
@@ -124,8 +115,8 @@ export function ActionToolbar({
             >
               {frozenSnapshot ? '❄️ Frozen' : '📷 Snapshot'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Bulk actions - only show when messages selected */}
         {selectedCount > 0 && (
