@@ -17,7 +17,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import type { MessageEnvelope } from '../types';
 
 // Configuration constants - TUNE THESE FOR YOUR NEEDS
-const BATCH_DELAY_MS = 250; // Message batching window
+const BATCH_DELAY_MS = 50; // Message batching window
 const INITIAL_BACKOFF_MS = 500; // First retry delay
 const MAX_FAST_RETRIES = 5; // Number of exponential backoff attempts
 const SLOW_RETRY_INTERVAL_MS = 30000; // Retry every 30s after fast retries

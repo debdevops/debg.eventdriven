@@ -140,7 +140,7 @@ public class ServiceBusStreamer
                 {
                     // No messages, send heartbeat and wait
                     await SendSseEventAsync(writer, "heartbeat", new { timestamp = DateTime.UtcNow });
-                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -173,7 +173,7 @@ public class ServiceBusStreamer
         {
             try
             {
-                var messages = await receiver.ReceiveMessagesAsync(batch, TimeSpan.FromSeconds(5), cancellationToken);
+                var messages = await receiver.ReceiveMessagesAsync(batch, TimeSpan.FromSeconds(1), cancellationToken);
 
                 if (messages.Any())
                 {
@@ -233,7 +233,7 @@ public class ServiceBusStreamer
                 }
 
                 // Wait before next poll
-                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

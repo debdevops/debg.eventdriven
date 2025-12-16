@@ -15,6 +15,7 @@ import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
 import { IdleWarningBanner } from './components/IdleWarningBanner'
 import { AuthErrorBanner } from './components/AuthErrorBanner'
 import { SessionExpiredModal } from './components/SessionExpiredModal'
+import { ReauthModal } from './components/ReauthModal'
 import { useToast } from './hooks/useToast'
 import { SessionProviderV2, useSessionV2 } from './contexts/SessionContextV2'
 import type { Namespace, AuditEntry } from './types'
@@ -179,30 +180,21 @@ function AppContent({
         onSwitchNamespace={handleSwitchNamespace}
       />
       
-      {/* Re-auth Modal - shown when credentials are invalid (status='auth_required') */}
-      {status === 'auth_required' && activeNamespace && !showConnectModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ textAlign: 'center' }}>
-            <h2>🔐 Re-Authentication Required</h2>
-            <p>Your session credentials are no longer valid. Please provide a fresh connection string.</p>
-            <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button className="btn-primary" onClick={() => {
-                // Close current namespace and open fresh connect modal
-                handleCloseNamespace(activeNamespace.sessionId)
-                setShowConnectModal(true)
-              }}>
-                Enter Connection String
-              </button>
-              <button className="btn-secondary" onClick={() => {
-                handleCloseNamespace(activeNamespace.sessionId)
-                clearError()
-              }}>
-                Close Namespace
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ReauthModal
+        isOpen={status === 'auth_required' && !!activeNamespace && !showConnectModal}
+        onEnterConnectionString={() => {
+          if (activeNamespace) {
+            handleCloseNamespace(activeNamespace.sessionId);
+            setShowConnectModal(true);
+          }
+        }}
+        onCloseNamespace={() => {
+          if (activeNamespace) {
+            handleCloseNamespace(activeNamespace.sessionId);
+            clearError();
+          }
+        }}
+      />
       
       <TopBar
         namespacesCount={namespaces.length}
