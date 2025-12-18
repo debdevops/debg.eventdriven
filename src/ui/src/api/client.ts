@@ -412,6 +412,93 @@ class ApiClient {
     }
     return this.request(url, { method: 'GET' })
   }
+
+  /**
+   * Generate test messages with controlled anomalies for AI analysis
+   */
+  async generateMessages(
+    sessionId: string,
+    count: number,
+    queueName?: string,
+    topicName?: string,
+    targetType: 'Queue' | 'Topic' | 'Both' = 'Queue',
+    includeDlqTestCases = true
+  ): Promise<{
+    totalGenerated: number
+    anomalousCount: number
+    dlqCandidates: number
+    errors: string[]
+    success: boolean
+  }> {
+    return this.request(`/api/messages/generate?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        count,
+        queueName,
+        topicName,
+        targetType,
+        includeDlqTestCases
+      })
+    })
+  }
+
+  /**
+   * Analyze messages using AI Insights service
+   */
+  async analyzeMessages(
+    sessionId: string,
+    queueName: string,
+    maxSampleSize = 100,
+    includeDlq = true
+  ): Promise<{
+    activeQueueAnalysis?: {
+      source: string
+      totalMessages: number
+      clusters: Array<{
+        eventType: string
+        size: number
+        sampleMessage: any
+        commonFields: string[]
+      }>
+      outliers: Array<{
+        messageId: string
+        eventType: string
+        anomalyType: string
+        description: string
+        source: string
+      }>
+      processingTimeMs: number
+    }
+    dlqAnalysis?: {
+      source: string
+      totalMessages: number
+      clusters: Array<{
+        eventType: string
+        size: number
+        sampleMessage: any
+        commonFields: string[]
+      }>
+      outliers: Array<{
+        messageId: string
+        eventType: string
+        anomalyType: string
+        description: string
+        source: string
+      }>
+      processingTimeMs: number
+    }
+    summary: string
+    analyzedAt: string
+  }> {
+    return this.request(`/api/messages/analyze?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        queueName,
+        maxSampleSize,
+        includeDlq
+      })
+    })
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL)

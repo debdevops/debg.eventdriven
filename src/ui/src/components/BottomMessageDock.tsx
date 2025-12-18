@@ -4,7 +4,7 @@
  * No separate collapsed bar - cleaner UI
  */
 
-import React, { useState, useRef } from 'react'
+import React, { useRef } from 'react'
 import { MessageSender } from './MessageSender'
 import './BottomMessageDock.css'
 
@@ -12,67 +12,53 @@ interface BottomMessageDockProps {
   sessionId: string | null
   entities?: Array<{ name: string; type: string }>
   currentEntity?: string
+  isOpen?: boolean
+  onClose?: () => void
 }
 
 export default function BottomMessageDock({
   sessionId,
   entities = [],
-  currentEntity
+  currentEntity,
+  isOpen = false,
+  onClose
 }: BottomMessageDockProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
   const dockRef = useRef<HTMLDivElement>(null)
 
   // Auto-close callback for MessageSender
   const handleMessageSent = () => {
     // Close drawer 1 second after successful send
     setTimeout(() => {
-      setIsExpanded(false)
+      onClose?.()
     }, 1000)
   }
 
   // Close on Escape key
   React.useEffect(() => {
-    if (!isExpanded) return
+    if (!isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setIsExpanded(false)
+        onClose?.()
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isExpanded])
+  }, [isOpen, onClose])
 
   // Handle backdrop click to close
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
-      setIsExpanded(false)
+      onClose?.()
     }
   }
 
-  // Handle open trigger - could be from FAB or other trigger
-  const handleOpenDrawer = () => {
-    setIsExpanded(true)
-  }
+  if (!isOpen) return null
 
   return (
     <>
-      {/* Floating Action Button - only shown when drawer is closed */}
-      {!isExpanded && (
-        <button
-          className="drawer-fab"
-          onClick={handleOpenDrawer}
-          title="Click to open Send Message drawer (Esc to close)"
-          aria-label="Open Send Message drawer"
-        >
-          <span className="fab-icon">✉</span>
-        </button>
-      )}
-
       {/* Drawer Overlay - fixed position overlay with backdrop */}
-      {isExpanded && (
-        <>
           {/* Backdrop - dims background, allows click-to-close */}
           <div 
             className="drawer-backdrop" 
@@ -90,7 +76,7 @@ export default function BottomMessageDock({
               <h3 className="drawer-title">Send Message to Service Bus</h3>
               <button
                 className="drawer-close-button"
-                onClick={() => setIsExpanded(false)}
+                onClick={onClose}
                 title="Close drawer (Esc)"
                 aria-label="Close Send Message drawer"
               >
@@ -107,8 +93,6 @@ export default function BottomMessageDock({
             </div>
           </div>
         </>
-      )}
-    </>
   )
 }
 

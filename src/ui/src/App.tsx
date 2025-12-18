@@ -10,6 +10,8 @@ import { NamespaceView } from './components/NamespaceView'
 import { ConnectModal } from './components/ConnectModal'
 import { AuditPanel } from './components/AuditPanel'
 import BottomMessageDock from './components/BottomMessageDock'
+import MultiFab from './components/MultiFab'
+import GenerateMessagesModal from './components/GenerateMessagesModal'
 import { ToastContainer } from './components/Toast'
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
 import { IdleWarningBanner } from './components/IdleWarningBanner'
@@ -18,6 +20,7 @@ import { SessionExpiredModal } from './components/SessionExpiredModal'
 import { ReauthModal } from './components/ReauthModal'
 import { useToast } from './hooks/useToast'
 import { SessionProviderV2, useSessionV2 } from './contexts/SessionContextV2'
+import { apiClient } from './api/client'
 import type { Namespace, AuditEntry } from './types'
 import './App.css'
 
@@ -46,6 +49,13 @@ function AppContent({
   
   // Local state for dismissing warnings only
   const [dismissedIdleWarning, setDismissedIdleWarning] = useState(false)
+  
+  // AI Insights state
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [showMessageDrawer, setShowMessageDrawer] = useState(false)
+  const [aiInsights, setAiInsights] = useState<any>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiCacheTime, setAiCacheTime] = useState<number>(0)
 
   const activeNamespace = namespaces.find((ns: Namespace) => ns.sessionId === activeNamespaceId)
 
@@ -144,6 +154,79 @@ function AppContent({
     setShowConnectModal(true)
   }, [activeNamespace, handleCloseNamespace])
 
+  // Handle successful message generation
+  const handleGenerateSuccess = useCallback((result: { totalGenerated: number; anomalousCount: number; dlqCandidates: number }) => {
+    toast.success(
+      `Generated ${result.totalGenerated} messages (${result.anomalousCount} anomalies, ${result.dlqCandidates} DLQ candidates)`
+    )
+    
+    // Trigger auto-refresh of entities to update message counts
+    // The NamespaceView will handle this
+    
+    // Auto-run AI analysis after 1 second if we have 100+ messages
+    if (result.totalGenerated >= 100 && currentEntityName) {
+      setTimeout(() => {
+        handleRunAiAnalysis()
+      }, 1000)
+    }
+  }, [toast, currentEntityName])
+
+  // Handle AI analysis
+  const handleRunAiAnalysis = useCallback(async () => {
+    if (!activeNamespace || !currentEntityName) {
+      toast.warning('Please select a queue first')
+      return
+    }
+
+    // Check cache (5 minute expiry)
+    const now = Date.now()
+    if (aiInsights && (now - aiCacheTime) < 5 * 60 * 1000) {
+      toast.info('Using cached AI analysis (less than 5 minutes old)')
+      return
+    }
+
+    setAiLoading(true)
+    try {
+      const result = await apiClient.analyzeMessages(
+        activeNamespace.sessionId,
+        currentEntityName,
+        100, // Sample size
+        true  // Include DLQ
+      )
+
+      setAiInsights(result)
+      setAiCacheTime(now)
+      
+      const totalOutliers = 
+        (result.activeQueueAnalysis?.outliers.length || 0) + 
+        (result.dlqAnalysis?.outliers.length || 0)
+      
+      if (totalOutliers > 0) {
+        toast.warning(`AI detected ${totalOutliers} anomalies`)
+      } else {
+        toast.success('AI analysis complete - no anomalies detected')
+      }
+
+      addAuditEntry({
+        timestamp: new Date().toISOString(),
+        sessionId: activeNamespace.sessionId,
+        entityName: currentEntityName,
+        operation: 'AI Analysis'
+      })
+    } catch (err: any) {
+      console.error('AI analysis failed:', err)
+      toast.error(err.message || 'AI analysis failed')
+    } finally {
+      setAiLoading(false)
+    }
+  }, [activeNamespace, currentEntityName, aiInsights, aiCacheTime, toast, addAuditEntry])
+
+  // Clear AI insights when entity changes
+  useEffect(() => {
+    setAiInsights(null)
+    setAiCacheTime(0)
+  }, [currentEntityName])
+
   return (
     <div className="app">
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
@@ -224,6 +307,10 @@ function AppContent({
             onAudit={addAuditEntry}
             onEntitySelect={setCurrentEntityName}
             toast={toast}
+            onAiInsights={handleRunAiAnalysis}
+            aiInsightsLoading={aiLoading}
+            hasAiInsights={!!aiInsights}
+            aiInsights={aiInsights}
           />
         ) : (
           <div className="empty-state">
@@ -238,11 +325,34 @@ function AppContent({
 
       <AuditPanel entries={auditLog} />
 
-      <BottomMessageDock 
-        sessionId={activeNamespace?.sessionId || null}
-        entities={activeNamespace ? [...activeNamespace.queues, ...activeNamespace.topics] : []}
-        currentEntity={currentEntityName || undefined}
-      />
+      {/* Multi-Action FAB - always visible when namespace is active */}
+      {activeNamespace && (
+        <>
+          <MultiFab
+            onSendMessage={() => setShowMessageDrawer(true)}
+            onGenerateMessages={() => setShowGenerateModal(true)}
+          />
+          
+          {/* Message Drawer - opened by FAB */}
+          <BottomMessageDock 
+            sessionId={activeNamespace.sessionId}
+            entities={[...activeNamespace.queues, ...activeNamespace.topics]}
+            currentEntity={currentEntityName || undefined}
+            isOpen={showMessageDrawer}
+            onClose={() => setShowMessageDrawer(false)}
+          />
+          
+          {/* Generate Messages Modal */}
+          <GenerateMessagesModal
+            isOpen={showGenerateModal}
+            onClose={() => setShowGenerateModal(false)}
+            sessionId={activeNamespace.sessionId}
+            entities={[...activeNamespace.queues, ...activeNamespace.topics]}
+            currentEntity={currentEntityName || undefined}
+            onSuccess={handleGenerateSuccess}
+          />
+        </>
+      )}
 
       {showConnectModal && (
         <ConnectModal
@@ -266,7 +376,6 @@ function App() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
   const [currentEntityName, setCurrentEntityName] = useState<string | null>(null)
-  const [reconnecting, setReconnecting] = useState(false)
   const toast = useToast()
 
   // Global keyboard shortcut listener

@@ -16,6 +16,10 @@ interface NamespaceViewProps {
   onAudit: (entry: AuditEntry) => void
   onEntitySelect?: (entityName: string) => void
   toast: any
+  onAiInsights?: () => void
+  aiInsightsLoading?: boolean
+  hasAiInsights?: boolean
+  aiInsights?: any
 }
 
 interface SelectedTarget {
@@ -31,7 +35,11 @@ export function NamespaceView({
   onUpdateNamespace,
   onAudit,
   onEntitySelect,
-  toast
+  toast,
+  onAiInsights,
+  aiInsightsLoading,
+  hasAiInsights,
+  aiInsights
 }: NamespaceViewProps) {
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -203,6 +211,10 @@ export function NamespaceView({
             selectedTarget={selectedTarget}
             onAudit={onAudit}
             isSessionExpired={status === 'expired'}
+            onAiInsights={onAiInsights}
+            aiInsightsLoading={aiInsightsLoading}
+            hasAiInsights={hasAiInsights}
+            aiInsights={aiInsights}
           />
         ) : (
           <div className="empty-selection">

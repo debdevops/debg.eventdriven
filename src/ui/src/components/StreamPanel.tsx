@@ -11,6 +11,8 @@ import MessageTable from './MessageTable'
 import { MetricsPanel } from './MetricsPanel'
 import RulesPanel from './RulesPanel'
 import { MessageTableSkeleton } from './MessageTableSkeleton'
+import { UnifiedInspector, InspectorMode } from './UnifiedInspector'
+import { MessageDetailPanel } from './MessageDetailPanel'
 import type { Entity, Subscription, MessageEnvelope, StreamMode, AuditEntry } from '../types'
 import './StreamPanel.css'
 
@@ -27,9 +29,22 @@ interface StreamPanelProps {
   selectedTarget: SelectedTarget
   onAudit: (entry: AuditEntry) => void
   isSessionExpired?: boolean
+  onAiInsights?: () => void
+  aiInsightsLoading?: boolean
+  hasAiInsights?: boolean
+  aiInsights?: any
 }
 
-export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSessionExpired = false }: StreamPanelProps) {
+export default function StreamPanel({ 
+  sessionId, 
+  selectedTarget, 
+  onAudit, 
+  isSessionExpired = false,
+  onAiInsights,
+  aiInsightsLoading,
+  hasAiInsights,
+  aiInsights
+}: StreamPanelProps) {
   const mode: StreamMode = 'peek' // Read-only mode
   const { status, registerTimer } = useSessionV2()
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
@@ -38,8 +53,12 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  const [showRules, setShowRules] = useState(false)
   const [frozenSnapshot, setFrozenSnapshot] = useState(false)
+  const [showRules, setShowRules] = useState(false)
+  
+  // Unified Inspector state
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>('closed')
+  const [selectedMessage, setSelectedMessage] = useState<MessageEnvelope | null>(null)
 
   // Get entity name and subscription name based on target type
   const entityName = selectedTarget.type === 'queue' || selectedTarget.type === 'dlq'
@@ -381,9 +400,19 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
           entityName={entityName}
           subscriptionName={subscriptionName}
           isDLQ={isDLQ}
+          dlqCount={selectedTarget.entity?.deadLetterMessageCount || 0}
           onRefresh={handlePeekNow}
           frozenSnapshot={frozenSnapshot}
           onToggleSnapshot={() => setFrozenSnapshot(!frozenSnapshot)}
+          onAiInsights={() => {
+            setInspectorMode('ai-insights')
+            if (onAiInsights) onAiInsights()
+          }}
+          aiInsightsLoading={aiInsightsLoading}
+          hasAiInsights={hasAiInsights}
+          onMessageSelect={(message) => {
+            setSelectedMessage(message)
+          }}
         />
       )}
       
@@ -394,6 +423,46 @@ export default function StreamPanel({ sessionId, selectedTarget, onAudit, isSess
           topicName={selectedTarget.topicName!}
           subscriptionName={selectedTarget.subscription!.name}
           onClose={() => setShowRules(false)}
+        />
+      )}
+
+      {/* Unified Inspector Panel */}
+      <UnifiedInspector
+        mode={inspectorMode}
+        aiInsights={aiInsights}
+        sessionId={sessionId}
+        entityName={entityName}
+        subscriptionName={subscriptionName}
+        isDLQ={isDLQ}
+        onClose={() => {
+          setInspectorMode('closed')
+        }}
+        onMessageSelect={(message) => setSelectedMessage(message)}
+        onAiRefresh={onAiInsights}
+      />
+
+      {/* Message Detail (Right-side modal, restored) */}
+      {selectedMessage && (
+        <MessageDetailPanel
+          message={selectedMessage}
+          messages={messages}
+          onClose={() => setSelectedMessage(null)}
+          onPrevious={() => {
+            const currentIndex = messages.findIndex((m) =>
+              (m.messageId && selectedMessage.messageId && m.messageId === selectedMessage.messageId) ||
+              (m.sequenceNumber !== undefined && m.sequenceNumber === selectedMessage.sequenceNumber)
+            )
+            const safeIndex = currentIndex >= 0 ? currentIndex : 0
+            if (safeIndex > 0) setSelectedMessage(messages[safeIndex - 1])
+          }}
+          onNext={() => {
+            const currentIndex = messages.findIndex((m) =>
+              (m.messageId && selectedMessage.messageId && m.messageId === selectedMessage.messageId) ||
+              (m.sequenceNumber !== undefined && m.sequenceNumber === selectedMessage.sequenceNumber)
+            )
+            const safeIndex = currentIndex >= 0 ? currentIndex : 0
+            if (safeIndex < messages.length - 1) setSelectedMessage(messages[safeIndex + 1])
+          }}
         />
       )}
     </div>

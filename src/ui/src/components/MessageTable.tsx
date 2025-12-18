@@ -1,13 +1,17 @@
 /**
  * Message Table Component with selection, sorting, actions, DLQ replay, and export
- * Enhanced with: ActionToolbar, DeliveryBadge, MessageDetailPanel, Select Mode
+ * Enhanced with: ActionToolbar, DeliveryBadge, Pagination, Select Mode
  */
 
 import { useState, useMemo } from 'react'
 import { ActionToolbar } from './ActionToolbar'
 import { DeliveryBadge } from './DeliveryBadge'
-import { MessageDetailPanel } from './MessageDetailPanel'
+import { Pagination } from './Pagination'
+import { QueueHealthHeader } from './QueueHealthHeader'
+import { MessageAgeDistribution } from './MessageAgeDistribution'
+import { EventTypeChip } from './EventTypeChip'
 import { formatTimestamp, formatRelativeTime, truncate } from '../utils/formatters'
+import { extractEventType, type AgeDistribution } from '../utils/eventTypeExtractor'
 import { API_BASE_URL } from '../config/api'
 import type { MessageEnvelope } from '../types'
 import './MessageTable.css'
@@ -18,9 +22,14 @@ interface MessageTableProps {
   entityName: string
   subscriptionName?: string
   isDLQ?: boolean
+  dlqCount?: number
   onRefresh?: () => void
   frozenSnapshot?: boolean
   onToggleSnapshot?: () => void
+  onAiInsights?: () => void
+  aiInsightsLoading?: boolean
+  hasAiInsights?: boolean
+  onMessageSelect?: (message: MessageEnvelope) => void
 }
 
 export default function MessageTable({
@@ -29,9 +38,14 @@ export default function MessageTable({
   entityName,
   subscriptionName,
   isDLQ = false,
+  dlqCount = 0,
   onRefresh,
   frozenSnapshot = false,
-  onToggleSnapshot
+  onToggleSnapshot,
+  onAiInsights,
+  aiInsightsLoading = false,
+  hasAiInsights = false,
+  onMessageSelect
 }: MessageTableProps) {
   const [sortField, setSortField] = useState<keyof MessageEnvelope>('sequenceNumber')
   const [sortAsc, setSortAsc] = useState(false) // Default: newest first
@@ -40,10 +54,13 @@ export default function MessageTable({
   const [selectedMessages, setSelectedMessages] = useState<Set<number>>(new Set())
   const [correlationFilter, setCorrelationFilter] = useState<string>('')
   const [replayLoading, setReplayLoading] = useState(false)
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>('')
+  const [ageBucketFilter, setAgeBucketFilter] = useState<keyof AgeDistribution | null>(null)
   
-  // Select mode and detail panel
+  // Select mode and pagination
   const [selectMode, setSelectMode] = useState(false)
-  const [detailMessage, setDetailMessage] = useState<MessageEnvelope | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
 
   const handleDownload = (message: MessageEnvelope) => {
     const blob = new Blob([JSON.stringify(message, null, 2)], { type: 'application/json' })
@@ -163,24 +180,8 @@ export default function MessageTable({
   }
 
   const handleRowClick = (message: MessageEnvelope) => {
-    if (!selectMode) {
-      setDetailMessage(message)
-    }
-  }
-
-  const handlePreviousMessage = () => {
-    if (!detailMessage) return
-    const currentIndex = filteredAndSortedMessages.findIndex(m => m.sequenceNumber === detailMessage.sequenceNumber)
-    if (currentIndex > 0) {
-      setDetailMessage(filteredAndSortedMessages[currentIndex - 1])
-    }
-  }
-
-  const handleNextMessage = () => {
-    if (!detailMessage) return
-    const currentIndex = filteredAndSortedMessages.findIndex(m => m.sequenceNumber === detailMessage.sequenceNumber)
-    if (currentIndex < filteredAndSortedMessages.length - 1) {
-      setDetailMessage(filteredAndSortedMessages[currentIndex + 1])
+    if (!selectMode && onMessageSelect) {
+      onMessageSelect(message)
     }
   }
 
@@ -188,6 +189,14 @@ export default function MessageTable({
     setSearchTerm('')
     setCorrelationFilter('')
     setFilterDeliveryCount(null)
+    setEventTypeFilter('')
+    setAgeBucketFilter(null)
+    setCurrentPage(1)
+  }
+
+  const handleAgeBucketClick = (bucket: keyof AgeDistribution) => {
+    setAgeBucketFilter(ageBucketFilter === bucket ? null : bucket)
+    setCurrentPage(1)
   }
 
   // Filter and sort messages
@@ -218,6 +227,27 @@ export default function MessageTable({
       filtered = filtered.filter(msg => msg.deliveryCount === filterDeliveryCount)
     }
 
+    // Apply event type filter
+    if (eventTypeFilter) {
+      filtered = filtered.filter(msg => {
+        const { eventType } = extractEventType(msg)
+        return eventType?.toLowerCase().includes(eventTypeFilter.toLowerCase())
+      })
+    }
+
+    // Apply age bucket filter
+    if (ageBucketFilter) {
+      const now = Date.now()
+      filtered = filtered.filter(msg => {
+        const ageMinutes = (now - new Date(msg.enqueuedTimeUtc).getTime()) / 60000
+        if (ageBucketFilter === 'lessThan5m') return ageMinutes < 5
+        if (ageBucketFilter === 'between5And30m') return ageMinutes >= 5 && ageMinutes < 30
+        if (ageBucketFilter === 'between30And120m') return ageMinutes >= 30 && ageMinutes < 120
+        if (ageBucketFilter === 'moreThan2h') return ageMinutes >= 120
+        return true
+      })
+    }
+
     // Sort
     const sorted = [...filtered].sort((a, b) => {
       const aVal = a[sortField]
@@ -229,10 +259,31 @@ export default function MessageTable({
     })
 
     return sorted
-  }, [messages, searchTerm, correlationFilter, filterDeliveryCount, sortField, sortAsc])
+  }, [messages, searchTerm, correlationFilter, filterDeliveryCount, eventTypeFilter, ageBucketFilter, sortField, sortAsc])
+
+  // Paginated messages
+  const paginatedMessages = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredAndSortedMessages.slice(start, start + pageSize)
+  }, [filteredAndSortedMessages, currentPage, pageSize])
 
   return (
     <div className="message-table-container">
+      {/* Queue Health Header */}
+      <QueueHealthHeader 
+        messages={messages}
+        dlqCount={dlqCount}
+        entityName={entityName}
+        isDLQ={isDLQ}
+      />
+
+      {/* Message Age Distribution */}
+      <MessageAgeDistribution
+        messages={messages}
+        onBucketClick={handleAgeBucketClick}
+        activeBucket={ageBucketFilter}
+      />
+
       {/* Unified Action Toolbar */}
       <ActionToolbar
         entityName={entityName}
@@ -245,10 +296,13 @@ export default function MessageTable({
         onExportSelected={handleExportSelected}
         onExportAll={handleExportAll}
         onClearFilters={handleClearFilters}
+        onAiInsights={onAiInsights}
         refreshing={false}
         loading={replayLoading}
         frozenSnapshot={frozenSnapshot}
         onToggleSnapshot={onToggleSnapshot}
+        aiInsightsLoading={aiInsightsLoading}
+        hasAiInsights={hasAiInsights}
         selectMode={selectMode}
         onToggleSelectMode={() => setSelectMode(!selectMode)}
         onSelectAll={handleSelectAll}
@@ -293,6 +347,24 @@ export default function MessageTable({
             </button>
           )}
         </div>
+        <div className="search-box" style={{maxWidth: '250px'}}>
+          <input
+            type="text"
+            placeholder="Filter by Event Type..."
+            value={eventTypeFilter}
+            onChange={(e) => setEventTypeFilter(e.target.value)}
+            className="search-input"
+          />
+          {eventTypeFilter && (
+            <button 
+              onClick={() => setEventTypeFilter('')} 
+              className="clear-search"
+              title="Clear event type filter"
+            >
+              ✕
+            </button>
+          )}
+        </div>
         <div className="filter-controls">
           <select
             value={filterDeliveryCount === null ? '' : filterDeliveryCount}
@@ -320,8 +392,9 @@ export default function MessageTable({
           )}
         </div>
       ) : (
-        <div className="table-wrapper">
-          <table className="message-table enhanced">
+        <>
+          <div className="table-wrapper">
+            <table className="message-table">
             <thead>
               <tr>
                 {selectMode && (
@@ -343,15 +416,16 @@ export default function MessageTable({
                 <th onClick={() => handleSort('deliveryCount')} className="sortable delivery-col">
                   Delivery {sortField === 'deliveryCount' && (sortAsc ? '▲' : '▼')}
                 </th>
-                <th className="preview-col">Preview</th>
+                <th className="eventtype-col">Event Type</th>
+                <th className="id-col">Message ID</th>
                 <th className="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredAndSortedMessages.map(message => (
+              {paginatedMessages.map(message => (
                 <tr 
                   key={message.sequenceNumber} 
-                  className={`message-row ${correlationFilter && message.correlationId?.toLowerCase().includes(correlationFilter.toLowerCase()) ? 'correlation-highlight' : ''} ${detailMessage?.sequenceNumber === message.sequenceNumber ? 'selected' : ''}`}
+                  className={`message-row ${correlationFilter && message.correlationId?.toLowerCase().includes(correlationFilter.toLowerCase()) ? 'correlation-highlight' : ''}`}
                   onClick={() => handleRowClick(message)}
                   style={{ cursor: selectMode ? 'default' : 'pointer' }}
                 >
@@ -371,15 +445,21 @@ export default function MessageTable({
                   <td className="delivery-col">
                     <DeliveryBadge count={message.deliveryCount} size="small" />
                   </td>
-                  <td className="preview-col">
-                    <div className="preview-content">
-                      <div className="preview-id" title={message.messageId}>{truncate(message.messageId, 30)}</div>
-                      <div className="preview-body">{truncate(message.body, 100)}</div>
-                    </div>
+                  <td className="eventtype-col">
+                    <EventTypeChip 
+                      message={message}
+                      onClick={() => {
+                        const { eventType } = extractEventType(message)
+                        if (eventType) setEventTypeFilter(eventType)
+                      }}
+                    />
+                  </td>
+                  <td className="id-col" title={message.messageId}>
+                    {truncate(message.messageId, 35)}
                   </td>
                   <td className="actions-col" onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => setDetailMessage(message)}
+                      onClick={() => onMessageSelect && onMessageSelect(message)}
                       className="btn-icon-only"
                       title="View details"
                     >
@@ -398,20 +478,19 @@ export default function MessageTable({
             </tbody>
           </table>
         </div>
-      )}
 
-      {/* Message Detail Panel - Slide out from right */}
-      {detailMessage && (
-        <MessageDetailPanel
-          message={detailMessage}
-          messages={filteredAndSortedMessages}
-          onClose={() => setDetailMessage(null)}
-          onPrevious={handlePreviousMessage}
-          onNext={handleNextMessage}
-          onResubmit={undefined}
-          onDelete={undefined}
-          onMoveToDLQ={undefined}
+        {/* Pagination */}
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredAndSortedMessages.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setCurrentPage(1)
+          }}
         />
+      </>
       )}
     </div>
   )

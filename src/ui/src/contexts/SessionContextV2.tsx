@@ -67,8 +67,6 @@ interface SessionProviderProps {
 const IDLE_THRESHOLD = 120 // 2 minutes
 const IDLE_WARNING_THRESHOLD = 30 // warn 30s before expiry
 const HEARTBEAT_INTERVAL = 20000 // 20 seconds
-const RECONNECT_BACKOFF_INITIAL = 500 // 500ms
-const RECONNECT_BACKOFF_MAX = 8000 // 8 seconds
 
 export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   // Core connection state

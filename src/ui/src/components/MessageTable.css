@@ -118,7 +118,20 @@
   cursor: pointer;
   accent-color: #0d6efd;
 }
-  accent-color: #0d6efd;
+
+/* EventType Column - Compact */
+.eventtype-col {
+  width: 180px;
+  padding: 8px !important;
+}
+
+/* ID Column - Medium */
+.id-col {
+  width: 280px;
+  padding: 8px !important;
+  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #495057;
 }
 
 /* Table Actions */
@@ -171,8 +184,11 @@
 
 .table-wrapper {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: auto;
   background: #f8f9fa;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .message-table {

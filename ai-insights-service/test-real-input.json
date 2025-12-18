@@ -1,0 +1,84 @@
+{
+  "messages": [
+    {
+      "message_id": "real-msg-001",
+      "event_type": "PaymentProcessed",
+      "correlation_id": "corr-real-001",
+      "timestamp": "2025-12-18T10:30:00Z",
+      "payload": {
+        "transaction_id": "txn-real-1001",
+        "amount": 199.99,
+        "currency": "USD",
+        "status": "completed",
+        "payment_method": "credit_card"
+      },
+      "properties": {
+        "source": "payment-service",
+        "version": "2.1"
+      }
+    },
+    {
+      "message_id": "real-msg-002",
+      "event_type": "PaymentProcessed",
+      "correlation_id": "corr-real-001",
+      "timestamp": "2025-12-18T10:30:02Z",
+      "payload": {
+        "transaction_id": "txn-real-1002",
+        "amount": 199.99,
+        "currency": "USD",
+        "status": "completed",
+        "payment_method": "credit_card"
+      },
+      "properties": {
+        "source": "payment-service",
+        "version": "2.1"
+      }
+    },
+    {
+      "message_id": "real-msg-003",
+      "event_type": "OrderCreated",
+      "correlation_id": "corr-real-002",
+      "timestamp": "2025-12-18T10:31:00Z",
+      "payload": {
+        "order_id": "ord-real-2001",
+        "customer_id": "cust-real-5000",
+        "total_amount": 199.99,
+        "currency": "USD",
+        "items_count": 3
+      },
+      "properties": {
+        "source": "order-service",
+        "version": "1.5"
+      }
+    },
+    {
+      "message_id": "real-msg-004",
+      "event_type": "PaymentFailed",
+      "correlation_id": "corr-real-003",
+      "timestamp": "2025-12-18T10:32:00Z",
+      "payload": {
+        "transaction_id": "txn-real-9001",
+        "amount": 89.99,
+        "currency": "USD",
+        "status": "failed",
+        "error_code": "INSUFFICIENT_FUNDS"
+      },
+      "properties": {
+        "source": "payment-service",
+        "version": "2.1"
+      }
+    },
+    {
+      "message_id": "real-msg-005",
+      "event_type": "UnknownEvent",
+      "correlation_id": "corr-real-004",
+      "timestamp": "2025-12-18T10:33:00Z",
+      "payload": {
+        "unexpected_field": "unexpected_value"
+      },
+      "properties": {
+        "source": "unknown-service"
+      }
+    }
+  ]
+}

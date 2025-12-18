@@ -9,7 +9,7 @@ export const API_ENDPOINTS = {
   listEntities: (sessionId: string) => `/api/namespace/${sessionId}/entities`,
   peek: (sessionId: string, entityName: string) => `/api/queue/${sessionId}/${entityName}/peek`,
   receive: (sessionId: string, entityName: string) => `/api/queue/${sessionId}/${entityName}/receive`,
-  stream: (sessionId: string, entityName: string, mode: string, prefetch = 50, batch = 20) =>
+  stream: (sessionId: string, entityName: string, mode: string, prefetch = 50, batch = 100) =>
     `/api/stream/${sessionId}/${entityName}?mode=${mode}&prefetch=${prefetch}&batch=${batch}`,
   health: '/api/health'
 } as const

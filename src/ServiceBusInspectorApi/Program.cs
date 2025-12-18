@@ -49,6 +49,8 @@ if (!string.IsNullOrEmpty(appInsightsConnectionString))
 builder.Services.AddSingleton<ServiceBusProvisioningService>();
 builder.Services.AddSingleton<ServiceBusStreamer>();
 builder.Services.AddSingleton<AuditStore>();
+builder.Services.AddHttpClient(); // For AI Insights HTTP calls
+builder.Services.AddSingleton<AiInsightsService>();
 
 // In-memory session store with TTL
 // PRODUCTION: Replace with Redis or Azure Cache for Redis for distributed sessions
@@ -86,6 +88,7 @@ var sessions = app.Services.GetRequiredService<ConcurrentDictionary<string, Sess
 var sbProvisioning = app.Services.GetRequiredService<ServiceBusProvisioningService>();
 var streamer = app.Services.GetRequiredService<ServiceBusStreamer>();
 var auditStore = app.Services.GetRequiredService<AuditStore>();
+var aiInsightsService = app.Services.GetRequiredService<AiInsightsService>();
 
 // ============================================================================
 // Helper Functions
@@ -1539,6 +1542,302 @@ app.MapGet("/api/debug/{sessionId}/peek-compare", async (
     }
 })
 .WithName("PeekCompare")
+.WithOpenApi();
+
+// ============================================================================
+// AI Insights Endpoints
+// ============================================================================
+
+/// <summary>
+/// Generate test messages with controlled anomalies for AI analysis.
+/// Sends messages to active queues/topics and optionally creates DLQ candidates.
+/// </summary>
+app.MapPost("/api/messages/generate", async (
+    string sessionId,
+    GenerateMessagesRequest request) =>
+{
+    if (!sessions.TryGetValue(sessionId, out var session))
+    {
+        return Results.Unauthorized();
+    }
+    
+    try
+    {
+        // Validate request
+        if (request.Count < 10 || request.Count > 300)
+        {
+            return Results.BadRequest("Count must be between 10 and 300");
+        }
+        
+        if (string.IsNullOrEmpty(request.QueueName) && string.IsNullOrEmpty(request.TopicName))
+        {
+            return Results.BadRequest("Must specify QueueName or TopicName");
+        }
+        
+        // Generate messages
+        var messages = aiInsightsService.GenerateTestMessages(
+            request.Count,
+            request.IncludeDlqTestCases,
+            out int anomalousCount,
+            out int dlqCount
+        );
+        
+        var client = new ServiceBusClient(session.ConnectionString);
+        var errors = new List<string>();
+        int totalSent = 0;
+        
+        // Send to queue if specified
+        if (!string.IsNullOrEmpty(request.QueueName) && 
+            (request.TargetType == "Queue" || request.TargetType == "Both"))
+        {
+            try
+            {
+                var sender = client.CreateSender(request.QueueName);
+                
+                // Send messages (SDK handles batching internally for better performance)
+                await sender.SendMessagesAsync(messages);
+                totalSent += messages.Count;
+                
+                await sender.CloseAsync();
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Queue send error: {ex.Message}");
+                app.Logger.LogError(ex, "Failed to send messages to queue {Queue}", request.QueueName);
+            }
+        }
+        
+        // Send to topic if specified
+        if (!string.IsNullOrEmpty(request.TopicName) && 
+            (request.TargetType == "Topic" || request.TargetType == "Both"))
+        {
+            try
+            {
+                var sender = client.CreateSender(request.TopicName);
+                
+                // Send messages (SDK handles batching internally)
+                await sender.SendMessagesAsync(messages);
+                totalSent += messages.Count;
+                
+                await sender.CloseAsync();
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Topic send error: {ex.Message}");
+                app.Logger.LogError(ex, "Failed to send messages to topic {Topic}", request.TopicName);
+            }
+        }
+        
+        await client.DisposeAsync();
+        
+        var response = new GenerateMessagesResponse
+        {
+            TotalGenerated = totalSent,
+            AnomalousCount = anomalousCount,
+            DlqCandidates = dlqCount,
+            Errors = errors,
+            Success = errors.Count == 0
+        };
+        
+        app.Logger.LogInformation(
+            "Generated {Count} messages for session {SessionId}: {Anomalous} anomalous, {DLQ} DLQ candidates",
+            totalSent, sessionId, anomalousCount, dlqCount
+        );
+        
+        return Results.Ok(response);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Message generation failed for session {SessionId}", sessionId);
+        return Results.Problem("Message generation failed");
+    }
+})
+.WithName("GenerateTestMessages")
+.WithOpenApi();
+
+/// <summary>
+/// Analyze messages using AI Insights service.
+/// Samples messages from active queue and optionally DLQ, then calls FastAPI service.
+/// </summary>
+app.MapPost("/api/messages/analyze", async (
+    string sessionId,
+    AnalyzeMessagesRequest request,
+    CancellationToken cancellationToken) =>
+{
+    if (!sessions.TryGetValue(sessionId, out var session))
+    {
+        return Results.Unauthorized();
+    }
+    
+    try
+    {
+        var client = new ServiceBusClient(session.ConnectionString);
+        var activeMessages = new List<object>();
+        var dlqMessages = new List<object>();
+        
+        // Sample messages from active queue
+        try
+        {
+            var receiver = client.CreateReceiver(request.QueueName);
+            var peeked = await receiver.PeekMessagesAsync(request.MaxSampleSize, cancellationToken: cancellationToken);
+            
+            foreach (var msg in peeked)
+            {
+                try
+                {
+                    var body = msg.Body.ToString();
+                    var messageData = JsonSerializer.Deserialize<Dictionary<string, object>>(body);
+                    
+                    if (messageData != null)
+                    {
+                        // Ensure required fields for AI service
+                        if (!messageData.ContainsKey("message_id"))
+                            messageData["message_id"] = msg.MessageId;
+                        if (!messageData.ContainsKey("event_type"))
+                            messageData["event_type"] = msg.Subject ?? "Unknown";
+                        if (!messageData.ContainsKey("correlation_id"))
+                            messageData["correlation_id"] = msg.CorrelationId;
+                        if (!messageData.ContainsKey("timestamp"))
+                            messageData["timestamp"] = msg.EnqueuedTime.UtcDateTime.ToString("O");
+                        if (!messageData.ContainsKey("payload"))
+                            messageData["payload"] = new Dictionary<string, object>();
+                        
+                        activeMessages.Add(messageData);
+                    }
+                }
+                catch
+                {
+                    // Skip malformed messages
+                }
+            }
+            
+            await receiver.CloseAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "Failed to peek active queue messages");
+        }
+        
+        // Sample messages from DLQ if requested
+        if (request.IncludeDlq)
+        {
+            try
+            {
+                var dlqPath = $"{request.QueueName}/$DeadLetterQueue";
+                var dlqReceiver = client.CreateReceiver(dlqPath);
+                var peekedDlq = await dlqReceiver.PeekMessagesAsync(
+                    request.MaxSampleSize / 2, 
+                    cancellationToken: cancellationToken
+                );
+                
+                foreach (var msg in peekedDlq)
+                {
+                    try
+                    {
+                        var body = msg.Body.ToString();
+                        var messageData = JsonSerializer.Deserialize<Dictionary<string, object>>(body);
+                        
+                        if (messageData != null)
+                        {
+                            if (!messageData.ContainsKey("message_id"))
+                                messageData["message_id"] = msg.MessageId;
+                            if (!messageData.ContainsKey("event_type"))
+                                messageData["event_type"] = msg.Subject ?? "Unknown";
+                            if (!messageData.ContainsKey("correlation_id"))
+                                messageData["correlation_id"] = msg.CorrelationId;
+                            if (!messageData.ContainsKey("timestamp"))
+                                messageData["timestamp"] = msg.EnqueuedTime.UtcDateTime.ToString("O");
+                            if (!messageData.ContainsKey("payload"))
+                                messageData["payload"] = new Dictionary<string, object>();
+                            
+                            dlqMessages.Add(messageData);
+                        }
+                    }
+                    catch
+                    {
+                        // Skip malformed messages
+                    }
+                }
+                
+                await dlqReceiver.CloseAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogWarning(ex, "Failed to peek DLQ messages");
+            }
+        }
+        
+        await client.DisposeAsync();
+        
+        // Call AI Insights service for active queue
+        AiInsightsAnalysis? activeAnalysis = null;
+        if (activeMessages.Count > 0)
+        {
+            var result = await aiInsightsService.AnalyzeMessagesAsync(activeMessages, cancellationToken);
+            if (result != null)
+            {
+                activeAnalysis = new AiInsightsAnalysis
+                {
+                    Source = "ActiveQueue",
+                    TotalMessages = result.TotalMessages,
+                    Clusters = result.Clusters.Select(c => c with { }).ToList(),
+                    Outliers = result.Outliers.Select(o => o with { Source = "ActiveQueue" }).ToList(),
+                    ProcessingTimeMs = result.ProcessingTimeMs
+                };
+            }
+        }
+        
+        // Call AI Insights service for DLQ
+        AiInsightsAnalysis? dlqAnalysis = null;
+        if (dlqMessages.Count > 0)
+        {
+            var result = await aiInsightsService.AnalyzeMessagesAsync(dlqMessages, cancellationToken);
+            if (result != null)
+            {
+                dlqAnalysis = new AiInsightsAnalysis
+                {
+                    Source = "DeadLetterQueue",
+                    TotalMessages = result.TotalMessages,
+                    Clusters = result.Clusters.Select(c => c with { }).ToList(),
+                    Outliers = result.Outliers.Select(o => o with { Source = "DeadLetterQueue" }).ToList(),
+                    ProcessingTimeMs = result.ProcessingTimeMs
+                };
+            }
+        }
+        
+        // Generate summary
+        var summary = $"Analyzed {activeMessages.Count} active messages";
+        if (dlqMessages.Count > 0)
+        {
+            summary += $" and {dlqMessages.Count} DLQ messages";
+        }
+        
+        var totalClusters = (activeAnalysis?.Clusters.Count ?? 0) + (dlqAnalysis?.Clusters.Count ?? 0);
+        var totalOutliers = (activeAnalysis?.Outliers.Count ?? 0) + (dlqAnalysis?.Outliers.Count ?? 0);
+        summary += $". Found {totalClusters} patterns and {totalOutliers} anomalies.";
+        
+        var response = new CombinedAiInsightsResponse
+        {
+            ActiveQueueAnalysis = activeAnalysis,
+            DlqAnalysis = dlqAnalysis,
+            Summary = summary,
+            AnalyzedAt = DateTime.UtcNow
+        };
+        
+        app.Logger.LogInformation(
+            "AI analysis for {Queue}: {ActiveCount} active, {DlqCount} DLQ, {Clusters} clusters, {Outliers} outliers",
+            request.QueueName, activeMessages.Count, dlqMessages.Count, totalClusters, totalOutliers
+        );
+        
+        return Results.Ok(response);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "AI analysis failed for session {SessionId}, queue {Queue}", sessionId, request.QueueName);
+        return Results.Problem($"AI analysis failed: {ex.Message}");
+    }
+})
+.WithName("AnalyzeMessages")
 .WithOpenApi();
 
 app.Run();

@@ -1,0 +1,100 @@
+.message-age-distribution {
+  background: var(--background-secondary, #1e1e1e);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.distribution-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.distribution-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.distribution-total {
+  font-size: 11px;
+  color: var(--text-tertiary, #666);
+}
+
+.distribution-bars {
+  display: flex;
+  gap: 8px;
+  height: 80px;
+}
+
+.age-bucket {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.age-bucket:hover:not(.empty) {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+.age-bucket.active {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+.age-bucket.empty {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.bucket-bar-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 40px;
+}
+
+.bucket-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: all 0.2s ease;
+}
+
+.age-bucket:hover:not(.empty) .bucket-bar {
+  opacity: 0.8;
+}
+
+.bucket-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.bucket-label-text {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+  font-weight: 500;
+}
+
+.bucket-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  font-variant-numeric: tabular-nums;
+}
+
+.age-bucket.empty .bucket-count {
+  color: var(--text-tertiary, #666);
+}

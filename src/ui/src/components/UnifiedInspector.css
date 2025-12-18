@@ -1,0 +1,109 @@
+/* Unified Inspector Panel - Bottom Panel Style */
+
+.unified-inspector {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 2px solid #0078d4;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.inspector-resize-handle {
+  height: 8px;
+  cursor: ns-resize;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.inspector-resize-handle:hover {
+  background: #e5e7eb;
+}
+
+.inspector-resize-handle:active {
+  background: #d1d5db;
+}
+
+.resize-indicator {
+  width: 40px;
+  height: 3px;
+  background: #9ca3af;
+  border-radius: 2px;
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: linear-gradient(to bottom, #ffffff, #f9fafb);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+
+.inspector-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+
+.inspector-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.inspector-close-btn:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.inspector-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+
+/* Override MessageDetailPanel styles when in inspector */
+.inspector-content .message-detail-panel {
+  position: static;
+  height: 100%;
+  width: 100%;
+  box-shadow: none;
+  border: none;
+  animation: none;
+}
+
+.inspector-content .detail-header {
+  padding: 16px 20px;
+}
+
+.inspector-content .detail-navigation {
+  display: none; /* Navigation handled by inspector header */
+}

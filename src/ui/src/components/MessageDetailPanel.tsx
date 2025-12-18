@@ -1,9 +1,9 @@
 /**
- * Message Detail Side Panel
- * Slide-out panel from right showing full message details
+ * Message Detail Panel
+ * Modal by default; can render embedded (no portal/backdrop) for the bottom inspector.
  */
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { MessageEnvelope } from '../types'
 import './MessageDetailPanel.css'
@@ -17,6 +17,7 @@ interface MessageDetailPanelProps {
   onResubmit?: (message: MessageEnvelope) => void
   onDelete?: (message: MessageEnvelope) => void
   onMoveToDLQ?: (message: MessageEnvelope) => void
+  embedded?: boolean
 }
 
 type TabType = 'body' | 'properties' | 'system'
@@ -29,49 +30,40 @@ export function MessageDetailPanel({
   onNext,
   onResubmit,
   onDelete,
-  onMoveToDLQ
+  onMoveToDLQ,
+  embedded = false
 }: MessageDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('body')
   const [formatBody, setFormatBody] = useState(true)
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      } else if (e.key === 'ArrowLeft' && onPrevious) {
-        onPrevious()
-      } else if (e.key === 'ArrowRight' && onNext) {
-        onNext()
-      }
+      if (e.key === 'Escape') onClose()
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose, onPrevious, onNext])
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-  }
-
-  const formatJSON = (body: string) => {
-    try {
-      const parsed = JSON.parse(body)
-      return JSON.stringify(parsed, null, 2)
-    } catch {
-      return body
+  const { safeIndex, hasPrevious, hasNext } = useMemo(() => {
+    const currentIndex = messages.findIndex((m) =>
+      (m.messageId && message.messageId && m.messageId === message.messageId) ||
+      (m.sequenceNumber !== undefined && m.sequenceNumber === message.sequenceNumber)
+    )
+    const resolvedIndex = currentIndex >= 0 ? currentIndex : 0
+    return {
+      safeIndex: resolvedIndex,
+      hasPrevious: resolvedIndex > 0,
+      hasNext: resolvedIndex < messages.length - 1
     }
-  }
+  }, [messages, message])
 
-  const currentIndex = messages.findIndex(m => m.messageId === message.messageId)
-  const hasPrevious = currentIndex > 0
-  const hasNext = currentIndex < messages.length - 1
+  const bodyText = message.body ?? ''
 
-  return createPortal(
-    <div className="message-detail-modal-overlay">
-      <div className="message-detail-modal-backdrop" onClick={onClose} />
-      <div className="message-detail-modal">
-        {/* Header */}
+  const panel = (
+    <div className={embedded ? 'message-detail-embedded' : 'message-detail-modal-overlay'}>
+      {!embedded && <div className="message-detail-modal-backdrop" onClick={onClose} />}
+      <div className={`message-detail-modal${embedded ? ' embedded' : ''}`}>
         <div className="message-detail-header">
           <div className="message-detail-title">
             <span className="message-id-label">Message ID</span>
@@ -84,44 +76,37 @@ export function MessageDetailPanel({
               📋
             </button>
           </div>
-          <button
-            className="btn-close-panel"
-            onClick={onClose}
-            aria-label="Close panel"
-          >
-            ×
-          </button>
+          {!embedded && (
+            <button className="btn-close-panel" onClick={onClose} aria-label="Close panel">
+              ×
+            </button>
+          )}
         </div>
 
-        {/* Navigation */}
         <div className="message-detail-nav">
           <button
             className="btn-nav"
             onClick={onPrevious}
-            disabled={!hasPrevious}
+            disabled={!onPrevious || !hasPrevious}
             title="Previous message"
           >
             ← Previous
           </button>
           <span className="message-position">
-            {currentIndex + 1} of {messages.length}
+            {safeIndex + 1} of {messages.length}
           </span>
           <button
             className="btn-nav"
             onClick={onNext}
-            disabled={!hasNext}
+            disabled={!onNext || !hasNext}
             title="Next message"
           >
             Next →
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="message-detail-tabs">
-          <button
-            className={`tab ${activeTab === 'body' ? 'active' : ''}`}
-            onClick={() => setActiveTab('body')}
-          >
+          <button className={`tab ${activeTab === 'body' ? 'active' : ''}`} onClick={() => setActiveTab('body')}>
             Body
           </button>
           <button
@@ -130,36 +115,25 @@ export function MessageDetailPanel({
           >
             Properties
           </button>
-          <button
-            className={`tab ${activeTab === 'system' ? 'active' : ''}`}
-            onClick={() => setActiveTab('system')}
-          >
+          <button className={`tab ${activeTab === 'system' ? 'active' : ''}`} onClick={() => setActiveTab('system')}>
             System
           </button>
         </div>
 
-        {/* Tab Content */}
         <div className="message-detail-content">
           {activeTab === 'body' && (
             <div className="tab-body">
               <div className="tab-body-toolbar">
                 <label className="format-toggle">
-                  <input
-                    type="checkbox"
-                    checked={formatBody}
-                    onChange={(e) => setFormatBody(e.target.checked)}
-                  />
+                  <input type="checkbox" checked={formatBody} onChange={(e) => setFormatBody(e.target.checked)} />
                   Format JSON
                 </label>
-                <button
-                  className="btn-copy-small"
-                  onClick={() => copyToClipboard(message.body)}
-                >
+                <button className="btn-copy-small" onClick={() => copyToClipboard(bodyText)}>
                   📋 Copy
                 </button>
               </div>
               <pre className="message-body-content">
-                <code>{formatBody ? formatJSON(message.body) : message.body}</code>
+                <code>{formatBody ? formatJSON(bodyText) : bodyText}</code>
               </pre>
             </div>
           )}
@@ -173,10 +147,7 @@ export function MessageDetailPanel({
                       <td className="prop-key">Content Type</td>
                       <td className="prop-value">
                         {message.contentType}
-                        <button
-                          className="btn-copy-mini"
-                          onClick={() => copyToClipboard(message.contentType!)}
-                        >
+                        <button className="btn-copy-mini" onClick={() => copyToClipboard(message.contentType!)}>
                           📋
                         </button>
                       </td>
@@ -187,10 +158,7 @@ export function MessageDetailPanel({
                       <td className="prop-key">Correlation ID</td>
                       <td className="prop-value">
                         {message.correlationId}
-                        <button
-                          className="btn-copy-mini"
-                          onClick={() => copyToClipboard(message.correlationId!)}
-                        >
+                        <button className="btn-copy-mini" onClick={() => copyToClipboard(message.correlationId!)}>
                           📋
                         </button>
                       </td>
@@ -200,10 +168,7 @@ export function MessageDetailPanel({
                     <td className="prop-key">Message ID</td>
                     <td className="prop-value">
                       {message.messageId}
-                      <button
-                        className="btn-copy-mini"
-                        onClick={() => copyToClipboard(message.messageId)}
-                      >
+                      <button className="btn-copy-mini" onClick={() => copyToClipboard(message.messageId)}>
                         📋
                       </button>
                     </td>
@@ -225,9 +190,7 @@ export function MessageDetailPanel({
                 <tbody>
                   <tr>
                     <td className="prop-key">Enqueued Time</td>
-                    <td className="prop-value">
-                      {new Date(message.enqueuedTimeUtc).toLocaleString()}
-                    </td>
+                    <td className="prop-value">{new Date(message.enqueuedTimeUtc).toLocaleString()}</td>
                   </tr>
                   <tr>
                     <td className="prop-key">Sequence Number</td>
@@ -235,9 +198,7 @@ export function MessageDetailPanel({
                   </tr>
                   <tr>
                     <td className="prop-key">Size</td>
-                    <td className="prop-value">
-                      {(message.body.length / 1024).toFixed(2)} KB
-                    </td>
+                    <td className="prop-value">{((bodyText.length || 0) / 1024).toFixed(2)} KB</td>
                   </tr>
                   <tr>
                     <td className="prop-key">Delivery Count</td>
@@ -249,35 +210,43 @@ export function MessageDetailPanel({
           )}
         </div>
 
-        {/* Footer Actions */}
         <div className="message-detail-footer">
           {onResubmit && (
-            <button
-              className="btn-action"
-              onClick={() => onResubmit(message)}
-            >
+            <button className="btn-action" onClick={() => onResubmit(message)}>
               🔄 Resubmit
             </button>
           )}
-          {onMoveToDLQ && (
-            <button
-              className="btn-action"
-              onClick={() => onMoveToDLQ(message)}
-            >
-              💀 Move to DLQ
+          {onDelete && (
+            <button className="btn-action danger" onClick={() => onDelete(message)}>
+              🗑 Delete
             </button>
           )}
-          {onDelete && (
-            <button
-              className="btn-action danger"
-              onClick={() => onDelete(message)}
-            >
-              🗑️ Delete
+          {onMoveToDLQ && (
+            <button className="btn-action warning" onClick={() => onMoveToDLQ(message)}>
+              📤 Move to DLQ
             </button>
           )}
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
   )
+
+  if (embedded) return panel
+  return createPortal(panel, document.body)
+}
+
+function formatJSON(text: string) {
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2)
+  } catch {
+    return text
+  }
+}
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // ignore
+  }
 }

@@ -45,6 +45,26 @@
   pointer-events: auto !important;
 }
 
+/* Embedded mode (for UnifiedInspector bottom panel) */
+.message-detail-embedded {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  z-index: auto !important;
+}
+
+.message-detail-modal.embedded {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  border-left: none !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
 /* Animations */
 @keyframes slideInFromRight {
   from {

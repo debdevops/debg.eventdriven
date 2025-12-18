@@ -1,0 +1,106 @@
+/* Pagination - Azure Portal Style */
+
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  gap: 16px;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.pagination-range {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.page-size-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.page-size-select:hover {
+  border-color: #0078d4;
+}
+
+.page-size-select:focus {
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pagination-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #4b5563;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #0078d4;
+  color: #0078d4;
+}
+
+.pagination-btn.active {
+  background: #0078d4;
+  border-color: #0078d4;
+  color: white;
+  font-weight: 600;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+.pagination-ellipsis {
+  padding: 0 8px;
+  color: #9ca3af;
+  font-size: 14px;
+  user-select: none;
+}
+
+/* Compact mode for smaller screens */
+@media (max-width: 768px) {
+  .pagination-container {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pagination-info {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
