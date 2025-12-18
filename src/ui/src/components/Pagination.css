@@ -23,6 +23,22 @@
   color: #1f2937;
 }
 
+/* Inspector mode styling - emphasizes peek window concept */
+.pagination-range.inspector-mode {
+  font-weight: 600;
+  color: #0078d4;
+}
+
+.inspector-mode-hint {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: help;
+}
+
 .page-size-select {
   padding: 4px 8px;
   border: 1px solid #d1d5db;
@@ -32,6 +48,12 @@
   cursor: pointer;
   outline: none;
   transition: all 0.2s;
+}
+
+.page-size-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f9fafb;
 }
 
 .page-size-select:hover {

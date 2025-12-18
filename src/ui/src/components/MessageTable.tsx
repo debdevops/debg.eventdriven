@@ -17,7 +17,8 @@ import type { MessageEnvelope } from '../types'
 import './MessageTable.css'
 
 interface MessageTableProps {
-  messages: MessageEnvelope[]
+  messages: MessageEnvelope[] // INSPECTOR MODE: loaded (peeked) messages, NOT total in queue
+  totalMessageCount?: number // Total messages in queue (informational only, not paginated)
   sessionId: string
   entityName: string
   subscriptionName?: string
@@ -34,6 +35,7 @@ interface MessageTableProps {
 
 export default function MessageTable({
   messages,
+  totalMessageCount,
   sessionId,
   entityName,
   subscriptionName,
@@ -497,16 +499,19 @@ export default function MessageTable({
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* INSPECTOR MODE Pagination - operates on loaded messages only */}
         <Pagination
           currentPage={currentPage}
           totalItems={sortedMessages.length}
+          totalQueueCount={totalMessageCount}
+          loadedCount={messages.length}
           pageSize={pageSize}
           onPageChange={setCurrentPage}
           onPageSizeChange={(size) => {
             setPageSize(size)
             setCurrentPage(1)
           }}
+          inspectorMode={true}
         />
       </>
       )}

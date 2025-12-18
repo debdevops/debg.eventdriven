@@ -396,6 +396,11 @@ export default function StreamPanel({
       ) : (
         <MessageTable
           messages={messages}
+          totalMessageCount={
+            selectedTarget.type === 'subscription'
+              ? selectedTarget.subscription?.messageCount
+              : selectedTarget.entity?.messageCount
+          }
           sessionId={sessionId}
           entityName={entityName}
           subscriptionName={subscriptionName}

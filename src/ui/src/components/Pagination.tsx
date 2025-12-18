@@ -1,29 +1,48 @@
 /**
- * Pagination Component - Azure Portal style
+ * Pagination Component - INSPECTOR MODE
+ * 
+ * CRITICAL: This is NOT database-style pagination.
+ * We paginate LOADED (peeked) messages, not total queue messages.
+ * 
+ * totalQueueCount = informational only (e.g., 200 total in queue)
+ * loadedCount = messages actually peeked (e.g., 20 loaded)
+ * totalItems = filtered/sorted loaded messages (e.g., 15 after filters)
  */
 
 import './Pagination.css'
 
 interface PaginationProps {
   currentPage: number
-  totalItems: number
+  totalItems: number // Filtered messages count (what we're paginating)
+  totalQueueCount?: number // Total in queue (informational only)
+  loadedCount?: number // Raw loaded messages (before filters)
   pageSize: number
   onPageChange: (page: number) => void
   onPageSizeChange: (size: number) => void
   pageSizeOptions?: number[]
+  inspectorMode?: boolean // Enable inspector-mode messaging
 }
 
 export function Pagination({
   currentPage,
   totalItems,
+  totalQueueCount,
+  loadedCount,
   pageSize,
   onPageChange,
   onPageSizeChange,
-  pageSizeOptions = [50, 100, 200]
+  pageSizeOptions = [50, 100, 200],
+  inspectorMode = false
 }: PaginationProps) {
   const totalPages = Math.ceil(totalItems / pageSize)
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const endItem = Math.min(currentPage * pageSize, totalItems)
+  
+  // INSPECTOR MODE: Hide pagination if only one page of loaded data
+  const showPaginationControls = totalPages > 1
+  
+  // INSPECTOR MODE: Disable page size selector if loaded data fits in one page
+  const disablePageSize = inspectorMode && (loadedCount || 0) <= pageSize
 
   const getPageNumbers = () => {
     const pages: (number | string)[] = []
@@ -62,13 +81,26 @@ export function Pagination({
   return (
     <div className="pagination-container">
       <div className="pagination-info">
-        <span className="pagination-range">
-          {startItem}–{endItem} of {totalItems}
-        </span>
+        {inspectorMode && totalQueueCount !== undefined ? (
+          <>
+            <span className="pagination-range inspector-mode">
+              Showing {loadedCount || totalItems} of {totalQueueCount} messages
+            </span>
+            <span className="inspector-mode-hint" title="Only peeked messages are loaded. Pagination operates on loaded data only.">
+              (peeked)
+            </span>
+          </>
+        ) : (
+          <span className="pagination-range">
+            {startItem}–{endItem} of {totalItems}
+          </span>
+        )}
         <select
           value={pageSize}
           onChange={(e) => onPageSizeChange(Number(e.target.value))}
           className="page-size-select"
+          disabled={disablePageSize}
+          title={disablePageSize ? 'All loaded messages fit in current view' : 'Change page size'}
         >
           {pageSizeOptions.map(size => (
             <option key={size} value={size}>
@@ -78,7 +110,9 @@ export function Pagination({
         </select>
       </div>
 
-      <div className="pagination-controls">
+      {/* Only show pagination controls if more than one page */}
+      {showPaginationControls && (
+        <div className="pagination-controls">
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
@@ -129,6 +163,7 @@ export function Pagination({
           ⟫
         </button>
       </div>
+      )}
     </div>
   )
 }
