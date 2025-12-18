@@ -1,48 +1,105 @@
 /**
- * Pagination Component - INSPECTOR MODE
+ * Pagination Component - DUAL MODE
  * 
- * CRITICAL: This is NOT database-style pagination.
- * We paginate LOADED (peeked) messages, not total queue messages.
+ * INSPECTOR MODE (MessageTable):
+ * - Grid renders ALL loaded messages, NO slicing
+ * - Footer shows: "Showing X of Y messages (peeked)"
+ * - peekSize is preference for NEXT peek cycle
  * 
- * totalQueueCount = informational only (e.g., 200 total in queue)
- * loadedCount = messages actually peeked (e.g., 20 loaded)
- * totalItems = filtered/sorted loaded messages (e.g., 15 after filters)
+ * LEGACY MODE (AiInsightsInspector):
+ * - Traditional pagination with slicing
+ * - Full page navigation controls
  */
 
 import './Pagination.css'
 
+type PaginationMode = 'inspector' | 'legacy'
+
 interface PaginationProps {
-  currentPage: number
-  totalItems: number // Filtered messages count (what we're paginating)
-  totalQueueCount?: number // Total in queue (informational only)
-  loadedCount?: number // Raw loaded messages (before filters)
-  pageSize: number
-  onPageChange: (page: number) => void
-  onPageSizeChange: (size: number) => void
+  // Inspector mode
+  filteredCount?: number
+  loadedCount?: number
+  totalQueueCount?: number
+  peekSize?: number
+  onPeekSizeChange?: (size: number) => void
+  
+  // Legacy mode
+  currentPage?: number
+  totalItems?: number
+  pageSize?: number
+  onPageChange?: (page: number) => void
+  onPageSizeChange?: (size: number) => void
+  
   pageSizeOptions?: number[]
-  inspectorMode?: boolean // Enable inspector-mode messaging
+  mode?: PaginationMode
 }
 
-export function Pagination({
-  currentPage,
-  totalItems,
-  totalQueueCount,
-  loadedCount,
-  pageSize,
-  onPageChange,
-  onPageSizeChange,
-  pageSizeOptions = [50, 100, 200],
-  inspectorMode = false
-}: PaginationProps) {
+export function Pagination(props: PaginationProps) {
+  // Auto-detect mode based on props
+  const mode: PaginationMode = props.filteredCount !== undefined ? 'inspector' : 'legacy'
+  
+  if (mode === 'inspector') {
+    return renderInspectorMode(props)
+  } else {
+    return renderLegacyMode(props)
+  }
+}
+
+function renderInspectorMode(props: PaginationProps) {
+  const { filteredCount = 0, loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, pageSizeOptions = [50, 100, 200] } = props
+  
+  const showPeekSizeSelector = loadedCount >= peekSize
+
+  return (
+    <div className="pagination-container inspector-footer">
+      <div className="pagination-info">
+        <span className="inspector-footer-text">
+          Showing{' '}
+          <span className="inspector-count-primary">{filteredCount}</span>
+          {totalQueueCount !== undefined && (
+            <>
+              {' '}of{' '}
+              <span className="inspector-count-total">{totalQueueCount}</span>
+            </>
+          )}
+          {' '}messages
+        </span>
+        <span className="inspector-mode-badge" title="Peek-based inspector tool">
+          (peeked)
+        </span>
+      </div>
+
+      {/* Peek size preference selector - informational only */}
+      {showPeekSizeSelector && (
+        <div className="inspector-peek-size">
+          <label htmlFor="peek-size-select" className="peek-size-label">
+            Next peek size:
+          </label>
+          <select
+            id="peek-size-select"
+            value={peekSize}
+            onChange={(e) => onPeekSizeChange?.(Number(e.target.value))}
+            className="peek-size-select"
+            title="Size for next peek operation (does not affect current display)"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function renderLegacyMode(props: PaginationProps) {
+  const { currentPage = 1, totalItems = 0, pageSize = 50, onPageChange, onPageSizeChange, pageSizeOptions = [50, 100, 200] } = props
+  
   const totalPages = Math.ceil(totalItems / pageSize)
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const endItem = Math.min(currentPage * pageSize, totalItems)
-  
-  // INSPECTOR MODE: Hide pagination if only one page of loaded data
-  const showPaginationControls = totalPages > 1
-  
-  // INSPECTOR MODE: Disable page size selector if loaded data fits in one page
-  const disablePageSize = inspectorMode && (loadedCount || 0) <= pageSize
 
   const getPageNumbers = () => {
     const pages: (number | string)[] = []
@@ -81,26 +138,13 @@ export function Pagination({
   return (
     <div className="pagination-container">
       <div className="pagination-info">
-        {inspectorMode && totalQueueCount !== undefined ? (
-          <>
-            <span className="pagination-range inspector-mode">
-              Showing {loadedCount || totalItems} of {totalQueueCount} messages
-            </span>
-            <span className="inspector-mode-hint" title="Only peeked messages are loaded. Pagination operates on loaded data only.">
-              (peeked)
-            </span>
-          </>
-        ) : (
-          <span className="pagination-range">
-            {startItem}–{endItem} of {totalItems}
-          </span>
-        )}
+        <span className="pagination-range">
+          {startItem}–{endItem} of {totalItems}
+        </span>
         <select
           value={pageSize}
-          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
           className="page-size-select"
-          disabled={disablePageSize}
-          title={disablePageSize ? 'All loaded messages fit in current view' : 'Change page size'}
         >
           {pageSizeOptions.map(size => (
             <option key={size} value={size}>
@@ -110,11 +154,9 @@ export function Pagination({
         </select>
       </div>
 
-      {/* Only show pagination controls if more than one page */}
-      {showPaginationControls && (
-        <div className="pagination-controls">
+      <div className="pagination-controls">
         <button
-          onClick={() => onPageChange(1)}
+          onClick={() => onPageChange?.(1)}
           disabled={currentPage === 1}
           className="pagination-btn"
           title="First page"
@@ -122,7 +164,7 @@ export function Pagination({
           ⟪
         </button>
         <button
-          onClick={() => onPageChange(currentPage - 1)}
+          onClick={() => onPageChange?.(currentPage - 1)}
           disabled={currentPage === 1}
           className="pagination-btn"
           title="Previous page"
@@ -134,7 +176,7 @@ export function Pagination({
           typeof page === 'number' ? (
             <button
               key={idx}
-              onClick={() => onPageChange(page)}
+              onClick={() => onPageChange?.(page)}
               className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
             >
               {page}
@@ -147,7 +189,7 @@ export function Pagination({
         )}
 
         <button
-          onClick={() => onPageChange(currentPage + 1)}
+          onClick={() => onPageChange?.(currentPage + 1)}
           disabled={currentPage === totalPages}
           className="pagination-btn"
           title="Next page"
@@ -155,7 +197,7 @@ export function Pagination({
           ›
         </button>
         <button
-          onClick={() => onPageChange(totalPages)}
+          onClick={() => onPageChange?.(totalPages)}
           disabled={currentPage === totalPages}
           className="pagination-btn"
           title="Last page"
@@ -163,7 +205,6 @@ export function Pagination({
           ⟫
         </button>
       </div>
-      )}
     </div>
   )
 }

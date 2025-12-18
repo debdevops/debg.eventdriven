@@ -1,35 +1,45 @@
-/* Pagination - Azure Portal Style */
+/* INSPECTOR MODE Footer - Informational Only */
 
 .pagination-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: white;
+  padding: 10px 16px;
+  background: #fafafa;
   border-top: 1px solid #e5e7eb;
   gap: 16px;
+  min-height: 36px;
+}
+
+.pagination-container.inspector-footer {
+  padding: 8px 16px;
+  min-height: 32px;
 }
 
 .pagination-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   font-size: 13px;
   color: #4b5563;
 }
 
-.pagination-range {
+.inspector-footer-text {
   font-weight: 500;
   color: #1f2937;
 }
 
-/* Inspector mode styling - emphasizes peek window concept */
-.pagination-range.inspector-mode {
-  font-weight: 600;
+.inspector-count-primary {
+  font-weight: 700;
   color: #0078d4;
 }
 
-.inspector-mode-hint {
+.inspector-count-total {
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.inspector-mode-badge {
   font-size: 11px;
   color: #6b7280;
   font-style: italic;
@@ -37,6 +47,52 @@
   padding: 2px 6px;
   border-radius: 3px;
   cursor: help;
+}
+
+.inspector-peek-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.peek-size-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.peek-size-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  min-width: 80px;
+}
+
+.peek-size-select:hover {
+  border-color: #0078d4;
+}
+
+.peek-size-select:focus {
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
+}
+
+.peek-size-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+.pagination-range {
+  font-weight: 500;
+  color: #1f2937;
 }
 
 .page-size-select {
@@ -48,12 +104,6 @@
   cursor: pointer;
   outline: none;
   transition: all 0.2s;
-}
-
-.page-size-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: #f9fafb;
 }
 
 .page-size-select:hover {
@@ -114,15 +164,14 @@
   user-select: none;
 }
 
-/* Compact mode for smaller screens */
 @media (max-width: 768px) {
   .pagination-container {
     flex-direction: column;
     gap: 8px;
   }
 
-  .pagination-info {
+  .inspector-peek-size {
     width: 100%;
-    justify-content: space-between;
+    margin-left: 0;
   }
 }

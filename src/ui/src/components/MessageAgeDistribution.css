@@ -1,6 +1,8 @@
 /* Light theme with soft visual hierarchy - grid stays primary focus */
 .message-age-distribution {
   background: #fafafa;
+  max-height: 72px;
+  overflow: hidden;
   padding: 6px 16px 8px;
   border-bottom: 1px solid #e5e7eb;
 }

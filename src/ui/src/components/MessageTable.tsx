@@ -59,10 +59,16 @@ export default function MessageTable({
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('')
   const [ageBucketFilter, setAgeBucketFilter] = useState<keyof AgeDistribution | null>(null)
   
-  // Select mode and pagination
+  // Select mode
   const [selectMode, setSelectMode] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
+  
+  /**
+   * INSPECTOR MODE ARCHITECTURE:
+   * Grid renders ALL loaded messages without pagination slicing.
+   * peekSize is preference for NEXT peek cycle, not current render.
+   * Pagination is informational footer only.
+   */
+  const [peekSize, setPeekSize] = useState(50)
 
   const handleDownload = (message: MessageEnvelope) => {
     const blob = new Blob([JSON.stringify(message, null, 2)], { type: 'application/json' })
@@ -193,12 +199,10 @@ export default function MessageTable({
     setFilterDeliveryCount(null)
     setEventTypeFilter('')
     setAgeBucketFilter(null)
-    setCurrentPage(1)
   }
 
   const handleAgeBucketClick = (bucket: keyof AgeDistribution) => {
     setAgeBucketFilter(ageBucketFilter === bucket ? null : bucket)
-    setCurrentPage(1)
   }
 
   /**
@@ -280,12 +284,11 @@ export default function MessageTable({
     })
   }, [ageFilteredMessages, sortField, sortAsc])
 
-  // STEP 5: Paginate - applied LAST to ensure page size is authoritative
-  const paginatedMessages = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
-    const end = start + pageSize
-    return sortedMessages.slice(start, end)
-  }, [sortedMessages, currentPage, pageSize])
+  /**
+   * INSPECTOR MODE: No pagination slicing.
+   * All sortedMessages render in grid.
+   * peekSize is for next fetch, not current display.
+   */
 
   return (
     <div className="message-table-container">
@@ -442,7 +445,7 @@ export default function MessageTable({
               </tr>
             </thead>
             <tbody>
-              {paginatedMessages.map(message => (
+              {sortedMessages.map(message => (
                 <tr 
                   key={message.sequenceNumber} 
                   className={`message-row ${correlationFilter && message.correlationId?.toLowerCase().includes(correlationFilter.toLowerCase()) ? 'correlation-highlight' : ''}`}
@@ -499,19 +502,13 @@ export default function MessageTable({
           </table>
         </div>
 
-        {/* INSPECTOR MODE Pagination - operates on loaded messages only */}
+        {/* INSPECTOR MODE Footer - informational only, no slicing */}
         <Pagination
-          currentPage={currentPage}
-          totalItems={sortedMessages.length}
-          totalQueueCount={totalMessageCount}
+          filteredCount={sortedMessages.length}
           loadedCount={messages.length}
-          pageSize={pageSize}
-          onPageChange={setCurrentPage}
-          onPageSizeChange={(size) => {
-            setPageSize(size)
-            setCurrentPage(1)
-          }}
-          inspectorMode={true}
+          totalQueueCount={totalMessageCount}
+          peekSize={peekSize}
+          onPeekSizeChange={setPeekSize}
         />
       </>
       )}
