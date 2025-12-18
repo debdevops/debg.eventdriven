@@ -24,6 +24,10 @@ interface Outlier {
   source: string
   correlationId?: string
   severity?: string
+  confidence?: number
+  expected?: string
+  actual?: string
+  reason?: string
 }
 
 interface Analysis {
@@ -129,33 +133,51 @@ export function AiInsightsInspector({
     return clusters.sort((a, b) => b.size - a.size)
   }, [aiInsights])
 
-  // Combine all outliers
+  // Combine all outliers with confidence filtering (>= 60%)
   const allOutliers = useMemo(() => {
     const outliers: Outlier[] = []
     
     if (aiInsights.activeQueueAnalysis?.outliers) {
-      outliers.push(...aiInsights.activeQueueAnalysis.outliers.map(o => ({
-        ...o,
-        source: o.source || 'Active Queue',
-        anomalyType: o.anomalyType || 'unknown',
-        severity: getSeverity(o.anomalyType),
-        correlationId: o.correlationId || 'N/A',
-        description: o.description || 'No description'
-      })))
+      outliers.push(...aiInsights.activeQueueAnalysis.outliers
+        .filter(o => !o.confidence || o.confidence >= 60)
+        .map(o => ({
+          ...o,
+          source: o.source || 'Active Queue',
+          anomalyType: o.anomalyType || 'unknown',
+          severity: getSeverity(o.anomalyType),
+          correlationId: o.correlationId || 'N/A',
+          description: o.description || 'No description',
+          confidence: o.confidence || 100,
+          reason: o.reason || o.description || 'No reason provided',
+          expected: o.expected,
+          actual: o.actual
+        })))
     }
     
     if (aiInsights.dlqAnalysis?.outliers) {
-      outliers.push(...aiInsights.dlqAnalysis.outliers.map(o => ({
-        ...o,
-        source: o.source || 'DLQ',
-        anomalyType: o.anomalyType || 'unknown',
-        severity: getSeverity(o.anomalyType),
-        correlationId: o.correlationId || 'N/A',
-        description: o.description || 'No description'
-      })))
+      outliers.push(...aiInsights.dlqAnalysis.outliers
+        .filter(o => !o.confidence || o.confidence >= 60)
+        .map(o => ({
+          ...o,
+          source: o.source || 'DLQ',
+          anomalyType: o.anomalyType || 'unknown',
+          severity: getSeverity(o.anomalyType),
+          correlationId: o.correlationId || 'N/A',
+          description: o.description || 'No description',
+          confidence: o.confidence || 100,
+          reason: o.reason || o.description || 'No reason provided',
+          expected: o.expected,
+          actual: o.actual
+        })))
     }
     
-    return outliers
+    return outliers.sort((a, b) => {
+      // Sort by severity, then confidence
+      const sevOrder = { High: 3, Medium: 2, Low: 1 }
+      const sevDiff = (sevOrder[b.severity as keyof typeof sevOrder] || 2) - (sevOrder[a.severity as keyof typeof sevOrder] || 2)
+      if (sevDiff !== 0) return sevDiff
+      return (b.confidence || 100) - (a.confidence || 100)
+    })
   }, [aiInsights])
 
   // Paginated patterns
@@ -360,6 +382,9 @@ export function AiInsightsInspector({
 
         {activeTab === 'anomalies' && (
           <div className="anomalies-tab">
+            <div className="anomalies-note">
+              Showing high-confidence anomalies (≥60%). AI stays silent on uncertain patterns.
+            </div>
             <div className="grid-container">
               <table className="inspector-grid">
                 <thead>
@@ -369,8 +394,9 @@ export function AiInsightsInspector({
                     <th>Event Type</th>
                     <th>Anomaly Type</th>
                     <th>Severity</th>
-                    <th>Correlation ID</th>
-                    <th>Description</th>
+                    <th>Confidence</th>
+                    <th>Reason</th>
+                    <th>Expected vs Actual</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -399,20 +425,38 @@ export function AiInsightsInspector({
                         </span>
                       </td>
                       <td>
-                        <code className="correlation-id">
-                          {outlier.correlationId === 'N/A' 
-                            ? 'N/A' 
-                            : (outlier.correlationId || '').substring(0, 15) + '...'}
-                        </code>
+                        <span className="confidence-badge">
+                          {outlier.confidence || 100}%
+                        </span>
                       </td>
-                      <td className="description-cell">{outlier.description}</td>
+                      <td className="reason-cell">{outlier.reason || outlier.description}</td>
+                      <td className="comparison-cell">
+                        {outlier.expected || outlier.actual ? (
+                          <div className="comparison">
+                            {outlier.expected && (
+                              <div className="comparison-item">
+                                <span className="comparison-label">Expected:</span>
+                                <code>{outlier.expected.substring(0, 30)}</code>
+                              </div>
+                            )}
+                            {outlier.actual && (
+                              <div className="comparison-item">
+                                <span className="comparison-label">Actual:</span>
+                                <code>{outlier.actual.substring(0, 30)}</code>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="no-comparison">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
 
               {allOutliers.length === 0 && (
-                <div className="empty-grid">No anomalies detected</div>
+                <div className="empty-grid">✅ No high-confidence anomalies detected</div>
               )}
             </div>
 
