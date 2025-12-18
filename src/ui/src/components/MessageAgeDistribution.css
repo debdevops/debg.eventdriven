@@ -1,7 +1,7 @@
 /* Light theme with soft visual hierarchy - grid stays primary focus */
 .message-age-distribution {
   background: #fafafa;
-  padding: 8px 16px 10px;
+  padding: 6px 16px 8px;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -9,11 +9,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .distribution-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #6b7280;
   text-transform: uppercase;
@@ -21,15 +21,15 @@
 }
 
 .distribution-total {
-  font-size: 10px;
+  font-size: 9px;
   color: #9ca3af;
 }
 
-/* Reduced height (50px vs 80px) for quick scan, not immersion */
+/* Reduced height (32px vs 50px) - 50% reduction for contextual scan */
 .distribution-bars {
   display: flex;
-  gap: 8px;
-  height: 50px;
+  gap: 6px;
+  height: 32px;
 }
 
 /* Subtle, scannable buckets - no heavy visual weight */
@@ -63,7 +63,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  min-height: 28px;
+  min-height: 18px;
 }
 
 .bucket-bar {
@@ -83,17 +83,17 @@
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .bucket-label-text {
-  font-size: 10px;
+  font-size: 9px;
   color: #9ca3af;
   font-weight: 500;
 }
 
 .bucket-count {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #374151;
   font-variant-numeric: tabular-nums;

@@ -82,10 +82,10 @@ export default function MessageTable({
   }
 
   const handleSelectAll = () => {
-    if (selectedMessages.size === filteredAndSortedMessages.length) {
+    if (selectedMessages.size === sortedMessages.length) {
       setSelectedMessages(new Set())
     } else {
-      setSelectedMessages(new Set(filteredAndSortedMessages.map(m => m.sequenceNumber)))
+      setSelectedMessages(new Set(sortedMessages.map(m => m.sequenceNumber)))
     }
   }
 
@@ -130,7 +130,7 @@ export default function MessageTable({
   }
 
   const handleReplayAll = async () => {
-    if (!confirm(`Replay ALL ${filteredAndSortedMessages.length} DLQ messages?`)) return
+    if (!confirm(`Replay ALL ${sortedMessages.length} DLQ messages?`)) return
     
     setReplayLoading(true)
     try {
@@ -141,7 +141,7 @@ export default function MessageTable({
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxMessages: filteredAndSortedMessages.length })
+        body: JSON.stringify({ maxMessages: sortedMessages.length })
       })
 
       if (response.ok) {
@@ -170,7 +170,7 @@ export default function MessageTable({
   }
 
   const handleExportAll = () => {
-    const blob = new Blob([JSON.stringify(filteredAndSortedMessages, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify(sortedMessages, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -199,11 +199,24 @@ export default function MessageTable({
     setCurrentPage(1)
   }
 
-  // Filter and sort messages
-  const filteredAndSortedMessages = useMemo(() => {
+  /**
+   * IMMUTABLE DATA PIPELINE - prevents pagination bugs
+   * 
+   * Step 1: Apply base filters (everything except age)
+   * Step 2: Compute age buckets from base-filtered data
+   * Step 3: Apply age filter to base-filtered data
+   * Step 4: Sort the age-filtered results
+   * Step 5: Paginate sorted results
+   * 
+   * WHY: Age Distribution must aggregate base-filtered data,
+   * not age-filtered data, so clicking buckets shows accurate counts.
+   * Pagination is applied LAST to ensure page size is authoritative.
+   */
+
+  // STEP 1: Base filters (search, correlation, delivery, eventType)
+  const baseFilteredMessages = useMemo(() => {
     let filtered = messages
 
-    // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
       filtered = filtered.filter(msg => 
@@ -215,19 +228,16 @@ export default function MessageTable({
       )
     }
 
-    // Apply correlation filter
     if (correlationFilter) {
       filtered = filtered.filter(msg => 
         msg.correlationId?.toLowerCase().includes(correlationFilter.toLowerCase())
       )
     }
 
-    // Apply delivery count filter
     if (filterDeliveryCount !== null) {
       filtered = filtered.filter(msg => msg.deliveryCount === filterDeliveryCount)
     }
 
-    // Apply event type filter
     if (eventTypeFilter) {
       filtered = filtered.filter(msg => {
         const { eventType } = extractEventType(msg)
@@ -235,21 +245,30 @@ export default function MessageTable({
       })
     }
 
-    // Apply age bucket filter
-    if (ageBucketFilter) {
-      const now = Date.now()
-      filtered = filtered.filter(msg => {
-        const ageMinutes = (now - new Date(msg.enqueuedTimeUtc).getTime()) / 60000
-        if (ageBucketFilter === 'lessThan5m') return ageMinutes < 5
-        if (ageBucketFilter === 'between5And30m') return ageMinutes >= 5 && ageMinutes < 30
-        if (ageBucketFilter === 'between30And120m') return ageMinutes >= 30 && ageMinutes < 120
-        if (ageBucketFilter === 'moreThan2h') return ageMinutes >= 120
-        return true
-      })
-    }
+    return filtered
+  }, [messages, searchTerm, correlationFilter, filterDeliveryCount, eventTypeFilter])
 
-    // Sort
-    const sorted = [...filtered].sort((a, b) => {
+  // STEP 2: Age buckets computed from base-filtered data (not age-filtered)
+  // This ensures bucket counts are accurate when age filter is active
+
+  // STEP 3: Apply age filter to base-filtered data
+  const ageFilteredMessages = useMemo(() => {
+    if (!ageBucketFilter) return baseFilteredMessages
+
+    const now = Date.now()
+    return baseFilteredMessages.filter(msg => {
+      const ageMinutes = (now - new Date(msg.enqueuedTimeUtc).getTime()) / 60000
+      if (ageBucketFilter === 'lessThan5m') return ageMinutes < 5
+      if (ageBucketFilter === 'between5And30m') return ageMinutes >= 5 && ageMinutes < 30
+      if (ageBucketFilter === 'between30And120m') return ageMinutes >= 30 && ageMinutes < 120
+      if (ageBucketFilter === 'moreThan2h') return ageMinutes >= 120
+      return true
+    })
+  }, [baseFilteredMessages, ageBucketFilter])
+
+  // STEP 4: Sort age-filtered results
+  const sortedMessages = useMemo(() => {
+    return [...ageFilteredMessages].sort((a, b) => {
       const aVal = a[sortField]
       const bVal = b[sortField]
       if (aVal === undefined || bVal === undefined) return 0
@@ -257,29 +276,28 @@ export default function MessageTable({
       if (aVal > bVal) return sortAsc ? 1 : -1
       return 0
     })
+  }, [ageFilteredMessages, sortField, sortAsc])
 
-    return sorted
-  }, [messages, searchTerm, correlationFilter, filterDeliveryCount, eventTypeFilter, ageBucketFilter, sortField, sortAsc])
-
-  // Paginated messages
+  // STEP 5: Paginate - applied LAST to ensure page size is authoritative
   const paginatedMessages = useMemo(() => {
     const start = (currentPage - 1) * pageSize
-    return filteredAndSortedMessages.slice(start, start + pageSize)
-  }, [filteredAndSortedMessages, currentPage, pageSize])
+    const end = start + pageSize
+    return sortedMessages.slice(start, end)
+  }, [sortedMessages, currentPage, pageSize])
 
   return (
     <div className="message-table-container">
-      {/* Queue Health Header */}
+      {/* Queue Health Header - shows stats for base-filtered view */}
       <QueueHealthHeader 
-        messages={messages}
+        messages={baseFilteredMessages}
         dlqCount={dlqCount}
         entityName={entityName}
         isDLQ={isDLQ}
       />
 
-      {/* Message Age Distribution */}
+      {/* Age Distribution - aggregates base-filtered data (excludes age filter) */}
       <MessageAgeDistribution
-        messages={messages}
+        messages={baseFilteredMessages}
         onBucketClick={handleAgeBucketClick}
         activeBucket={ageBucketFilter}
       />
@@ -288,7 +306,7 @@ export default function MessageTable({
       <ActionToolbar
         entityName={entityName}
         entityType={isDLQ ? 'dlq' : subscriptionName ? 'subscription' : 'queue'}
-        totalMessages={filteredAndSortedMessages.length}
+        totalMessages={sortedMessages.length}
         selectedCount={selectedMessages.size}
         onRefresh={onRefresh || (() => {})}
         onReplay={isDLQ ? handleReplaySelected : undefined}
@@ -377,12 +395,12 @@ export default function MessageTable({
             <option value="2">2+ Retries</option>
           </select>
           <span className="result-count">
-            {filteredAndSortedMessages.length} message{filteredAndSortedMessages.length !== 1 ? 's' : ''}
+            {sortedMessages.length} message{sortedMessages.length !== 1 ? 's' : ''}
           </span>
         </div>
       </div>
 
-      {filteredAndSortedMessages.length === 0 ? (
+      {sortedMessages.length === 0 ? (
         <div className="empty-messages">
           <p>{messages.length === 0 ? 'No messages to display' : 'No messages match your filters'}</p>
           {messages.length > 0 && (
@@ -401,7 +419,7 @@ export default function MessageTable({
                   <th className="checkbox-col">
                     <input
                       type="checkbox"
-                      checked={selectedMessages.size === filteredAndSortedMessages.length && filteredAndSortedMessages.length > 0}
+                      checked={selectedMessages.size === sortedMessages.length && sortedMessages.length > 0}
                       onChange={handleSelectAll}
                       title="Select all"
                     />
@@ -482,7 +500,7 @@ export default function MessageTable({
         {/* Pagination */}
         <Pagination
           currentPage={currentPage}
-          totalItems={filteredAndSortedMessages.length}
+          totalItems={sortedMessages.length}
           pageSize={pageSize}
           onPageChange={setCurrentPage}
           onPageSizeChange={(size) => {
