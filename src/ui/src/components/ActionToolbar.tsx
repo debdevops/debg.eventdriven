@@ -28,6 +28,7 @@ export interface ActionToolbarProps {
   // State
   refreshing?: boolean
   loading?: boolean
+  disabled?: boolean
   frozenSnapshot?: boolean
   onToggleSnapshot?: () => void
   aiInsightsLoading?: boolean
@@ -56,6 +57,7 @@ export function ActionToolbar({
   onAiInsights,
   refreshing: _refreshing = false,
   loading = false,
+  disabled = false,
   frozenSnapshot = false,
   onToggleSnapshot,
   aiInsightsLoading = false,
@@ -86,6 +88,7 @@ export function ActionToolbar({
             <button
               className={`toolbar-btn ${selectMode ? 'active' : ''}`}
               onClick={onToggleSelectMode}
+              disabled={disabled}
               title="Toggle selection mode (S)"
             >
               ☑ Select
@@ -94,6 +97,7 @@ export function ActionToolbar({
               <button
                 className="toolbar-btn"
                 onClick={onSelectAll}
+                disabled={disabled}
                 title="Select all (A)"
               >
                 Select All
@@ -103,6 +107,7 @@ export function ActionToolbar({
               <button
                 className="toolbar-btn"
                 onClick={onClearSelection}
+                disabled={disabled}
                 title="Clear selection"
               >
                 Clear
@@ -117,6 +122,7 @@ export function ActionToolbar({
             <button
               className={`toolbar-btn ${frozenSnapshot ? 'active' : ''}`}
               onClick={onToggleSnapshot}
+              disabled={disabled}
               title="Freeze/unfreeze snapshot"
             >
               {frozenSnapshot ? '❄️ Frozen' : '📷 Snapshot'}
@@ -131,7 +137,7 @@ export function ActionToolbar({
               <button
                 className="toolbar-btn success"
                 onClick={onReplay}
-                disabled={loading}
+                disabled={disabled || loading}
                 title="Replay selected messages"
               >
                 ▶️ Replay ({selectedCount})
@@ -142,7 +148,7 @@ export function ActionToolbar({
               <button
                 className="toolbar-btn warning"
                 onClick={onMoveToDLQ}
-                disabled={loading}
+                disabled={disabled || loading}
                 title="Move selected to DLQ"
               >
                 ⚠️ To DLQ ({selectedCount})
@@ -153,7 +159,7 @@ export function ActionToolbar({
               <button
                 className="toolbar-btn danger"
                 onClick={onDelete}
-                disabled={loading}
+                disabled={disabled || loading}
                 title="Delete selected messages"
               >
                 🗑️ Delete ({selectedCount})
@@ -164,6 +170,7 @@ export function ActionToolbar({
               <button
                 className="toolbar-btn"
                 onClick={onExportSelected}
+                disabled={disabled}
                 title="Export selected messages"
               >
                 📥 Export
@@ -178,7 +185,7 @@ export function ActionToolbar({
             <button
               className="toolbar-btn success"
               onClick={onReplayAll}
-              disabled={loading}
+              disabled={disabled || loading}
               title="Replay all DLQ messages"
             >
               ▶️ Replay All
@@ -189,6 +196,7 @@ export function ActionToolbar({
             <button
               className="toolbar-btn"
               onClick={onExportAll}
+              disabled={disabled}
               title="Export all messages"
             >
               📥 Export All
@@ -199,6 +207,7 @@ export function ActionToolbar({
             <button
               className="toolbar-btn"
               onClick={onClearFilters}
+              disabled={disabled}
               title="Clear all filters"
             >
               ✕ Clear Filters
@@ -210,7 +219,7 @@ export function ActionToolbar({
             <button
               className={`toolbar-btn ai-insights-btn ${hasAiInsights ? 'active' : ''}`}
               onClick={onAiInsights}
-              disabled={aiInsightsLoading}
+              disabled={disabled || aiInsightsLoading}
               title="Run AI analysis to detect anomalies and patterns"
             >
               {aiInsightsLoading ? (

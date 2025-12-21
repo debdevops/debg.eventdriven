@@ -5,9 +5,9 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: white;
-  border-top: 2px solid #0078d4;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  background: var(--inspector-bg);
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 -4px 12px var(--modal-overlay);
   display: flex;
   flex-direction: column;
   z-index: 1000;
@@ -26,7 +26,7 @@
 .inspector-resize-handle {
   height: 8px;
   cursor: ns-resize;
-  background: #f3f4f6;
+  background: var(--surface-3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -35,17 +35,17 @@
 }
 
 .inspector-resize-handle:hover {
-  background: #e5e7eb;
+  background: var(--surface-2);
 }
 
 .inspector-resize-handle:active {
-  background: #d1d5db;
+  background: var(--border-color);
 }
 
 .resize-indicator {
   width: 40px;
   height: 3px;
-  background: #9ca3af;
+  background: var(--text-muted);
   border-radius: 2px;
 }
 
@@ -54,15 +54,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: linear-gradient(to bottom, #ffffff, #f9fafb);
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--inspector-header-bg);
+  border-bottom: 1px solid var(--border-color);
 }
 
 
 .inspector-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 
@@ -70,7 +70,7 @@
   background: none;
   border: none;
   font-size: 18px;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -79,8 +79,8 @@
 }
 
 .inspector-close-btn:hover {
-  background: #f3f4f6;
-  color: #1f2937;
+  background: var(--surface-3);
+  color: var(--text-primary);
 }
 
 .inspector-content {

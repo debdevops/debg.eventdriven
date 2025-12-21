@@ -34,6 +34,7 @@ interface UnifiedInspectorProps {
   onClose: () => void
   onMessageSelect?: (message: any) => void
   onAiRefresh?: () => void
+  onApplyAiPattern?: (patternId: string, label: string, messageIds: string[]) => void
 }
 
 export function UnifiedInspector({
@@ -45,7 +46,8 @@ export function UnifiedInspector({
   isDLQ,
   onClose,
   onMessageSelect,
-  onAiRefresh
+  onAiRefresh,
+  onApplyAiPattern
 }: UnifiedInspectorProps) {
   const [height, setHeight] = useState(400)
   const [isResizing, setIsResizing] = useState(false)
@@ -118,6 +120,7 @@ export function UnifiedInspector({
             isDLQ={isDLQ}
             onMessageSelect={onMessageSelect}
             onRefresh={onAiRefresh}
+            onApplyAiPattern={onApplyAiPattern}
           />
         )}
 

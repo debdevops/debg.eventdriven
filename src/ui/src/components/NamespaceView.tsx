@@ -44,7 +44,7 @@ export function NamespaceView({
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(200) // Compact sidebar default
+  const [sidebarWidth, setSidebarWidth] = useState(180) // Reduced from 200 for more grid space
   const [isResizing, setIsResizing] = useState(false)
   
   // Use new robust session context
@@ -56,7 +56,6 @@ export function NamespaceView({
     // Guard: Prevent navigation if session is not ready
     if (status === 'connecting' || status === 'auth_required') {
       console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
-      toast?.warning('Please wait for reconnection to complete')
       return
     }
     
@@ -72,7 +71,6 @@ export function NamespaceView({
     // Guard: Prevent navigation if session is not ready
     if (status === 'connecting' || status === 'auth_required') {
       console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
-      toast?.warning('Please wait for reconnection to complete')
       return
     }
     
@@ -90,7 +88,6 @@ export function NamespaceView({
     // Guard: Prevent navigation if session is not ready
     if (status === 'connecting' || status === 'auth_required') {
       console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
-      toast?.warning('Please wait for reconnection to complete')
       return
     }
     
@@ -110,7 +107,7 @@ export function NamespaceView({
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return
     const newWidth = e.clientX
-    if (newWidth >= 200 && newWidth <= 600) {
+    if (newWidth >= 160 && newWidth <= 400) { // Reduced min from 200 to 160
       setSidebarWidth(newWidth)
     }
   }, [isResizing])
@@ -134,9 +131,6 @@ export function NamespaceView({
     // Guard: Prevent refresh if session is not ready
     if (status === 'connecting' || status === 'auth_required') {
       console.log('[NamespaceView] Refresh blocked: session not ready (status=' + status + ')')
-      if (triggeredByUser) {
-        toast.warning('Please wait for reconnection to complete')
-      }
       return
     }
     
@@ -210,7 +204,7 @@ export function NamespaceView({
             sessionId={namespace.sessionId}
             selectedTarget={selectedTarget}
             onAudit={onAudit}
-            isSessionExpired={status === 'expired'}
+            isSessionExpired={status === 'auth_required'}
             onAiInsights={onAiInsights}
             aiInsightsLoading={aiInsightsLoading}
             hasAiInsights={hasAiInsights}

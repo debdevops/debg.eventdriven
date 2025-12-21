@@ -1,37 +1,73 @@
-/* Light theme with soft visual hierarchy - grid stays primary focus */
+/* COMPACT HEALTH INDICATOR - Fixed height, visually subordinate to message grid */
 .message-age-distribution {
-  background: #fafafa;
-  max-height: 72px;
+  background: var(--surface-2);
+  height: 32px; /* ULTRA-COMPACT - reduced from 48px */
+  max-height: 32px;
+  min-height: 32px;
   overflow: hidden;
-  padding: 6px 16px 8px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 2px 12px; /* Reduced from 4px 16px */
+  border-bottom: 1px solid var(--border-color);
+  box-sizing: border-box;
+  flex-shrink: 0; /* Prevent flex container from shrinking this */
+}
+
+.message-age-distribution.collapsed {
+  height: 0px; /* Completely hidden when collapsed */
+  max-height: 0px;
+  min-height: 0px;
+  padding: 0;
+  border: none;
 }
 
 .distribution-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 1px; /* Minimal spacing */
+  height: 12px; /* Reduced from 16px */
+}
+
+.distribution-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.distribution-collapse-btn {
+  background: transparent; /* No background for minimal design */
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.distribution-collapse-btn:hover {
+  border-color: var(--border-color);
+  background: var(--surface);
+  color: var(--accent);
 }
 
 .distribution-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: #6b7280;
+  font-size: 8px; /* Reduced from 9px */
+  font-weight: 500; /* Reduced from 600 for less visual weight */
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px; /* Reduced from 0.3px */
 }
 
 .distribution-total {
-  font-size: 9px;
-  color: #9ca3af;
+  font-size: 7px; /* Reduced from 8px */
+  color: var(--text-muted);
 }
 
-/* Reduced height (32px vs 50px) - 50% reduction for contextual scan */
+/* ULTRA-COMPACT bars - 18px height total */
 .distribution-bars {
   display: flex;
-  gap: 6px;
-  height: 32px;
+  gap: 3px; /* Reduced from 4px */
+  height: 18px; /* Reduced from 24px */
 }
 
 /* Subtle, scannable buckets - no heavy visual weight */
@@ -46,13 +82,13 @@
 }
 
 .age-bucket:hover:not(.empty) {
-  background: #f3f4f6;
+  background: var(--surface-3);
   transform: translateY(-1px);
 }
 
 .age-bucket.active {
-  background: #e5e7eb;
-  box-shadow: 0 0 0 2px #d1d5db;
+  background: var(--surface-3);
+  box-shadow: 0 0 0 2px var(--border-strong);
 }
 
 .age-bucket.empty {
@@ -79,28 +115,35 @@
   opacity: 0.85;
 }
 
-/* Compact labels - details in tooltips, not visual noise */
+/* ULTRA-COMPACT labels - minimal text, maximum scanability */
 .bucket-label {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  margin-top: 4px;
+  gap: 0px; /* No gap for ultra-compact */
+  margin-top: 2px; /* Reduced from 4px */
 }
 
 .bucket-label-text {
-  font-size: 9px;
-  color: #9ca3af;
-  font-weight: 500;
+  font-size: 8px; /* Reduced from 9px */
+  color: var(--text-muted);
+  font-weight: 400; /* Reduced visual weight */
+  line-height: 1;
 }
 
 .bucket-count {
-  font-size: 12px;
+  font-size: 11px; /* Reduced from 12px */
   font-weight: 600;
-  color: #374151;
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .age-bucket.empty .bucket-count {
-  color: #d1d5db;
+  color: var(--border-strong);
 }
+
+.bucket-bar.tone-0 { background: var(--age-0); }
+.bucket-bar.tone-1 { background: var(--age-1); }
+.bucket-bar.tone-2 { background: var(--age-2); }
+.bucket-bar.tone-3 { background: var(--age-3); }

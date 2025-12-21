@@ -1,0 +1,26 @@
+.connect-form-description {
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.connect-form-field {
+  margin-bottom: 1rem;
+}
+
+.connect-form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.connect-form-input {
+  width: 100%;
+  max-width: 500px;
+}
+
+.connect-form-submit {
+  background-color: var(--accent);
+}
+
+.connect-form-info {
+  margin-top: 1.5rem;
+}

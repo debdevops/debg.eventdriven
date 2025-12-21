@@ -4,8 +4,8 @@
 
 .session-health-card {
   padding: 12px;
-  background-color: white;
-  border: 1px solid var(--border, #e5e7eb);
+  background-color: var(--surface);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   margin-bottom: 12px;
 }
@@ -30,25 +30,25 @@
 }
 
 .session-health-dot-green {
-  background-color: #10b981;
+  background-color: var(--success);
 }
 
 .session-health-dot-yellow {
-  background-color: #f59e0b;
+  background-color: var(--warning);
 }
 
 .session-health-dot-orange {
-  background-color: #f97316;
+  background-color: var(--warning);
 }
 
 .session-health-dot-red {
-  background-color: #ef4444;
+  background-color: var(--danger);
 }
 
 .session-health-namespace-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text, #111827);
+  color: var(--text-primary);
 }
 
 .session-health-badge {
@@ -59,23 +59,23 @@
 }
 
 .session-health-badge-green {
-  background-color: #d1fae5;
-  color: #065f46;
+  background-color: var(--success-bg);
+  color: var(--success-text);
 }
 
 .session-health-badge-yellow {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .session-health-badge-orange {
-  background-color: #ffedd5;
-  color: #9a3412;
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .session-health-badge-red {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
 }
 
 .session-health-timer {
@@ -87,7 +87,7 @@
 
 .session-health-timer-label {
   font-size: 11px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-muted);
 }
 
 .session-health-timer-value {
@@ -97,15 +97,15 @@
 }
 
 .session-health-timer-normal {
-  color: var(--text, #111827);
+  color: var(--text-primary);
 }
 
 .session-health-timer-warning {
-  color: #f59e0b;
+  color: var(--warning);
 }
 
 .session-health-timer-critical {
-  color: #f97316;
+  color: var(--danger);
   animation: pulse 1s ease-in-out infinite;
 }
 
@@ -120,8 +120,8 @@
 
 .session-health-extend-btn {
   width: 100%;
-  background-color: #3b82f6;
-  color: white;
+  background-color: var(--accent);
+  color: var(--surface);
   border: none;
   border-radius: 6px;
   padding: 8px 12px;
@@ -132,15 +132,16 @@
 }
 
 .session-health-extend-btn:hover {
-  background-color: #2563eb;
+  background-color: var(--accent-hover);
 }
 
 .session-health-extend-btn:active {
-  background-color: #1d4ed8;
+  background-color: var(--accent-hover);
 }
 
 .session-health-extend-btn:disabled {
-  background-color: #9ca3af;
+  background-color: var(--surface-3);
+  color: var(--text-muted);
   cursor: not-allowed;
   opacity: 0.7;
 }

@@ -5,8 +5,8 @@
   justify-content: space-between;
   padding: 0 20px;
   height: 48px;
-  background: var(--bg-primary, #fff);
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   gap: 16px;
 }
@@ -22,15 +22,15 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #1f2937);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .dlq-badge {
-  background: #ef4444;
-  color: white;
+  background: var(--danger);
+  color: var(--surface);
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
@@ -40,11 +40,11 @@
 
 .message-count {
   font-size: 13px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .selected-count {
-  color: var(--primary-color, #3b82f6);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -65,7 +65,7 @@
 }
 
 .toolbar-group + .toolbar-group {
-  border-left: 1px solid var(--border-color, #e5e7eb);
+  border-left: 1px solid var(--border-color);
   padding-left: 12px;
 }
 
@@ -76,18 +76,18 @@
   padding: 6px 12px;
   font-size: 13px;
   font-weight: 500;
-  background: var(--bg-secondary, #f9fafb);
-  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--surface-2);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: var(--text-primary, #1f2937);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 200ms;
   white-space: nowrap;
 }
 
 .toolbar-btn:hover:not(:disabled) {
-  background: var(--bg-hover, #f3f4f6);
-  border-color: var(--primary-color, #3b82f6);
+  background: var(--surface-3);
+  border-color: var(--accent);
 }
 
 .toolbar-btn:disabled {
@@ -96,75 +96,75 @@
 }
 
 .toolbar-btn.active {
-  background: var(--primary-color, #3b82f6);
-  color: white;
-  border-color: var(--primary-color, #3b82f6);
+  background: var(--accent);
+  color: var(--surface);
+  border-color: var(--accent);
 }
 
 .toolbar-btn.primary {
-  background: var(--primary-color, #3b82f6);
-  color: white;
-  border-color: var(--primary-color, #3b82f6);
+  background: var(--accent);
+  color: var(--surface);
+  border-color: var(--accent);
 }
 
 .toolbar-btn.primary:hover:not(:disabled) {
-  background: var(--primary-hover, #2563eb);
+  background: var(--accent-hover);
 }
 
 .toolbar-btn.success {
-  background: #10b981;
-  color: white;
-  border-color: #10b981;
+  background: var(--success);
+  color: var(--surface);
+  border-color: var(--success);
 }
 
 .toolbar-btn.success:hover:not(:disabled) {
-  background: #059669;
+  background: var(--success);
 }
 
 .toolbar-btn.warning {
-  background: #f59e0b;
-  color: white;
-  border-color: #f59e0b;
+  background: var(--warning);
+  color: var(--surface);
+  border-color: var(--warning);
 }
 
 .toolbar-btn.warning:hover:not(:disabled) {
-  background: #d97706;
+  background: var(--warning);
 }
 
 .toolbar-btn.danger {
-  background: #ef4444;
-  color: white;
-  border-color: #ef4444;
+  background: var(--danger);
+  color: var(--surface);
+  border-color: var(--danger);
 }
 
 .toolbar-btn.danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--danger);
 }
 
 /* AI Insights Button - Special styling */
 .toolbar-btn.ai-insights-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: var(--surface);
   border: none;
   font-weight: 600;
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 2px 4px var(--focus-ring);
   transition: all 0.3s ease;
 }
 
 .toolbar-btn.ai-insights-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  box-shadow: 0 4px 8px rgba(99, 102, 241, 0.3);
+  background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent) 100%);
+  box-shadow: 0 4px 8px var(--focus-ring);
   transform: translateY(-1px);
 }
 
 .toolbar-btn.ai-insights-btn.active {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  background: linear-gradient(135deg, var(--success) 0%, var(--success) 100%);
+  box-shadow: var(--shadow);
 }
 
 .toolbar-btn.ai-insights-btn.active:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, var(--success) 0%, var(--success) 100%);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Mobile responsive */

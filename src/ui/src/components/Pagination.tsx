@@ -22,6 +22,8 @@ interface PaginationProps {
   totalQueueCount?: number
   peekSize?: number
   onPeekSizeChange?: (size: number) => void
+  onLoadNextBatch?: () => void
+  disabled?: boolean
   
   // Legacy mode
   currentPage?: number
@@ -46,15 +48,25 @@ export function Pagination(props: PaginationProps) {
 }
 
 function renderInspectorMode(props: PaginationProps) {
-  const { filteredCount = 0, loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, pageSizeOptions = [50, 100, 200] } = props
+  const { filteredCount = 0, loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, onLoadNextBatch, pageSizeOptions = [50, 100, 200], disabled = false } = props
   
   const showPeekSizeSelector = loadedCount >= peekSize
+  const hasMoreMessages = totalQueueCount !== undefined && filteredCount < totalQueueCount
 
   return (
     <div className="pagination-container inspector-footer">
+      {/* Visual divider when more messages are available */}
+      {hasMoreMessages && (
+        <div className="messages-end-divider">
+          <div className="divider-line"></div>
+          <span className="divider-text">End of loaded messages</span>
+          <div className="divider-line"></div>
+        </div>
+      )}
+      
       <div className="pagination-info">
         <span className="inspector-footer-text">
-          Showing{' '}
+          Showing first{' '}
           <span className="inspector-count-primary">{filteredCount}</span>
           {totalQueueCount !== undefined && (
             <>
@@ -63,33 +75,53 @@ function renderInspectorMode(props: PaginationProps) {
             </>
           )}
           {' '}messages
-        </span>
-        <span className="inspector-mode-badge" title="Peek-based inspector tool">
-          (peeked)
+          <span className="inspector-mode-badge" title="Peek-based inspector tool - non-destructive read from queue">
+            (Peek snapshot)
+          </span>
         </span>
       </div>
 
-      {/* Peek size preference selector - informational only */}
-      {showPeekSizeSelector && (
-        <div className="inspector-peek-size">
-          <label htmlFor="peek-size-select" className="peek-size-label">
-            Next peek size:
-          </label>
-          <select
-            id="peek-size-select"
-            value={peekSize}
-            onChange={(e) => onPeekSizeChange?.(Number(e.target.value))}
-            className="peek-size-select"
-            title="Size for next peek operation (does not affect current display)"
-          >
-            {pageSizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <div className="inspector-controls">
+        {/* Load next batch button - enhanced visibility */}
+        {hasMoreMessages && onLoadNextBatch && (
+          <div className="load-next-section">
+            <button
+              onClick={onLoadNextBatch}
+              className="btn-load-next-batch primary"
+              title="Load next batch of messages using last sequence number"
+              disabled={disabled}
+            >
+              ⬇ Load next batch ({totalQueueCount && filteredCount ? totalQueueCount - filteredCount : '?'} more)
+            </button>
+            <div className="peek-hint">
+              Scrolling won't load more - use button above
+            </div>
+          </div>
+        )}
+
+        {/* Peek batch size preference selector - clearly labeled */}
+        {showPeekSizeSelector && (
+          <div className="inspector-peek-size">
+            <label htmlFor="peek-size-select" className="peek-size-label">
+              Peek batch size:
+            </label>
+            <select
+              id="peek-size-select"
+              value={peekSize}
+              onChange={(e) => onPeekSizeChange?.(Number(e.target.value))}
+              className="peek-size-select"
+              title="Number of messages to fetch in each peek operation. This is NOT pagination - Service Bus uses sequential message reading."
+              disabled={disabled}
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size} messages
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

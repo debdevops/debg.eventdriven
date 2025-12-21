@@ -1,8 +1,8 @@
 /* Metrics Panel - Compact Single Row */
 
 .metrics-panel-compact {
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-  border-bottom: 1px solid #e1e4e8;
+  background: linear-gradient(135deg, var(--app-bg) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--border-color);
   padding: 2px 12px;
   margin: 0;
 }
@@ -23,7 +23,7 @@
 
 .metric-inline-label {
   font-size: 10px;
-  color: #6c757d;
+  color: var(--text-muted);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -32,41 +32,41 @@
 .metric-inline-value {
   font-size: 12px;
   font-weight: 700;
-  color: #24292e;
+  color: var(--text-primary);
 }
 
 .metric-inline-value.critical {
-  color: #dc3545;
+  color: var(--danger);
 }
 
 .metric-inline-value.warning {
-  color: #fd7e14;
+  color: var(--warning);
 }
 
 .metric-inline-value.success {
-  color: #28a745;
+  color: var(--success);
 }
 
 .metric-inline-value.info {
-  color: #0d6efd;
+  color: var(--accent);
 }
 
 .metrics-collapse-btn {
   margin-left: auto;
   background: none;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 4px 8px;
   cursor: pointer;
-  color: #6c757d;
+  color: var(--text-muted);
   font-size: 10px;
   transition: all 0.2s ease;
 }
 
 .metrics-collapse-btn:hover {
-  background: #f8f9fa;
-  border-color: #0d6efd;
-  color: #0d6efd;
+  background: var(--app-bg);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .metrics-panel-compact.collapsed {
@@ -76,14 +76,14 @@
 .metrics-loading {
   text-align: center;
   padding: 8px;
-  color: #6c757d;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .metrics-error {
-  background: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
   border-radius: 4px;
   padding: 8px 12px;
   font-size: 11px;

@@ -19,7 +19,7 @@ import { AuthErrorBanner } from './components/AuthErrorBanner'
 import { SessionExpiredModal } from './components/SessionExpiredModal'
 import { ReauthModal } from './components/ReauthModal'
 import { useToast } from './hooks/useToast'
-import { SessionProviderV2, useSessionV2 } from './contexts/SessionContextV2'
+import { SessionProviderV2, useSession } from './contexts/SessionContextV2'
 import { apiClient } from './api/client'
 import type { Namespace, AuditEntry } from './types'
 import './App.css'
@@ -45,7 +45,17 @@ function AppContent({
   handleUpdateNamespace,
   handleAddNamespace
 }: any) {
-  const { status, error, showIdleCritical, idleSeconds, reconnect, clearError, markConnected } = useSessionV2()
+  const { 
+    sessionState,  // NEW: Single source of truth
+    status, 
+    error, 
+    showIdleCritical, 
+    idleSeconds, 
+    reconnect, 
+    markConnected,
+    markExpired,   // NEW: Called when API client detects 401
+    markHealthy    // NEW: Called after successful API calls
+  } = useSession()
   
   // Local state for dismissing warnings only
   const [dismissedIdleWarning, setDismissedIdleWarning] = useState(false)
@@ -117,27 +127,36 @@ function AppContent({
     }
   }, [activeNamespace, reconnect, handleUpdateNamespace, setActiveNamespaceId, toast])
 
-  // Wire up API client auth error handler to trigger reconnect automatically
+  // Wire up API client to session state machine
   useEffect(() => {
     const setupAuthHandler = async () => {
       const { apiClient } = await import('./api/client')
+      
+      // ENTERPRISE STATE MACHINE INTEGRATION
+      // When API client detects 401, transition to 'expired' state ONCE
       apiClient.setAuthErrorHandler(() => {
-        console.log('[App] Auth error detected by API client, triggering reconnect')
-        if (activeNamespace) {
-          setTimeout(() => handleReconnectFromModal(), 100)
+        console.log('[App] 401 detected by API client - marking session expired')
+        markExpired() // This will fire toast + show banner ONCE
+      })
+      
+      // When API client has successful calls, mark session healthy
+      apiClient.setSuccessHandler(() => {
+        if (sessionState !== 'healthy') {
+          console.log('[App] Successful API call - marking session healthy')
+          markHealthy() // This will auto-clear error banner
         }
       })
     }
     setupAuthHandler()
-  }, [activeNamespace, handleReconnectFromModal])
+  }, [markExpired, markHealthy, sessionState])
 
-  // Mark connected when we have an active namespace and status is disconnected
+  // Auto-recover: Mark healthy after successful reconnect
   useEffect(() => {
-    if (activeNamespace && status === 'disconnected') {
-      console.log('[App] Active namespace exists, marking connected')
+    if (activeNamespace && sessionState === 'healthy') {
+      console.log('[App] Session is healthy, marking connected')
       markConnected()
     }
-  }, [activeNamespace, status, markConnected])
+  }, [activeNamespace, sessionState, markConnected])
 
   // Auto-close idle warning when activity resumes
   useEffect(() => {
@@ -228,26 +247,27 @@ function AppContent({
   }, [currentEntityName])
 
   return (
-    <div className="app">
+    <div className={`app ${sessionState === 'expired' ? 'has-auth-error' : ''}`}>
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       
-      {/* Auth error banner - shown when auth fails (status='auth_required') */}
-      {status === 'auth_required' && error && error.isAuthError && (
+      {/* Auth error banner - shown ONLY when sessionState === 'expired' */}
+      {sessionState === 'expired' && error && (
         <AuthErrorBanner
           isVisible={true}
-          message={error.message}
           reason={error.reason}
           statusCode={error.statusCode}
           timestamp={error.timestamp}
-          onDismiss={() => {
-            clearError()
-            // Clear error but keep status as auth_required to show fresh auth modal
+          onReAddNamespace={() => {
+            if (activeNamespace) {
+              handleCloseNamespace(activeNamespace.sessionId)
+            }
+            setShowConnectModal(true)
           }}
-          onRetryReconnect={handleReconnectFromModal}
-          isReconnecting={false}
         />
       )}
       
+      {/* Main application - disabled during expired state */}
+      <div className={`app-main ${sessionState === 'expired' ? 'disabled' : ''}`}>
       {/* Idle warning banner - shown when user is idle but not expired yet */}
       {showIdleCritical && !dismissedIdleWarning && status === 'connected' && (
         <IdleWarningBanner
@@ -263,20 +283,11 @@ function AppContent({
         onSwitchNamespace={handleSwitchNamespace}
       />
       
+      {/* 401 flow uses a single persistent banner; connect modal opens via CTA */}
       <ReauthModal
-        isOpen={status === 'auth_required' && !!activeNamespace && !showConnectModal}
-        onEnterConnectionString={() => {
-          if (activeNamespace) {
-            handleCloseNamespace(activeNamespace.sessionId);
-            setShowConnectModal(true);
-          }
-        }}
-        onCloseNamespace={() => {
-          if (activeNamespace) {
-            handleCloseNamespace(activeNamespace.sessionId);
-            clearError();
-          }
-        }}
+        isOpen={false}
+        onEnterConnectionString={() => {}}
+        onCloseNamespace={() => {}}
       />
       
       <TopBar
@@ -365,6 +376,7 @@ function AppContent({
         isOpen={showShortcuts}
         onClose={() => setShowShortcuts(false)}
       />
+      </div> {/* Close app-main */}
     </div>
   )
 }

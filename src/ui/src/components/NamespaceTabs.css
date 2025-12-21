@@ -12,7 +12,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-bottom: none;
   border-radius: var(--radius) var(--radius) 0 0;
@@ -26,15 +26,15 @@
 }
 
 .namespace-tab.active {
-  background: white;
-  border-bottom: 2px solid white;
+  background: var(--surface);
+  border-bottom: 2px solid var(--surface);
   position: relative;
   bottom: -1px;
 }
 
 .namespace-tab.expired {
   opacity: 0.6;
-  background: #fff3cd;
+  background: var(--warning-bg);
 }
 
 .tab-label {
@@ -68,5 +68,5 @@
 
 .tab-close:hover {
   background: var(--danger);
-  color: white;
+  color: var(--surface);
 }

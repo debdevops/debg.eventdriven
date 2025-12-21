@@ -1,0 +1,18 @@
+.json-modal-content {
+  max-width: 800px;
+}
+
+.json-modal-pre {
+  background-color: var(--surface-2);
+  padding: 1rem;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 60vh;
+  font-size: 0.9em;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.json-modal-close {
+  margin-top: 1rem;
+}

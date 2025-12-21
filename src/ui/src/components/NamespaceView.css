@@ -1,11 +1,11 @@
 .namespace-view {
   display: flex;
   height: 100%;
-  background: var(--border);
+  background: var(--surface-inset);
 }
 
 .left-pane {
-  background: white;
+  background: var(--surface);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -32,16 +32,16 @@
 }
 
 .resize-handle:hover {
-  background: #0d6efd;
+  background: var(--accent);
 }
 
 .resize-handle:active {
-  background: #0a58ca;
+  background: var(--accent-hover);
 }
 
 .right-pane {
   flex: 1;
-  background: white;
+  background: var(--surface);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -53,15 +53,15 @@
   top: 6px;
   left: 6px;
   z-index: 100;
-  background: white;
-  border: 1px solid #dee2e6;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 2px 4px;
   cursor: pointer;
   font-size: 14px;
-  color: #0d6efd;
+  color: var(--accent);
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow);
   line-height: 1;
   width: 24px;
   height: 24px;
@@ -71,8 +71,8 @@
 }
 
 .sidebar-toggle:hover {
-  background: #f8f9fa;
-  border-color: #0d6efd;
+  background: var(--surface-2);
+  border-color: var(--accent);
   transform: scale(1.15);
 }
 
@@ -81,7 +81,7 @@
 }
 
 .right-pane {
-  background: white;
+  background: var(--surface);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -105,8 +105,8 @@
 /* Compact Namespace Header */
 .namespace-header-compact {
   padding: 6px 10px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-  border-bottom: 1px solid #e1e4e8;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .namespace-header-row {
@@ -119,19 +119,19 @@
 .namespace-dropdown {
   flex: 1;
   padding: 3px 6px;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #24292e;
-  background: white;
+  color: var(--text-primary);
+  background: var(--surface);
   cursor: not-allowed;
 }
 
 .btn-reconnect {
   padding: 2px 6px;
-  background: white;
-  border: 1px solid #e1e4e8;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
@@ -144,9 +144,9 @@
 }
 
 .btn-reconnect:hover:not(:disabled) {
-  background: #0d6efd;
-  color: white;
-  border-color: #0d6efd;
+  background: var(--accent);
+  color: var(--surface);
+  border-color: var(--accent);
   transform: rotate(180deg);
 }
 
@@ -162,17 +162,17 @@
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 12px;
-  background: #f0f0f0;
+  background: var(--surface-3);
 }
 
 .connection-status.connected {
-  background: #d4edda;
-  color: #155724;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .connection-status.disconnected {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--danger-bg);
+  color: var(--danger-text);
 }
 
 .status-dot {
@@ -187,7 +187,7 @@
 
 .session-expiry-row {
   font-size: 10px;
-  color: #6c757d;
+  color: var(--text-muted);
   padding: 2px 0;
   text-align: center;
 }
@@ -198,17 +198,17 @@
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
-  background: #fef3c7;
-  border-left: 4px solid #f59e0b;
+  background: var(--warning-bg);
+  border-left: 4px solid var(--warning);
   font-size: 14px;
-  color: #92400e;
+  color: var(--warning-text);
   z-index: 100;
 }
 
 .session-expiry-banner.warning {
-  background: #fef3c7;
-  border-left-color: #f59e0b;
-  color: #92400e;
+  background: var(--warning-bg);
+  border-left-color: var(--warning);
+  color: var(--warning-text);
 }
 
 .session-expiry-banner .banner-icon {
@@ -224,8 +224,8 @@
 }
 
 .session-expiry-banner .banner-action {
-  background: #f59e0b;
-  color: white;
+  background: var(--warning);
+  color: var(--surface);
   border: none;
   padding: 6px 12px;
   border-radius: 4px;
@@ -236,7 +236,7 @@
 }
 
 .session-expiry-banner .banner-action:hover {
-  background: #d97706;
+  background: var(--warning);
 }
 
 /* Responsive */

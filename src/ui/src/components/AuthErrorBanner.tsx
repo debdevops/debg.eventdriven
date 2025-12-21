@@ -9,24 +9,18 @@ import './AuthErrorBanner.css'
 
 interface AuthErrorBannerProps {
   isVisible: boolean
-  message: string
   reason: string
   statusCode?: number
   timestamp: Date
-  onDismiss: () => void
-  onRetryReconnect: () => void
-  isReconnecting: boolean
+  onReAddNamespace: () => void
 }
 
 export function AuthErrorBanner({
   isVisible,
-  message,
   reason,
   statusCode,
   timestamp,
-  onDismiss,
-  onRetryReconnect,
-  isReconnecting
+  onReAddNamespace
 }: AuthErrorBannerProps) {
   const [show, setShow] = useState(isVisible)
 
@@ -37,35 +31,27 @@ export function AuthErrorBanner({
   if (!show) return null
 
   return (
-    <div className="auth-error-banner">
+    <div className="auth-error-banner persistent">
       <div className="auth-error-content">
-        <div className="auth-error-icon">🔴</div>
+        <div className="auth-error-icon">🔐</div>
         <div className="auth-error-text">
           <div className="auth-error-title">
-            {reason === 'unauthorized' ? '🔐 Authentication Failed' : '⚠️ Session Error'}
+            {reason === 'unauthorized' ? 'Session Expired' : 'Connection Error'}
           </div>
-          <div className="auth-error-message">{message}</div>
+          <div className="auth-error-message">
+            Your session has expired. Re-add the namespace to continue.
+          </div>
           <div className="auth-error-meta">
-            {statusCode && `[${statusCode}]`} {timestamp.toLocaleTimeString()} • {reason}
+            {statusCode && `Error ${statusCode} •`} {timestamp.toLocaleTimeString()} • {reason}
           </div>
         </div>
         <div className="auth-error-actions">
           <button 
-            className="btn-auth-retry"
-            onClick={onRetryReconnect}
-            disabled={isReconnecting}
-            title="Attempt to reconnect and refresh credentials"
+            className="btn-auth-retry primary"
+            onClick={onReAddNamespace}
+            title="Open Add Namespace to re-authenticate"
           >
-            {isReconnecting ? '⟳ Reconnecting...' : '🔄 Reconnect'}
-          </button>
-          <button 
-            className="btn-auth-dismiss"
-            onClick={onDismiss}
-            disabled={isReconnecting}
-            title="Dismiss this message"
-            aria-label="Close error message"
-          >
-            ✕
+            Re-add Namespace
           </button>
         </div>
       </div>

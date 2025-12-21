@@ -1,7 +1,7 @@
 /* AI Insights Panel Styles */
 
 .ai-insights-panel {
-  background: white;
+  background: var(--surface);
   border: none;
   border-radius: 0;
   margin: 0;
@@ -13,7 +13,7 @@
 }
 
 .ai-insights-panel.collapsed {
-  background: #f9fafb;
+  background: var(--surface-2);
 }
 
 .panel-header {
@@ -27,7 +27,7 @@
 }
 
 .panel-header:hover {
-  background: #f9fafb;
+  background: var(--surface-2);
 }
 
 .header-left {
@@ -44,12 +44,12 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .badge-warning {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--danger-bg);
+  color: var(--danger);
   padding: 2px 10px;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -83,7 +83,7 @@
 }
 
 .refresh-btn:hover {
-  background: #e5e7eb;
+  background: var(--surface-3);
   transform: rotate(90deg);
 }
 
@@ -93,7 +93,7 @@
   font-size: 0.875rem;
   cursor: pointer;
   padding: 4px;
-  color: #6b7280;
+  color: var(--text-muted);
   transition: transform 0.3s;
 }
 
@@ -116,15 +116,15 @@
 }
 
 .analysis-summary {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid #bfdbfe;
+  background: linear-gradient(135deg, var(--accent-soft-bg) 0%, var(--accent-soft-border) 100%);
+  border: 1px solid var(--accent-soft-border);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 16px;
 }
 
 .summary-text {
-  color: #1e40af;
+  color: var(--info-text);
   font-size: 0.9375rem;
   margin: 0 0 12px;
   line-height: 1.5;
@@ -145,12 +145,12 @@
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e3a8a;
+  color: var(--info-text);
 }
 
 .stat-label {
   font-size: 0.75rem;
-  color: #3b82f6;
+  color: var(--accent);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -159,7 +159,7 @@
 .analyzed-at {
   margin: 0;
   font-size: 0.8125rem;
-  color: #3b82f6;
+  color: var(--accent);
   font-style: italic;
 }
 
@@ -167,7 +167,7 @@
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border-color);
 }
 
 .tab-btn {
@@ -177,19 +177,19 @@
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-muted);
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   transition: all 0.2s;
 }
 
 .tab-btn:hover {
-  color: #3b82f6;
+  color: var(--accent);
 }
 
 .tab-btn.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .tab-content {
@@ -208,8 +208,8 @@
 }
 
 .analysis-section {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 14px;
   margin-bottom: 12px;
@@ -222,7 +222,7 @@
   margin: 0 0 10px;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .section-icon {
@@ -233,12 +233,12 @@
   display: flex;
   gap: 16px;
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .section-stats span {
   padding: 4px 10px;
-  background: #f3f4f6;
+  background: var(--surface-3);
   border-radius: 4px;
   font-weight: 500;
 }
@@ -250,7 +250,7 @@
 .group-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary);
   margin: 0 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -262,16 +262,16 @@
 }
 
 .cluster-card {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 12px;
   transition: all 0.2s;
 }
 
 .cluster-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-color: #3b82f6;
+  box-shadow: var(--shadow);
+  border-color: var(--accent);
 }
 
 .cluster-header {
@@ -283,14 +283,14 @@
 
 .cluster-type {
   font-weight: 600;
-  color: #3b82f6;
+  color: var(--accent);
   font-size: 0.875rem;
 }
 
 .cluster-size {
   font-size: 0.75rem;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--text-muted);
+  background: var(--surface-3);
   padding: 2px 8px;
   border-radius: 10px;
   font-weight: 500;
@@ -298,13 +298,13 @@
 
 .cluster-fields {
   font-size: 0.8125rem;
-  color: #4b5563;
+  color: var(--text-secondary);
 }
 
 .cluster-fields strong {
   display: block;
   margin-bottom: 6px;
-  color: #374151;
+  color: var(--text-secondary);
 }
 
 .field-tags {
@@ -314,19 +314,19 @@
 }
 
 .field-tag {
-  background: #eff6ff;
-  color: #1e40af;
+  background: var(--info-bg);
+  color: var(--info-text);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 500;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--info-border);
 }
 
 .field-tag.more {
-  background: #f3f4f6;
-  color: #6b7280;
-  border-color: #d1d5db;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  border-color: var(--border-color);
 }
 
 .outlier-list {
@@ -335,21 +335,21 @@
 }
 
 .outlier-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-left: 4px solid #f59e0b;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--warning);
   border-radius: 6px;
   padding: 12px;
   transition: all 0.2s;
 }
 
 .outlier-card.deadletterqueue {
-  border-left-color: #dc2626;
-  background: #fef2f2;
+  border-left-color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .outlier-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow);
 }
 
 .outlier-header {
@@ -373,13 +373,13 @@
 
 .outlier-type {
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .outlier-source-badge {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-3);
+  color: var(--text-muted);
   padding: 2px 8px;
   border-radius: 10px;
   font-size: 0.625rem;
@@ -389,14 +389,14 @@
 }
 
 .outlier-card.deadletterqueue .outlier-source-badge {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .outlier-anomaly-type {
   font-size: 0.75rem;
-  color: #6b7280;
-  background: #fef3c7;
+  color: var(--text-muted);
+  background: var(--warning-bg);
   padding: 2px 8px;
   border-radius: 4px;
   font-weight: 500;
@@ -406,17 +406,17 @@
 .outlier-description {
   margin: 8px 0;
   font-size: 0.8125rem;
-  color: #4b5563;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .outlier-id {
   display: block;
-  background: #f3f4f6;
+  background: var(--surface-3);
   padding: 6px 8px;
   border-radius: 4px;
   font-size: 0.6875rem;
-  color: #6b7280;
+  color: var(--text-muted);
   font-family: 'Monaco', 'Courier New', monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -426,106 +426,8 @@
 .empty-state {
   text-align: center;
   padding: 40px 20px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.9375rem;
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .ai-insights-panel {
-    background: #1f2937;
-    border-color: #374151;
-  }
 
-  .ai-insights-panel.collapsed {
-    background: #111827;
-  }
-
-  .panel-header:hover {
-    background: #111827;
-  }
-
-  .panel-title {
-    color: #f9fafb;
-  }
-
-  .analysis-summary {
-    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-    border-color: #1e40af;
-  }
-
-  .summary-text {
-    color: #bfdbfe;
-  }
-
-  .stat-value {
-    color: #dbeafe;
-  }
-
-  .stat-label {
-    color: #93c5fd;
-  }
-
-  .analyzed-at {
-    color: #93c5fd;
-  }
-
-  .tab-navigation {
-    border-bottom-color: #374151;
-  }
-
-  .tab-btn {
-    color: #9ca3af;
-  }
-
-  .tab-btn:hover,
-  .tab-btn.active {
-    color: #60a5fa;
-  }
-
-  .tab-btn.active {
-    border-bottom-color: #60a5fa;
-  }
-
-  .analysis-section {
-    background: #111827;
-    border-color: #374151;
-  }
-
-  .section-title {
-    color: #f3f4f6;
-  }
-
-  .section-stats span {
-    background: #1f2937;
-    color: #d1d5db;
-  }
-
-  .cluster-card,
-  .outlier-card {
-    background: #111827;
-    border-color: #374151;
-  }
-
-  .cluster-card:hover,
-  .outlier-card:hover {
-    border-color: #3b82f6;
-  }
-
-  .outlier-card.deadletterqueue {
-    background: #450a0a;
-  }
-
-  .outlier-type {
-    color: #f3f4f6;
-  }
-
-  .outlier-description {
-    color: #d1d5db;
-  }
-
-  .outlier-id {
-    background: #1f2937;
-    color: #9ca3af;
-  }
-}

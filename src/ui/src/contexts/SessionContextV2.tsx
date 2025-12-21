@@ -16,6 +16,13 @@ import { createContext, useContext, useState, useRef, useCallback, useEffect } f
 import { useIdleDetection } from '../hooks/useIdleDetection'
 import { AuthError } from '../api/errors'
 
+/**
+ * Enterprise-grade session state machine
+ * Single source of truth for session health
+ */
+type SessionState = 'healthy' | 'expired' | 'reconnecting'
+
+// Legacy status type for backward compatibility
 type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'expired' | 'auth_required'
 
 interface SessionError {
@@ -27,7 +34,10 @@ interface SessionError {
 }
 
 interface SessionContextType {
-  // Connection state
+  // SINGLE SOURCE OF TRUTH
+  sessionState: SessionState
+  
+  // Legacy compatibility (computed from sessionState)
   status: SessionStatus
   error: SessionError | null
   connectedAt: Date | null
@@ -45,7 +55,11 @@ interface SessionContextType {
   resetActivity: () => void
   markExpired: () => void
   markConnected: () => void
-  triggerReconnect: () => void  // Simple reconnect trigger for components
+  triggerReconnect: () => void
+  
+  // Internal state management
+  markHealthy: () => void    // Called after successful API call
+  markReconnecting: () => void // Called when starting reconnect
   
   // Timer management
   registerTimer: (name: string, timerId: NodeJS.Timeout) => void
@@ -69,9 +83,16 @@ const IDLE_WARNING_THRESHOLD = 30 // warn 30s before expiry
 const HEARTBEAT_INTERVAL = 20000 // 20 seconds
 
 export function SessionProviderV2({ children, toast }: SessionProviderProps) {
-  // Core connection state
-  // Start in 'disconnected' until a successful connect occurs to avoid premature expiry/heartbeats
-  const [status, setStatus] = useState<SessionStatus>('disconnected')
+  /**
+   * ENTERPRISE SESSION STATE MACHINE
+   * Single source of truth with proper state transitions:
+   * - healthy: All API calls work, no auth errors
+   * - expired: HTTP 401 detected, show auth banner, disable UI
+   * - reconnecting: User clicked reconnect, attempting recovery
+   */
+  const [sessionState, setSessionState] = useState<SessionState>('healthy')
+  
+  // Legacy state (computed from sessionState for backward compatibility)
   const [error, setError] = useState<SessionError | null>(null)
   const [connectedAt, setConnectedAt] = useState<Date | null>(null)
   const [lastErrorTime, setLastErrorTime] = useState<number | null>(null)
@@ -80,12 +101,12 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   const [showIdleWarning, setShowIdleWarning] = useState(false)
   const [showIdleCritical, setShowIdleCritical] = useState(false)
   
-  // Tracking refs
+  // Internal tracking
   const reconnectInProgressRef = useRef(false)
-  const reconnectAttemptsRef = useRef(0)
   const timerRegistry = useRef<Map<string, NodeJS.Timeout>>(new Map())
   const heartbeatIntervalRef = useRef<NodeJS.Timeout>()
   const lastHeartbeatTimeRef = useRef<number>(Date.now())
+  const errorNotificationFiredRef = useRef(false) // Prevent duplicate error notifications
   const toastShownRef = useRef(false)
   const criticalShownRef = useRef(false)
 
@@ -144,32 +165,87 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   }, [])
 
   // Clear error
+  /**
+   * STATE TRANSITION: * → expired
+   * Fired when a 401 is detected.
+   * Subsequent 401s during 'expired' state are ignored.
+   */
+  const markExpired = useCallback(() => {
+    if (sessionState === 'expired') {
+      console.log('[Session] Ignoring markExpired - already expired')
+      return
+    }
+    
+    console.log(`[Session] STATE TRANSITION: ${sessionState} → expired`)
+
+    // Hard-stop all polling/intervals immediately on auth failure.
+    clearAllTimers()
+
+    setSessionState('expired')
+    setLastErrorTime(Date.now())
+    
+    // Show error ONCE
+    if (!errorNotificationFiredRef.current) {
+      const authError: SessionError = {
+        message: 'Session credentials are invalid. Re-authentication required.',
+        reason: 'unauthorized',
+        isAuthError: true,
+        statusCode: 401,
+        timestamp: new Date()
+      }
+      setError(authError)
+      errorNotificationFiredRef.current = true
+    }
+  }, [sessionState, clearAllTimers])
+  
+  /**
+   * STATE TRANSITION: * → reconnecting
+   * User clicked reconnect button
+   */
+  const markReconnecting = useCallback(() => {
+    console.log(`[Session] STATE TRANSITION: ${sessionState} → reconnecting`)
+    setSessionState('reconnecting')
+    setError(null) // Clear error during reconnect attempt
+  }, [sessionState])
+  
+  /**
+   * STATE TRANSITION: * → healthy
+   * Successful API call or successful reconnect
+   * Auto-clears all error state
+   */
+  const markHealthy = useCallback(() => {
+    console.log(`[Session] STATE TRANSITION: ${sessionState} → healthy`)
+    setSessionState('healthy')
+    setError(null)
+    setLastErrorTime(null)
+    errorNotificationFiredRef.current = false // Reset for next error cycle
+  }, [sessionState])
+
   const clearError = useCallback(() => {
     setError(null)
+    setLastErrorTime(null)
   }, [])
 
-  // Mark session expired
-  const markExpired = useCallback(() => {
-    setStatus('expired')
-  }, [])
+  // Legacy compatibility - compute status from sessionState
+  const statusByState: Record<SessionState, SessionStatus> = {
+    healthy: 'connected',
+    expired: 'auth_required',
+    reconnecting: 'connecting'
+  }
+  const status = statusByState[sessionState]
 
-  // Mark session connected (after successful connect)
+  // Mark connected when we have an active namespace and session is healthy
   const markConnected = useCallback(() => {
-    setStatus('connected')
-    setConnectedAt(new Date())
-    setShowIdleWarning(false)
-    setShowIdleCritical(false)
-    toastShownRef.current = false
-    criticalShownRef.current = false
-  }, [])
+    if (sessionState === 'healthy') {
+      setConnectedAt(new Date())
+    }
+  }, [sessionState])
 
-  // Trigger reconnect (simple wrapper that components can call)
+  // Trigger reconnect (simple wrapper)
   const triggerReconnect = useCallback(() => {
     console.log('[Session] triggerReconnect() called')
-    // This will be wired up by AppContent to call handleReconnectFromModal
-    // For now, just mark as expired to show modal
-    setStatus('expired')
-  }, [])
+    markReconnecting()
+  }, [markReconnecting])
 
   // Reset activity
   const resetActivity = useCallback(() => {
@@ -200,9 +276,8 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
         console.warn(`[Heartbeat] ⚠️ Missed heartbeat ${missedHeartbeats}`, err)
         
         if (missedHeartbeats >= 2) {
-          console.error('[Heartbeat] 2 consecutive missed - marking disconnected')
-          setStatus('disconnected')
-          toast.error('Connection lost. Click Reconnect or refresh page.')
+          console.error('[Heartbeat] 2 consecutive missed - triggering reconnect')
+          markReconnecting()
         }
       }
     }
@@ -215,156 +290,101 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
         clearInterval(heartbeatIntervalRef.current)
       }
     }
-  }, [status, isIdle, toast, registerTimer])
+  }, [status, isIdle, markReconnecting, registerTimer])
 
   /**
-   * ROBUST RECONNECT WITH EXPONENTIAL BACKOFF
+   * ENTERPRISE RECONNECT FLOW
    * 
-   * Algorithm:
-   * 1. Prevent duplicate attempts (mutex via reconnectInProgressRef)
-   * 2. Clear all old timers/listeners to prevent memory leaks
-   * 3. Attempt reload with exponential backoff (500ms, 1s, 2s, 4s, 8s max)
-   * 4. On success: restore selection, reset activity, update UI
-   * 5. On failure: show error, offer manual retry
+   * State transitions:
+   * 1. expired → reconnecting (when user clicks reconnect)
+   * 2. reconnecting → healthy (on successful API calls) 
+   * 3. reconnecting → expired (on auth failure)
    */
   const reconnect = useCallback(async (
     sessionId: string,
     reloadCallback: () => Promise<void>
   ) => {
-    // Prevent duplicate reconnects
+    // Prevent duplicate attempts
     if (reconnectInProgressRef.current) {
       console.log('[Session] Reconnect already in progress')
       return
     }
 
-    if (status === 'connecting') {
-      console.log('[Session] Already connecting')
-      return
-    }
-
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('────────────────────────────────────────')
     console.log('[Session] RECONNECT FLOW START')
     console.log(`[Session] Session ID: ${sessionId}`)
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('────────────────────────────────────────')
 
     reconnectInProgressRef.current = true
-    setStatus('connecting')
-    setError(null)
-    setShowIdleWarning(false)
-    setShowIdleCritical(false)
+    markReconnecting()
+    
+    try {
+      // Clear all existing timers
+      clearAllTimers()
+      console.log('[Session] ✓ Timers cleared')
 
-    const maxAttempts = 1 // Single attempt only - no retries to avoid toast spam
-    let lastError: Error | null = null
+      // Brief pause for cleanup
+      await new Promise(resolve => setTimeout(resolve, 150))
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(`[Session] Attempt ${attempt}/${maxAttempts}: Reconnecting...`)
-        // Don't show toast for every attempt - only show final success/failure
+      // Execute reload (this will make API calls and potentially trigger markHealthy)
+      console.log('[Session] Executing full reload')
+      await reloadCallback()
+      console.log('[Session] ✓ Reload successful')
 
-        // Step 1: Clear all existing timers/intervals
-        clearAllTimers()
-        console.log('[Session] ✓ Timers cleared')
+      // If we get here without AuthError, mark healthy
+      markHealthy()
+      resetIdleActivity()
+      
+      console.log('[Session] ✓ Reconnect SUCCESS')
+      toast.success('✓ Reconnected successfully')
 
-        // Step 2: Brief pause for cleanup
-        await new Promise(resolve => setTimeout(resolve, 150))
-
-        // Step 3: Execute reload (namespace + entities + messages)
-        console.log('[Session] Executing full reload')
-        await reloadCallback()
-        console.log('[Session] ✓ Reload successful')
-
-        // Step 4: Mark success
-        setStatus('connected')
-        setError(null)
-        setConnectedAt(new Date())
-        resetIdleActivity()
-        reconnectAttemptsRef.current = 0
-        toastShownRef.current = false
-        criticalShownRef.current = false
-
-        console.log('[Session] ✓ Reconnect SUCCESS on attempt', attempt)
-        toast.success('✓ Reconnected successfully!')
-
-        reconnectInProgressRef.current = false
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        console.log('[Session] RECONNECT FLOW END (SUCCESS)')
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        return
-
-      } catch (err) {
-        lastError = err as Error
-        console.error(`[Session] ✗ Attempt ${attempt} failed:`, err)
-
-        // If it's auth error (401), don't retry - set status immediately
-        if (err instanceof AuthError) {
-          console.error('[Session] Auth error detected - credentials invalid, no retries')
-          
-          const authError: SessionError = {
-            message: err.getUserFriendlyMessage(),
-            reason: err.reason,
-            isAuthError: true,
-            statusCode: err.statusCode,
-            timestamp: err.timestamp
-          }
-          setError(authError)
-          setStatus('auth_required')  // Trigger fresh auth flow
-          setLastErrorTime(Date.now())
-          toast.error(`🔐 ${authError.message}`)
-          
-          reconnectInProgressRef.current = false
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-          console.log('[Session] RECONNECT FLOW END (AUTH ERROR)')
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-          return
-        }
-
-        // Continue to next attempt for network errors
-        if (attempt < maxAttempts) {
-          console.log(`[Session] Retrying (${attempt}/${maxAttempts})...`)
-          continue
-        }
+    } catch (err) {
+      console.error('[Session] ✗ Reconnect failed:', err)
+      
+      if (err instanceof AuthError) {
+        // Auth failed - go back to expired state
+        markExpired()
+      } else {
+        // Network error - also go to expired for simplicity
+        markExpired()
+        toast.error('Reconnection failed - Please try again')
       }
+    } finally {
+      reconnectInProgressRef.current = false
+      console.log('────────────────────────────────────────')
+      console.log('[Session] RECONNECT FLOW END')
+      console.log('────────────────────────────────────────')
     }
-
-    // All attempts failed with network error (AuthError already handled above)
-    console.error('[Session] ✗ RECONNECT FAILED after all attempts:', lastError)
-
-    // Set timestamp for error display
-    setLastErrorTime(Date.now())
-
-    // Generic network error
-    const errorMsg = lastError?.message || 'Unknown error'
-    const genericError: SessionError = {
-      message: `Reconnect failed: ${errorMsg}. Click the Reconnect button to try again.`,
-      reason: 'network_error',
-      isAuthError: false,
-      timestamp: new Date()
-    }
-    setError(genericError)
-    setStatus('disconnected')
-    toast.error(`⚠️ ${genericError.message}`)
-
-    reconnectInProgressRef.current = false
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('[Session] RECONNECT FLOW END (NETWORK ERROR)')
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  }, [status, toast, clearAllTimers, resetIdleActivity])
-
+  }, [markReconnecting, markHealthy, markExpired, clearAllTimers, resetIdleActivity, toast])
   const value: SessionContextType = {
+    // SINGLE SOURCE OF TRUTH
+    sessionState,
+    
+    // Legacy compatibility
     status,
     error,
+    connectedAt,
+    lastErrorTime,
+    
+    // Idle state
     isIdle,
     idleSeconds,
     showIdleWarning,
     showIdleCritical,
-    connectedAt,
-    lastErrorTime,
+    
+    // Actions
     reconnect,
     clearError,
     resetActivity,
     markExpired,
     markConnected,
     triggerReconnect,
+    
+    // Internal state management
+    markHealthy,
+    markReconnecting,
+    
+    // Timer management
     registerTimer,
     clearAllTimers
   }
@@ -394,3 +414,6 @@ export function useSessionV2() {
   }
   return context
 }
+
+// Backward compatibility alias
+export const useSession = useSessionV2

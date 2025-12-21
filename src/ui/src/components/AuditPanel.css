@@ -1,7 +1,7 @@
 .audit-panel {
-  background: white;
+  background: var(--surface);
   border-top: 1px solid var(--border);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow);
   transition: all 0.3s;
 }
 
@@ -16,7 +16,7 @@
   padding: 12px 24px;
   cursor: pointer;
   user-select: none;
-  background: white;
+  background: var(--surface);
 }
 
 .audit-header:hover {
@@ -88,16 +88,16 @@
 }
 
 .operation-badge.connect {
-  background: #d1ecf1;
-  color: #0c5460;
+  background: var(--info-bg);
+  color: var(--info-text);
 }
 
 .operation-badge.peek {
-  background: #d4edda;
-  color: #155724;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .operation-badge.receive {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }

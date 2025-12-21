@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { MessageEnvelope } from '../types'
+import type { DlqMessageClassification } from '../services/dlqReplayAdvisor'
 import './MessageDetailPanel.css'
 
 interface MessageDetailPanelProps {
@@ -17,10 +18,11 @@ interface MessageDetailPanelProps {
   onResubmit?: (message: MessageEnvelope) => void
   onDelete?: (message: MessageEnvelope) => void
   onMoveToDLQ?: (message: MessageEnvelope) => void
+  dlqClassification?: DlqMessageClassification | null
   embedded?: boolean
 }
 
-type TabType = 'body' | 'properties' | 'system'
+type TabType = 'body' | 'properties' | 'system' | 'risks'
 
 export function MessageDetailPanel({
   message,
@@ -31,6 +33,7 @@ export function MessageDetailPanel({
   onResubmit,
   onDelete,
   onMoveToDLQ,
+  dlqClassification = null,
   embedded = false
 }: MessageDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('body')
@@ -118,6 +121,15 @@ export function MessageDetailPanel({
           <button className={`tab ${activeTab === 'system' ? 'active' : ''}`} onClick={() => setActiveTab('system')}>
             System
           </button>
+          {dlqClassification && dlqClassification.riskSignals && dlqClassification.riskSignals.length > 0 && (
+            <button
+              className={`tab ${activeTab === 'risks' ? 'active' : ''}`}
+              onClick={() => setActiveTab('risks')}
+              title="Risk signals for this message"
+            >
+              ⚠️ Risks ({dlqClassification.riskSignals.length})
+            </button>
+          )}
         </div>
 
         <div className="message-detail-content">
@@ -206,6 +218,32 @@ export function MessageDetailPanel({
                   </tr>
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {activeTab === 'risks' && dlqClassification && dlqClassification.riskSignals && (
+            <div className="tab-risks">
+              <div className="risks-header">
+                <h3>Risk Signals</h3>
+                <p className="risks-description">
+                  These non-automated signals help you assess message replay risk. Review each signal carefully before replaying.
+                </p>
+              </div>
+              <div className="risks-list">
+                {dlqClassification.riskSignals.length === 0 ? (
+                  <div className="no-risks">No risk signals detected</div>
+                ) : (
+                  dlqClassification.riskSignals.map((signal, idx) => (
+                    <div key={idx} className={`risk-signal-item risk-${signal.severity}`}>
+                      <div className="risk-header">
+                        <span className="risk-type">{signal.description}</span>
+                        <span className={`risk-severity ${signal.severity}`}>{signal.severity.toUpperCase()}</span>
+                      </div>
+                      <div className="risk-explanation">{signal.explanation}</div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>

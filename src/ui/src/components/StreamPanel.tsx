@@ -2,7 +2,7 @@
  * Stream Panel - Main message viewing and interaction component
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useSSE } from '../hooks/useSSE'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import { apiClient } from '../api/client'
@@ -13,6 +13,9 @@ import RulesPanel from './RulesPanel'
 import { MessageTableSkeleton } from './MessageTableSkeleton'
 import { UnifiedInspector, InspectorMode } from './UnifiedInspector'
 import { MessageDetailPanel } from './MessageDetailPanel'
+import { AiPatternFilterChip } from './AiPatternFilterChip'
+import { DlqReplayAdvisor } from './DlqReplayAdvisor'
+import { analyzeDlqMessages, getMessageIdsByClassification, type DlqClassification } from '../services/dlqReplayAdvisor'
 import type { Entity, Subscription, MessageEnvelope, StreamMode, AuditEntry } from '../types'
 import './StreamPanel.css'
 
@@ -47,14 +50,26 @@ export default function StreamPanel({
 }: StreamPanelProps) {
   const mode: StreamMode = 'peek' // Read-only mode
   const { status, registerTimer } = useSessionV2()
+  const controlsDisabled = status !== 'connected' || isSessionExpired
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [streaming, setStreaming] = useState(false)
+  const [peekSize, setPeekSize] = useState(50)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [frozenSnapshot, setFrozenSnapshot] = useState(false)
   const [showRules, setShowRules] = useState(false)
+  
+  // AI Pattern filter state
+  const [aiPatternFilter, setAiPatternFilter] = useState<{
+    patternId: string
+    label: string
+    messageIds: string[]
+  } | null>(null)
+  
+  // DLQ Replay Advisor state
+  const [dlqAdvisorAnalysis, setDlqAdvisorAnalysis] = useState<any>(null)
   
   // Unified Inspector state
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('closed')
@@ -81,6 +96,9 @@ export default function StreamPanel({
 
   // Reusable function to load messages once
   const loadMessagesOnce = useCallback(async (silent = false) => {
+    if (status !== 'connected') {
+      return
+    }
     try {
       const entityType = selectedTarget.type === 'dlq' ? 'dlq' : 
                         selectedTarget.type === 'subscription' ? 'subscription' : 
@@ -92,7 +110,7 @@ export default function StreamPanel({
       }
       
       // Fetch fresh from backend
-      const response = await apiClient.peekMessages(sessionId, entityName, 20, subscriptionName, isDLQ)
+      const response = await apiClient.peekMessages(sessionId, entityName, peekSize, subscriptionName, isDLQ)
       
       // Save to local store with correct entity type
       await messageStore.saveMessages(
@@ -132,7 +150,7 @@ export default function StreamPanel({
         setLoading(false)
       }
     }
-  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type])
+  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type, peekSize, status])
 
   // Track last refresh time
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -157,6 +175,33 @@ export default function StreamPanel({
     
     initialLoad()
   }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type, loadMessagesOnce])
+
+  // DLQ Replay Advisor Analysis - runs when messages are loaded and we're viewing DLQ
+  useEffect(() => {
+    if (!isDLQ || messages.length === 0) {
+      setDlqAdvisorAnalysis(null)
+      return
+    }
+
+    // Run analysis on DLQ messages (client-side, instant)
+    try {
+      const analysis = analyzeDlqMessages(messages, 5, 60) // min 5 messages, 60% confidence threshold
+      setDlqAdvisorAnalysis(analysis)
+    } catch (err) {
+      console.error('[StreamPanel] DLQ analysis failed:', err)
+      // Silently fail - don't disrupt UI
+    }
+  }, [messages, isDLQ])
+
+  // Create a Map of messageId -> classification for efficient lookup in grid
+  const dlqClassificationsMap = useMemo(() => {
+    if (!dlqAdvisorAnalysis) return null
+    const map = new Map()
+    dlqAdvisorAnalysis.classifications.forEach((c: any) => {
+      map.set(c.messageId, c)
+    })
+    return map
+  }, [dlqAdvisorAnalysis])
 
   // Single unified auto-refresh loop with Page Visibility API
   // Pauses during session expiry or reconnect
@@ -250,12 +295,20 @@ export default function StreamPanel({
 
   useSSE({
     url: streamURL,
-    enabled: streaming,
+    enabled: streaming && status === 'connected',
     onMessage: handleMessage
   })
 
+  // Ensure streaming is stopped immediately when session isn't connected
+  useEffect(() => {
+    if (status !== 'connected' && streaming) {
+      setStreaming(false)
+    }
+  }, [status, streaming])
+
   // Peek Now (POST) - now just calls loadMessagesOnce
   const handlePeekNow = async () => {
+    if (controlsDisabled) return
     await loadMessagesOnce(false) // Not silent - show loading and errors
     onAudit({
       timestamp: new Date().toISOString(),
@@ -264,6 +317,152 @@ export default function StreamPanel({
       operation: 'Peek'
     })
   }
+
+  // Apply AI Pattern Filter
+  const handleApplyAiPattern = (patternId: string, label: string, messageIds: string[]) => {
+    setAiPatternFilter({ patternId, label, messageIds })
+    setToast({
+      message: `✅ Filtered to ${messageIds.length} messages in pattern "${label}"`,
+      type: 'success'
+    })
+    onAudit({
+      timestamp: new Date().toISOString(),
+      sessionId,
+      entityName,
+      operation: 'Peek' // Audit as a Peek operation
+    })
+  }
+
+  // Clear AI Pattern Filter
+  const handleClearAiPattern = () => {
+    if (aiPatternFilter) {
+      const clearedPattern = aiPatternFilter.label
+      setAiPatternFilter(null)
+      setToast({
+        message: `✅ Cleared filter for pattern "${clearedPattern}"`,
+        type: 'success'
+      })
+      onAudit({
+        timestamp: new Date().toISOString(),
+        sessionId,
+        entityName,
+        operation: 'Peek' // Audit as a Peek operation
+      })
+    }
+  }
+
+  // Filter by DLQ Classification Category
+  const handleFilterByDlqCategory = (category: DlqClassification) => {
+    if (!dlqAdvisorAnalysis) return
+
+    const messageIds = getMessageIdsByClassification(dlqAdvisorAnalysis, category)
+    if (messageIds.length === 0) return
+
+    const categoryLabel = category === 'SAFE_TO_REPLAY'
+      ? 'Safe to Replay'
+      : category === 'NEEDS_INVESTIGATION'
+      ? 'Needs Investigation'
+      : 'Do Not Replay'
+
+    setAiPatternFilter({
+      patternId: `dlq-${category}`,
+      label: `DLQ: ${categoryLabel}`,
+      messageIds
+    })
+
+    setToast({
+      message: `✅ Filtered to ${messageIds.length} DLQ messages (${categoryLabel})`,
+      type: 'success'
+    })
+
+    onAudit({
+      timestamp: new Date().toISOString(),
+      sessionId,
+      entityName,
+      operation: 'Peek'
+    })
+  }
+
+  // Load Next Batch - uses last message sequence number to peek from that point
+  const handleLoadNextBatch = useCallback(async () => {
+    if (controlsDisabled) return
+    if (messages.length === 0) {
+      console.log('[StreamPanel] No messages loaded, cannot load next batch')
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      // Get last message sequence number (messages are sorted newest first, so last = oldest loaded)
+      // Find the message with the highest sequence number to use as fromSequenceNumber
+      const lastSeqNum = Math.max(...messages.map(m => m.sequenceNumber))
+      
+      if (!lastSeqNum) {
+        setError('No sequence number found in loaded messages')
+        return
+      }
+
+      const entityType = selectedTarget.type === 'dlq' ? 'dlq' : 
+                        selectedTarget.type === 'subscription' ? 'subscription' : 
+                        selectedTarget.type === 'queue' ? 'queue' : 'topic'
+      
+      // Peek from next sequence number (lastSeqNum + 1)
+      const response = await apiClient.peekMessages(
+        sessionId,
+        entityName,
+        peekSize,
+        subscriptionName,
+        isDLQ
+      )
+
+      if (response.messages && response.messages.length > 0) {
+        // Save messages to local store
+        await messageStore.saveMessages(
+          response.messages,
+          sessionId,
+          entityName,
+          entityType,
+          'peeked',
+          subscriptionName
+        )
+
+        // Append new messages to current list
+        setMessages(prev => {
+          // Combine and deduplicate
+          const allMessages = [...prev, ...response.messages]
+          const unique = Array.from(new Map(allMessages.map(m => [m.sequenceNumber, m])).values())
+          // Sort by sequence number (newest first)
+          return unique.sort((a, b) => b.sequenceNumber - a.sequenceNumber)
+        })
+
+        setToast({
+          message: `✅ Loaded ${response.messages.length} more messages`,
+          type: 'success'
+        })
+
+        onAudit({
+          timestamp: new Date().toISOString(),
+          sessionId,
+          entityName,
+          operation: 'Peek'
+        })
+      } else {
+        setToast({
+          message: 'ℹ️ No more messages to load',
+          type: 'success'
+        })
+      }
+
+      setError(null)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load next batch'
+      console.error('Load next batch failed:', err)
+      setError(errorMsg)
+    } finally {
+      setLoading(false)
+    }
+  }, [controlsDisabled, messages, sessionId, entityName, subscriptionName, isDLQ, selectedTarget.type, peekSize])
 
   // Start streaming
   /* const _handleStartStream = () => {
@@ -390,35 +589,61 @@ export default function StreamPanel({
         />
       )}
 
+      {/* DLQ Replay Advisor - only for DLQ view */}
+      {isDLQ && dlqAdvisorAnalysis && (
+        <DlqReplayAdvisor
+          analysis={dlqAdvisorAnalysis}
+          onFilterByCategory={handleFilterByDlqCategory}
+          disabled={false}
+        />
+      )}
+
       {/* Show skeleton loader during initial load or reconnect */}
       {(loading && messages.length === 0) || status === 'connecting' ? (
         <MessageTableSkeleton />
       ) : (
-        <MessageTable
-          messages={messages}
-          totalMessageCount={
-            selectedTarget.type === 'subscription'
-              ? selectedTarget.subscription?.messageCount
-              : selectedTarget.entity?.messageCount
-          }
-          sessionId={sessionId}
-          entityName={entityName}
-          subscriptionName={subscriptionName}
-          isDLQ={isDLQ}
-          dlqCount={selectedTarget.entity?.deadLetterMessageCount || 0}
-          onRefresh={handlePeekNow}
-          frozenSnapshot={frozenSnapshot}
-          onToggleSnapshot={() => setFrozenSnapshot(!frozenSnapshot)}
-          onAiInsights={() => {
-            setInspectorMode('ai-insights')
-            if (onAiInsights) onAiInsights()
-          }}
-          aiInsightsLoading={aiInsightsLoading}
-          hasAiInsights={hasAiInsights}
-          onMessageSelect={(message) => {
-            setSelectedMessage(message)
-          }}
-        />
+        <>
+          {/* AI Pattern Filter Chip - appears when filter is active */}
+          {aiPatternFilter && (
+            <AiPatternFilterChip
+              patternLabel={aiPatternFilter.label}
+              messageCount={aiPatternFilter.messageIds.length}
+              onClear={handleClearAiPattern}
+            />
+          )}
+
+          <MessageTable
+            messages={messages}
+            totalMessageCount={
+              selectedTarget.type === 'subscription'
+                ? selectedTarget.subscription?.messageCount
+                : selectedTarget.entity?.messageCount
+            }
+            sessionId={sessionId}
+            entityName={entityName}
+            subscriptionName={subscriptionName}
+            isDLQ={isDLQ}
+            dlqCount={selectedTarget.entity?.deadLetterMessageCount || 0}
+            onRefresh={handlePeekNow}
+            onLoadNextBatch={handleLoadNextBatch}
+            disabled={controlsDisabled}
+            frozenSnapshot={frozenSnapshot}
+            onToggleSnapshot={() => setFrozenSnapshot(!frozenSnapshot)}
+            onAiInsights={() => {
+              setInspectorMode('ai-insights')
+              if (onAiInsights) onAiInsights()
+            }}
+            aiInsightsLoading={aiInsightsLoading}
+            hasAiInsights={hasAiInsights}
+            onMessageSelect={(message) => {
+              setSelectedMessage(message)
+            }}
+            aiPatternFilter={aiPatternFilter}
+            dlqClassifications={isDLQ ? dlqClassificationsMap : null}
+            peekSize={peekSize}
+            onPeekSizeChange={setPeekSize}
+          />
+        </>
       )}
       
       {/* Rules Panel */}
@@ -444,6 +669,7 @@ export default function StreamPanel({
         }}
         onMessageSelect={(message) => setSelectedMessage(message)}
         onAiRefresh={onAiInsights}
+        onApplyAiPattern={handleApplyAiPattern}
       />
 
       {/* Message Detail (Right-side modal, restored) */}
@@ -451,6 +677,11 @@ export default function StreamPanel({
         <MessageDetailPanel
           message={selectedMessage}
           messages={messages}
+          dlqClassification={
+            isDLQ && dlqClassificationsMap
+              ? dlqClassificationsMap.get(selectedMessage.messageId) || null
+              : null
+          }
           onClose={() => setSelectedMessage(null)}
           onPrevious={() => {
             const currentIndex = messages.findIndex((m) =>

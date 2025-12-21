@@ -34,6 +34,7 @@ class ApiClient {
   private lastHeartbeatTime: number = Date.now()
   private consecutiveMissedHeartbeats: number = 0
   private onAuthError: (() => void) | null = null  // Callback to trigger reconnect
+  private onSuccess: (() => void) | null = null    // NEW: Callback for successful API calls
 
   constructor(baseURL: string) {
     this.baseURL = baseURL
@@ -48,6 +49,15 @@ class ApiClient {
   setAuthErrorHandler(handler: () => void) {
     this.onAuthError = handler
     console.log('[ApiClient] Auth error handler registered')
+  }
+
+  /**
+   * Register callback for successful API calls
+   * This will be called after each successful API response to mark session healthy
+   */
+  setSuccessHandler(handler: () => void) {
+    this.onSuccess = handler
+    console.log('[ApiClient] Success handler registered')
   }
 
   /**
@@ -211,6 +221,11 @@ class ApiClient {
           }
 
           throw new ApiError(errorText, response.status, endpoint)
+        }
+
+        // Success! Call success handler to mark session healthy
+        if (this.onSuccess) {
+          this.onSuccess()
         }
 
         return response.json()

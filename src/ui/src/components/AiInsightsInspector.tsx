@@ -53,6 +53,7 @@ interface AiInsightsInspectorProps {
   isDLQ?: boolean
   onMessageSelect?: (message: MessageEnvelope) => void
   onRefresh?: () => void
+  onApplyAiPattern?: (patternId: string, label: string, messageIds: string[]) => void
 }
 
 type TabType = 'overview' | 'patterns' | 'anomalies'
@@ -64,7 +65,8 @@ export function AiInsightsInspector({
   subscriptionName,
   isDLQ,
   onMessageSelect,
-  onRefresh
+  onRefresh,
+  onApplyAiPattern
 }: AiInsightsInspectorProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [patternPage, setPatternPage] = useState(1)
@@ -329,34 +331,58 @@ export function AiInsightsInspector({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedPatterns.map((cluster, idx) => (
-                    <tr key={idx}>
-                      <td>
-                        <span className="event-type-badge">{cluster.eventType}</span>
-                      </td>
-                      <td>{cluster.source}</td>
-                      <td>
-                        <span className="count-badge">{cluster.size}</span>
-                      </td>
-                      <td>
-                        <div className="common-fields">
-                          {(Array.isArray(cluster.commonFields) ? cluster.commonFields : []).slice(0, 3).map((field, i) => (
-                            <span key={i} className="field-tag">{field}</span>
-                          ))}
-                          {(Array.isArray(cluster.commonFields) ? cluster.commonFields : []).length > 3 && (
-                            <span className="field-tag more">
-                              +{(Array.isArray(cluster.commonFields) ? cluster.commonFields : []).length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <code className="sample-preview">
-                          {safeStringify(cluster.sampleMessage).substring(0, 50)}...
-                        </code>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedPatterns.map((cluster, idx) => {
+                    // Generate pattern ID from eventType and source
+                    const patternId = `${cluster.eventType}-${cluster.source}`
+                    
+                    // Find all loaded messages matching this pattern's eventType
+                    // (This would need to be enhanced if we have access to actual message IDs from AI service)
+                    const matchingMessageIds: string[] = []
+                    
+                    const handlePatternClick = () => {
+                      if (onApplyAiPattern && matchingMessageIds.length > 0) {
+                        onApplyAiPattern(
+                          patternId,
+                          `${cluster.eventType} (${cluster.source})`,
+                          matchingMessageIds
+                        )
+                      }
+                    }
+                    
+                    return (
+                      <tr 
+                        key={idx}
+                        className="pattern-row"
+                        onClick={handlePatternClick}
+                        title="Click to filter messages by this pattern"
+                      >
+                        <td>
+                          <span className="event-type-badge">{cluster.eventType}</span>
+                        </td>
+                        <td>{cluster.source}</td>
+                        <td>
+                          <span className="count-badge">{cluster.size}</span>
+                        </td>
+                        <td>
+                          <div className="common-fields">
+                            {(Array.isArray(cluster.commonFields) ? cluster.commonFields : []).slice(0, 3).map((field, i) => (
+                              <span key={i} className="field-tag">{field}</span>
+                            ))}
+                            {(Array.isArray(cluster.commonFields) ? cluster.commonFields : []).length > 3 && (
+                              <span className="field-tag more">
+                                +{(Array.isArray(cluster.commonFields) ? cluster.commonFields : []).length - 3}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <code className="sample-preview">
+                            {safeStringify(cluster.sampleMessage).substring(0, 50)}...
+                          </code>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
 

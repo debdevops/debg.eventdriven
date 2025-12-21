@@ -73,6 +73,20 @@
   justify-content: center;
 }
 
+.refresh-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--success);
+  color: var(--surface);
+  font-size: 12px;
+  margin-left: 6px;
+  animation: fadeInOut 2s ease-in-out;
+}
+
 .refresh-btn:hover:not(:disabled) {
   background: var(--light);
   border-color: var(--primary);
@@ -308,7 +322,7 @@
 }
 
 .expand-icon:hover {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--surface-3);
 }
 
 .entity-name {

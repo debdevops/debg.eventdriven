@@ -10,10 +10,12 @@ import { Pagination } from './Pagination'
 import { QueueHealthHeader } from './QueueHealthHeader'
 import { MessageAgeDistribution } from './MessageAgeDistribution'
 import { EventTypeChip } from './EventTypeChip'
+import { RiskSignalGroup } from './RiskSignalBadge'
 import { formatTimestamp, formatRelativeTime, truncate } from '../utils/formatters'
 import { extractEventType, type AgeDistribution } from '../utils/eventTypeExtractor'
 import { API_BASE_URL } from '../config/api'
 import type { MessageEnvelope } from '../types'
+import type { DlqMessageClassification } from '../services/dlqReplayAdvisor'
 import './MessageTable.css'
 
 interface MessageTableProps {
@@ -25,12 +27,20 @@ interface MessageTableProps {
   isDLQ?: boolean
   dlqCount?: number
   onRefresh?: () => void
+  onLoadNextBatch?: () => void // Load next batch using last sequence number
+  disabled?: boolean
   frozenSnapshot?: boolean
   onToggleSnapshot?: () => void
   onAiInsights?: () => void
   aiInsightsLoading?: boolean
   hasAiInsights?: boolean
   onMessageSelect?: (message: MessageEnvelope) => void
+  peekSize?: number
+  onPeekSizeChange?: (size: number) => void
+  // AI Pattern filter - if set, only show messages with these IDs
+  aiPatternFilter?: { patternId: string; label: string; messageIds: string[] } | null
+  // DLQ classifications (advisory only)
+  dlqClassifications?: Map<string, DlqMessageClassification> | null
 }
 
 export default function MessageTable({
@@ -42,12 +52,18 @@ export default function MessageTable({
   isDLQ = false,
   dlqCount = 0,
   onRefresh,
+  onLoadNextBatch,
+  disabled = false,
   frozenSnapshot = false,
   onToggleSnapshot,
   onAiInsights,
   aiInsightsLoading = false,
   hasAiInsights = false,
-  onMessageSelect
+  onMessageSelect,
+  peekSize = 50,
+  onPeekSizeChange,
+  aiPatternFilter = null,
+  dlqClassifications = null
 }: MessageTableProps) {
   const [sortField, setSortField] = useState<keyof MessageEnvelope>('sequenceNumber')
   const [sortAsc, setSortAsc] = useState(false) // Default: newest first
@@ -68,7 +84,6 @@ export default function MessageTable({
    * peekSize is preference for NEXT peek cycle, not current render.
    * Pagination is informational footer only.
    */
-  const [peekSize, setPeekSize] = useState(50)
 
   const handleDownload = (message: MessageEnvelope) => {
     const blob = new Blob([JSON.stringify(message, null, 2)], { type: 'application/json' })
@@ -272,9 +287,20 @@ export default function MessageTable({
     })
   }, [baseFilteredMessages, ageBucketFilter])
 
+  // STEP 3b: Apply AI pattern filter (if active)
+  const aiPatternFilteredMessages = useMemo(() => {
+    if (!aiPatternFilter || aiPatternFilter.messageIds.length === 0) {
+      return ageFilteredMessages
+    }
+    
+    // Create a Set for O(1) lookup performance
+    const patternIdSet = new Set(aiPatternFilter.messageIds)
+    return ageFilteredMessages.filter(msg => patternIdSet.has(msg.messageId))
+  }, [ageFilteredMessages, aiPatternFilter])
+
   // STEP 4: Sort age-filtered results
   const sortedMessages = useMemo(() => {
-    return [...ageFilteredMessages].sort((a, b) => {
+    return [...aiPatternFilteredMessages].sort((a, b) => {
       const aVal = a[sortField]
       const bVal = b[sortField]
       if (aVal === undefined || bVal === undefined) return 0
@@ -282,7 +308,7 @@ export default function MessageTable({
       if (aVal > bVal) return sortAsc ? 1 : -1
       return 0
     })
-  }, [ageFilteredMessages, sortField, sortAsc])
+  }, [aiPatternFilteredMessages, sortField, sortAsc])
 
   /**
    * INSPECTOR MODE: No pagination slicing.
@@ -322,6 +348,7 @@ export default function MessageTable({
         onAiInsights={onAiInsights}
         refreshing={false}
         loading={replayLoading}
+        disabled={disabled}
         frozenSnapshot={frozenSnapshot}
         onToggleSnapshot={onToggleSnapshot}
         aiInsightsLoading={aiInsightsLoading}
@@ -430,6 +457,11 @@ export default function MessageTable({
                     />
                   </th>
                 )}
+                {isDLQ && dlqClassifications && (
+                  <th className="dlq-status-col" title="AI Replay Advisor classification">
+                    AI Status
+                  </th>
+                )}
                 <th onClick={() => handleSort('sequenceNumber')} className="sortable seq-col">
                   Seq# {sortField === 'sequenceNumber' && (sortAsc ? '▲' : '▼')}
                 </th>
@@ -459,6 +491,40 @@ export default function MessageTable({
                         checked={selectedMessages.has(message.sequenceNumber)}
                         onChange={() => handleSelectMessage(message.sequenceNumber)}
                       />
+                    </td>
+                  )}
+                  {isDLQ && dlqClassifications && (
+                    <td className="dlq-status-col">
+                      <div className="dlq-status-content">
+                        {(() => {
+                          const classification = dlqClassifications.get(message.messageId)
+                          if (!classification) return '—'
+                          
+                          const icon = classification.classification === 'SAFE_TO_REPLAY'
+                            ? '✅'
+                            : classification.classification === 'NEEDS_INVESTIGATION'
+                            ? '🔍'
+                            : '⛔'
+                          
+                          const className = `dlq-status-badge ${classification.classification.toLowerCase().replace(/_/g, '-')}`
+                          
+                          return (
+                            <div>
+                              <span
+                                className={className}
+                                title={`${classification.classification} - ${classification.confidence}% confidence - ${classification.explanation}`}
+                              >
+                                {icon}
+                              </span>
+                              {classification.riskSignals && classification.riskSignals.length > 0 && (
+                                <div className="dlq-risk-signals">
+                                  <RiskSignalGroup signals={classification.riskSignals} maxDisplay={2} />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </div>
                     </td>
                   )}
                   <td className="seq-col">{message.sequenceNumber}</td>
@@ -508,7 +574,9 @@ export default function MessageTable({
           loadedCount={messages.length}
           totalQueueCount={totalMessageCount}
           peekSize={peekSize}
-          onPeekSizeChange={setPeekSize}
+          onPeekSizeChange={onPeekSizeChange}
+          onLoadNextBatch={onLoadNextBatch}
+          disabled={disabled}
         />
       </>
       )}

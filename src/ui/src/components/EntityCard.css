@@ -65,7 +65,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.12) 100%);
+  background: var(--surface-3);
   border-radius: 8px;
   pointer-events: none;
 }
@@ -109,13 +109,13 @@
   position: absolute;
   top: 6px;
   right: 6px;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--surface-3);
   backdrop-filter: blur(6px);
   padding: 2px 6px;
   border-radius: 9999px;
   font-size: 10px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
   min-width: 22px;
   text-align: center;
 }

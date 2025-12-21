@@ -193,7 +193,7 @@ export default function EntityList({
           <button
             className="refresh-btn"
             onClick={() => onRefresh(true)} // true = user clicked refresh button
-            disabled={refreshing}
+            disabled={refreshing || status !== 'connected'}
             title={refreshing ? 'Refreshing entities...' : 'Refresh entity counts'}
           >
             {refreshing ? '⟳' : '🔄'}
@@ -202,19 +202,6 @@ export default function EntityList({
             <span 
               className="refresh-indicator"
               title="Updated"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '18px',
-                height: '18px',
-                borderRadius: '50%',
-                backgroundColor: '#10b981',
-                color: 'white',
-                fontSize: '12px',
-                marginLeft: '6px',
-                animation: 'fadeInOut 2s ease-in-out'
-              }}
             >
               ✓
             </span>
