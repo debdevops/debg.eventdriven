@@ -3,7 +3,6 @@
  * Enhanced with backdrop blur, gradient border, and animated countdown
  */
 
-import { useEffect } from 'react'
 import './IdleWarningBanner.css'
 
 interface IdleWarningBannerProps {
@@ -18,32 +17,6 @@ export function IdleWarningBanner({ secondsRemaining, onDismiss }: IdleWarningBa
   // Determine urgency level
   const isUrgent = secondsRemaining <= 10
   const isCritical = secondsRemaining <= 5
-
-  // Auto-dismiss on user activity (mousemove/keydown/touch)
-  useEffect(() => {
-    const dismissOnActivity = () => onDismiss()
-    window.addEventListener('mousemove', dismissOnActivity, { once: true })
-    window.addEventListener('keydown', dismissOnActivity, { once: true })
-    window.addEventListener('touchstart', dismissOnActivity, { once: true })
-    return () => {
-      window.removeEventListener('mousemove', dismissOnActivity)
-      window.removeEventListener('keydown', dismissOnActivity)
-      window.removeEventListener('touchstart', dismissOnActivity)
-    }
-  }, [onDismiss])
-
-  // Safety: if countdown jumps back up (activity detected by session timer), dismiss the banner
-  useEffect(() => {
-    if (secondsRemaining >= 25) {
-      onDismiss()
-    }
-  }, [secondsRemaining, onDismiss])
-
-  // Timeout-based auto-dismiss to avoid lingering banner
-  useEffect(() => {
-    const t = setTimeout(() => onDismiss(), 4000)
-    return () => clearTimeout(t)
-  }, [onDismiss])
 
   return (
     <div className={`idle-warning-glassmorphic ${isCritical ? 'critical-shake' : ''}`} onClick={onDismiss}>

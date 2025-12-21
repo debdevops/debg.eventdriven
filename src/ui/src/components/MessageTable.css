@@ -7,18 +7,19 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  max-width: 100%;
 }
 
 /* Search and Filter Bar - Compact Azure Portal Style */
 .search-filter-bar {
   display: flex;
-  gap: 4px;
-  padding: 3px 12px;
-  background: linear-gradient(to bottom, var(--surface-2), var(--surface));
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--surface);
   border-bottom: 1px solid var(--border-color);
   align-items: center;
-  min-height: 38px;
-  max-height: 38px;
+  min-height: 42px;
+  max-height: 42px;
 }
 
 .search-box {

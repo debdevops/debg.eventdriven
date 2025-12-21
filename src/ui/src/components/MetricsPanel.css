@@ -1,9 +1,9 @@
 /* Metrics Panel - Compact Single Row */
 
 .metrics-panel-compact {
-  background: linear-gradient(135deg, var(--app-bg) 0%, var(--surface) 100%);
+  background: var(--surface);
   border-bottom: 1px solid var(--border-color);
-  padding: 2px 12px;
+  padding: 4px 16px;
   margin: 0;
 }
 

@@ -66,17 +66,17 @@ function renderInspectorMode(props: PaginationProps) {
       
       <div className="pagination-info">
         <span className="inspector-footer-text">
-          Showing first{' '}
+          Loaded{' '}
           <span className="inspector-count-primary">{filteredCount}</span>
           {totalQueueCount !== undefined && (
             <>
-              {' '}of{' '}
+              {' '}of ~
               <span className="inspector-count-total">{totalQueueCount}</span>
             </>
           )}
           {' '}messages
-          <span className="inspector-mode-badge" title="Peek-based inspector tool - non-destructive read from queue">
-            (Peek snapshot)
+          <span className="inspector-mode-badge" title="Peek mode - read-only, messages remain in queue">
+            (read-only peek)
           </span>
         </span>
       </div>

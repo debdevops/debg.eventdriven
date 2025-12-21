@@ -4,7 +4,8 @@
  * No separate collapsed bar - cleaner UI
  */
 
-import React, { useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
+import { useSessionV2 } from '../contexts/SessionContextV2'
 import { MessageSender } from './MessageSender'
 import './BottomMessageDock.css'
 
@@ -24,13 +25,20 @@ export default function BottomMessageDock({
   onClose
 }: BottomMessageDockProps) {
   const dockRef = useRef<HTMLDivElement>(null)
+  const { scheduleTimeout, clearTimer } = useSessionV2()
+
+  useEffect(() => {
+    if (!isOpen) {
+      clearTimer('bottom-message-dock:auto-close')
+    }
+  }, [clearTimer, isOpen])
 
   // Auto-close callback for MessageSender
   const handleMessageSent = () => {
     // Close drawer 1 second after successful send
-    setTimeout(() => {
+    scheduleTimeout('bottom-message-dock:auto-close', 1000, () => {
       onClose?.()
-    }, 1000)
+    })
   }
 
   // Close on Escape key

@@ -45,16 +45,15 @@ function AppContent({
   handleUpdateNamespace,
   handleAddNamespace
 }: any) {
-  const { 
-    sessionState,  // NEW: Single source of truth
-    status, 
-    error, 
-    showIdleCritical, 
-    idleSeconds, 
-    reconnect, 
-    markConnected,
-    markExpired,   // NEW: Called when API client detects 401
-    markHealthy    // NEW: Called after successful API calls
+  const {
+    sessionState,
+    status,
+    canInteract,
+    error,
+    idleSeconds,
+    reconnect,
+    scheduleTimeout,
+    setLastSelection
   } = useSession()
   
   // Local state for dismissing warnings only
@@ -79,91 +78,44 @@ function AppContent({
     console.log('[App] Reconnect triggered from modal/banner')
     
     try {
-      await reconnect(activeNamespace.sessionId, async () => {
-        const { apiClient } = await import('./api/client')
-        
-        // CRITICAL FIX: Re-establish connection with fresh credentials
-        // This ensures ApiClient has valid sessionId/token for all subsequent requests
-        const credentials = apiClient.getCredentials()
-        if (!credentials?.connectionString) {
-          throw new Error('No connection string available for reconnect')
-        }
-        
-        console.log('[App] Re-establishing connection with backend')
-        const connectResponse = await apiClient.connect(credentials.connectionString)
-        
-        // Update apiClient with fresh session credentials
-        apiClient.setCredentials(connectResponse.sessionId, credentials.connectionString)
-        console.log('[App] ✓ Fresh session established:', connectResponse.sessionId)
-        
-        // Update namespace with new sessionId and also set activeNamespaceId
+      await reconnect(async ({ sessionId, expiresAtUtc, entities, lastSelection }) => {
+        // Update namespace with fresh session + entities.
         handleUpdateNamespace(activeNamespace.sessionId, {
-          sessionId: connectResponse.sessionId,
-          expiresAtUtc: connectResponse.expiresAtUtc
-        })
-        setActiveNamespaceId(connectResponse.sessionId)
-        
-        // Now reload entities with the NEW sessionId
-        console.log('[App] Loading entities with fresh session')
-        const entities = await apiClient.listEntities(connectResponse.sessionId)
-        
-        // Update namespace with fresh entities against the NEW sessionId
-        handleUpdateNamespace(connectResponse.sessionId, {
+          sessionId,
+          expiresAtUtc,
           queues: entities.queues,
-          topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
+          topics: entities.topics.map((t: any) => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
         })
-        
-        console.log('[App] ✓ Metadata reloaded successfully')
+        setActiveNamespaceId(sessionId)
+
+        // Restore selection if it still exists.
+        const entityNames = new Set<string>([
+          ...entities.queues.map((q: any) => q.name),
+          ...entities.topics.map((t: any) => t.name)
+        ])
+        if (lastSelection && entityNames.has(lastSelection)) {
+          setCurrentEntityName(lastSelection)
+        } else {
+          setCurrentEntityName(null)
+        }
       })
-      
-      // On success, all modals auto-close via session status change
-      console.log('[App] Reconnect successful')
-      toast.success('Reconnected successfully')
-      
     } catch (err) {
       console.error('[App] Reconnect failed:', err)
-      toast.error('Reconnect failed. Please try again.')
-      // Error already handled in SessionContext - will show auth banner or modal
+      // SessionController will transition to expired/failed.
     }
-  }, [activeNamespace, reconnect, handleUpdateNamespace, setActiveNamespaceId, toast])
-
-  // Wire up API client to session state machine
-  useEffect(() => {
-    const setupAuthHandler = async () => {
-      const { apiClient } = await import('./api/client')
-      
-      // ENTERPRISE STATE MACHINE INTEGRATION
-      // When API client detects 401, transition to 'expired' state ONCE
-      apiClient.setAuthErrorHandler(() => {
-        console.log('[App] 401 detected by API client - marking session expired')
-        markExpired() // This will fire toast + show banner ONCE
-      })
-      
-      // When API client has successful calls, mark session healthy
-      apiClient.setSuccessHandler(() => {
-        if (sessionState !== 'healthy') {
-          console.log('[App] Successful API call - marking session healthy')
-          markHealthy() // This will auto-clear error banner
-        }
-      })
-    }
-    setupAuthHandler()
-  }, [markExpired, markHealthy, sessionState])
-
-  // Auto-recover: Mark healthy after successful reconnect
-  useEffect(() => {
-    if (activeNamespace && sessionState === 'healthy') {
-      console.log('[App] Session is healthy, marking connected')
-      markConnected()
-    }
-  }, [activeNamespace, sessionState, markConnected])
+  }, [activeNamespace, reconnect, handleUpdateNamespace, setActiveNamespaceId, setCurrentEntityName])
 
   // Auto-close idle warning when activity resumes
   useEffect(() => {
-    if (!showIdleCritical) {
+    if (sessionState !== 'idle-warning') {
       setDismissedIdleWarning(false)
     }
-  }, [showIdleCritical])
+  }, [sessionState])
+
+  // Track last selection for deterministic reconnect restore.
+  useEffect(() => {
+    setLastSelection(currentEntityName)
+  }, [currentEntityName, setLastSelection])
 
   // Handle switch namespace - close current and open connect modal
   const handleSwitchNamespace = useCallback(() => {
@@ -173,24 +125,6 @@ function AppContent({
     setShowConnectModal(true)
   }, [activeNamespace, handleCloseNamespace])
 
-  // Handle successful message generation
-  const handleGenerateSuccess = useCallback((result: { totalGenerated: number; anomalousCount: number; dlqCandidates: number }) => {
-    toast.success(
-      `Generated ${result.totalGenerated} messages (${result.anomalousCount} anomalies, ${result.dlqCandidates} DLQ candidates)`
-    )
-    
-    // Trigger auto-refresh of entities to update message counts
-    // The NamespaceView will handle this
-    
-    // Auto-run AI analysis after 1 second if we have 100+ messages
-    if (result.totalGenerated >= 100 && currentEntityName) {
-      setTimeout(() => {
-        handleRunAiAnalysis()
-      }, 1000)
-    }
-  }, [toast, currentEntityName])
-
-  // Handle AI analysis
   const handleRunAiAnalysis = useCallback(async () => {
     if (!activeNamespace || !currentEntityName) {
       toast.warning('Please select a queue first')
@@ -240,6 +174,23 @@ function AppContent({
     }
   }, [activeNamespace, currentEntityName, aiInsights, aiCacheTime, toast, addAuditEntry])
 
+  // Handle successful message generation
+  const handleGenerateSuccess = useCallback((result: { totalGenerated: number; anomalousCount: number; dlqCandidates: number }) => {
+    toast.success(
+      `Generated ${result.totalGenerated} messages (${result.anomalousCount} anomalies, ${result.dlqCandidates} DLQ candidates)`
+    )
+    
+    // Trigger auto-refresh of entities to update message counts
+    // The NamespaceView will handle this
+    
+    // Auto-run AI analysis after 1 second if we have 100+ messages
+    if (result.totalGenerated >= 100 && currentEntityName) {
+      scheduleTimeout('auto-ai-analysis', 1000, () => {
+        handleRunAiAnalysis()
+      })
+    }
+  }, [toast, currentEntityName, handleRunAiAnalysis, scheduleTimeout])
+
   // Clear AI insights when entity changes
   useEffect(() => {
     setAiInsights(null)
@@ -251,7 +202,7 @@ function AppContent({
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       
       {/* Auth error banner - shown ONLY when sessionState === 'expired' */}
-      {sessionState === 'expired' && error && (
+      {sessionState === 'expired' && error?.isAuthError && (
         <AuthErrorBanner
           isVisible={true}
           reason={error.reason}
@@ -267,18 +218,18 @@ function AppContent({
       )}
       
       {/* Main application - disabled during expired state */}
-      <div className={`app-main ${sessionState === 'expired' ? 'disabled' : ''}`}>
+      <div className={`app-main ${canInteract ? '' : 'disabled'}`}>
       {/* Idle warning banner - shown when user is idle but not expired yet */}
-      {showIdleCritical && !dismissedIdleWarning && status === 'connected' && (
+      {sessionState === 'idle-warning' && !dismissedIdleWarning && status === 'connected' && (
         <IdleWarningBanner
-          secondsRemaining={Math.max(0, 180 - idleSeconds)}
+          secondsRemaining={Math.max(0, 150 - idleSeconds)}
           onDismiss={() => setDismissedIdleWarning(true)}
         />
       )}
 
       {/* Session Expired Modal - shown when idle timeout expires */}
       <SessionExpiredModal
-        isOpen={showIdleCritical && status !== 'auth_required'}
+        isOpen={sessionState === 'expired' && error?.reason === 'idle'}
         onReconnect={handleReconnectFromModal}
         onSwitchNamespace={handleSwitchNamespace}
       />
@@ -342,6 +293,7 @@ function AppContent({
           <MultiFab
             onSendMessage={() => setShowMessageDrawer(true)}
             onGenerateMessages={() => setShowGenerateModal(true)}
+            disabled={!canInteract}
           />
           
           {/* Message Drawer - opened by FAB */}

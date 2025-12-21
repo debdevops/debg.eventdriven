@@ -26,7 +26,7 @@ export function TopBar({
   onSwitchNamespace,
   onReconnect
 }: TopBarProps) {
-  const { status } = useSessionV2()
+  const { sessionState } = useSessionV2()
 
   return (
     <header className="topbar-gradient">
@@ -49,7 +49,15 @@ export function TopBar({
             <div className="session-status-modern">
               <span className="session-name-modern">{currentNamespace}</span>
               <StatusDot
-                status={status === 'connected' ? 'connected' : status === 'expired' ? 'expired' : 'connecting'}
+                status={
+                  sessionState === 'connected' || sessionState === 'idle-warning'
+                    ? 'connected'
+                    : sessionState === 'expired'
+                      ? 'expired'
+                      : sessionState === 'failed'
+                        ? 'failed'
+                        : 'connecting'
+                }
                 expiresAtUtc={expiresAtUtc || null}
                 namespaceName={currentNamespace}
                 onReconnect={onReconnect || (() => {})}

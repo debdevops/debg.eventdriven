@@ -35,6 +35,7 @@ class ApiClient {
   private consecutiveMissedHeartbeats: number = 0
   private onAuthError: (() => void) | null = null  // Callback to trigger reconnect
   private onSuccess: (() => void) | null = null    // NEW: Callback for successful API calls
+  private inFlightControllers: Set<AbortController> = new Set()
 
   constructor(baseURL: string) {
     this.baseURL = baseURL
@@ -100,9 +101,28 @@ class ApiClient {
    */
   resetClient() {
     console.log('[ApiClient] Resetting client state')
+    // Abort any in-flight requests first to prevent partial updates.
+    this.abortAllRequests('client-reset')
     this.clearCredentials()
     this.lastHeartbeatTime = Date.now()
     this.consecutiveMissedHeartbeats = 0
+  }
+
+  /**
+   * Abort all in-flight requests.
+   * Used by the SessionController to enforce atomic reconnect semantics.
+   */
+  abortAllRequests(reason: string = 'abort-all') {
+    if (this.inFlightControllers.size === 0) return
+    console.warn(`[ApiClient] Aborting ${this.inFlightControllers.size} in-flight request(s): ${reason}`)
+    for (const controller of this.inFlightControllers) {
+      try {
+        controller.abort(reason)
+      } catch {
+        // ignore
+      }
+    }
+    this.inFlightControllers.clear()
   }
 
   /**
@@ -181,12 +201,35 @@ class ApiClient {
         // Record heartbeat on successful request
         this.recordHeartbeat()
 
+        // Always attach an AbortController so the SessionController can cancel
+        // all in-flight requests during reconnect.
+        const controller = new AbortController()
+        this.inFlightControllers.add(controller)
+
+        // If caller provided a signal, mirror it into our controller.
+        const externalSignal = options.signal
+        if (externalSignal) {
+          if (externalSignal.aborted) {
+            controller.abort((externalSignal as any).reason || 'external-abort')
+          } else {
+            externalSignal.addEventListener(
+              'abort',
+              () => controller.abort((externalSignal as any).reason || 'external-abort'),
+              { once: true }
+            )
+          }
+        }
+
         const response = await fetch(url, {
           ...options,
+          signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             ...options.headers
           }
+        }).finally(() => {
+          // Ensure we always release the controller.
+          this.inFlightControllers.delete(controller)
         })
 
         // Handle 401 Unauthorized - trigger single-flight refresh (which throws AuthError)
@@ -230,6 +273,11 @@ class ApiClient {
 
         return response.json()
       } catch (error) {
+        // Abort is an expected control-flow during reconnect; do not retry.
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          throw error
+        }
+
         // Auth errors are NOT retried - thrown immediately
         if (error instanceof AuthError) {
           throw error

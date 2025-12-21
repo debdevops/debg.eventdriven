@@ -1,26 +1,17 @@
 /**
- * Production-grade SSE Hook with:
- * - Exponential backoff reconnection: 500ms → 1s → 2s → 4s → 8s, then 30s forever
- * - Batch message updates (aggregate 200-300ms to prevent re-render storms)
- * - Connection status tracking with timestamps
- * - Heartbeat handling
- * - Message buffer flushing on disconnect
- * 
- * Configuration (tune these for production):
- * - BATCH_DELAY_MS: Aggregate incoming messages for this duration before setState (default 250ms)
- * - INITIAL_BACKOFF_MS: First reconnection delay (default 500ms)
- * - MAX_FAST_RETRIES: Number of fast exponential retries before switching to slow retry (default 5)
- * - SLOW_RETRY_INTERVAL_MS: Retry interval after fast retries exhausted (default 30000ms = 30s)
+ * SSE Hook (hardened for deterministic session lifecycle)
+ *
+ * Session policy:
+ * - No internal timers/reconnect loops.
+ * - SessionController owns reconnect + all timers.
+ * - When `enabled` flips false (expired/reconnecting/failed), SSE stops immediately.
+ *
+ * Performance:
+ * - Microtask batching (no setTimeout) to avoid render storms.
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { MessageEnvelope } from '../types';
-
-// Configuration constants - TUNE THESE FOR YOUR NEEDS
-const BATCH_DELAY_MS = 50; // Message batching window
-const INITIAL_BACKOFF_MS = 500; // First retry delay
-const MAX_FAST_RETRIES = 5; // Number of exponential backoff attempts
-const SLOW_RETRY_INTERVAL_MS = 30000; // Retry every 30s after fast retries
 
 export type SSEConnectionStatus =
   | 'disconnected'
@@ -56,23 +47,12 @@ export function useSSE({
 }: UseSSEOptions): SSEConnectionInfo {
   const eventSourceRef = useRef<EventSource | null>(null);
   const batchQueueRef = useRef<MessageEnvelope[]>([]);
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushScheduledRef = useRef(false);
   
   const [status, setStatus] = useState<SSEConnectionStatus>('disconnected');
   const [reconnectCount, setReconnectCount] = useState(0);
   const [lastConnected, setLastConnected] = useState<Date | null>(null);
   const [lastReconnectAttempt, setLastReconnectAttempt] = useState<Date | null>(null);
-
-  // Exponential backoff: 500ms → 1s → 2s → 4s → 8s, then 30s forever
-  const getBackoffDelay = useCallback((attempt: number): number => {
-    if (attempt < MAX_FAST_RETRIES) {
-      // Exponential: 500ms, 1000ms, 2000ms, 4000ms, 8000ms
-      return INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-    }
-    // After fast retries, use slow retry interval
-    return SLOW_RETRY_INTERVAL_MS;
-  }, []);
 
   // Flush batched messages
   const flushBatch = useCallback(() => {
@@ -87,21 +67,17 @@ export function useSSE({
       }
     }
 
-    if (flushTimerRef.current) {
-      clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
+    flushScheduledRef.current = false;
   }, [onBatchMessages, onMessage]);
 
   // Queue a message for batched delivery
   const queueMessage = useCallback((message: MessageEnvelope) => {
     batchQueueRef.current.push(message);
 
-    // Schedule flush if not already scheduled
-    if (!flushTimerRef.current) {
-      flushTimerRef.current = setTimeout(() => {
-        flushBatch();
-      }, BATCH_DELAY_MS);
+    // Schedule a single microtask flush for this tick.
+    if (!flushScheduledRef.current) {
+      flushScheduledRef.current = true;
+      queueMicrotask(() => flushBatch());
     }
   }, [flushBatch]);
 
@@ -113,12 +89,6 @@ export function useSSE({
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
-    }
-
-    // Clear any pending reconnect timer
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
     }
 
     setStatus('connecting');
@@ -155,26 +125,17 @@ export function useSSE({
         flushBatch();
         onClose?.();
 
-        // Schedule reconnection if still enabled
-        if (enabled) {
-          const delay = getBackoffDelay(reconnectCount);
-          setStatus('reconnecting');
-          setLastReconnectAttempt(new Date());
-
-          reconnectTimerRef.current = setTimeout(() => {
-            setReconnectCount(prev => prev + 1);
-            connect();
-          }, delay);
-        } else {
-          setStatus('disconnected');
-        }
+        // No internal reconnect loop. SessionController owns reconnect.
+        setStatus(enabled ? 'reconnecting' : 'disconnected');
+        setLastReconnectAttempt(new Date());
+        setReconnectCount(prev => prev + 1);
       };
 
     } catch (err) {
       console.error('[useSSE] Connection error:', err);
       setStatus('disconnected');
     }
-  }, [enabled, url, reconnectCount, getBackoffDelay, queueMessage, flushBatch, onOpen, onHeartbeat, onClose]);
+  }, [enabled, url, queueMessage, flushBatch, onOpen, onHeartbeat, onClose]);
 
   // Effect: manage connection lifecycle
   useEffect(() => {
@@ -186,10 +147,6 @@ export function useSSE({
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
       flushBatch();
       setStatus('disconnected');
       setReconnectCount(0);
@@ -199,14 +156,6 @@ export function useSSE({
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
-      }
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      if (flushTimerRef.current) {
-        clearTimeout(flushTimerRef.current);
-        flushTimerRef.current = null;
       }
       flushBatch();
     };

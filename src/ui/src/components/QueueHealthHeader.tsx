@@ -42,22 +42,22 @@ export function QueueHealthHeader({ messages, dlqCount, isDLQ }: QueueHealthHead
 
     // Determine health status
     let status: HealthStatus = 'healthy'
-    let statusReason = 'All metrics nominal'
+    let statusReason = 'Queue operating normally'
 
     // Critical: Any DLQ messages (hard warning)
     if (dlqCount > 0 && !isDLQ) {
       status = 'critical'
-      statusReason = `${dlqCount} messages in DLQ`
+      statusReason = `${dlqCount} failed message${dlqCount > 1 ? 's' : ''} in Dead Letter Queue require attention`
     }
     // Warning: Messages older than 2 hours
     else if (oldestAgeMinutes > 120) {
       status = 'warning'
-      statusReason = `Oldest message is ${Math.floor(oldestAgeMinutes / 60)}h old`
+      statusReason = `Oldest message is ${Math.floor(oldestAgeMinutes / 60)}h old - possible processing delay`
     }
     // Warning: High message backlog (>100 for production queues)
     else if (activeCount > 100) {
       status = 'warning'
-      statusReason = `${activeCount} messages in backlog`
+      statusReason = `${activeCount} messages waiting - backlog building`
     }
 
     return {

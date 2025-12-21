@@ -48,13 +48,13 @@ export function NamespaceView({
   const [isResizing, setIsResizing] = useState(false)
   
   // Use new robust session context
-  const { status } = useSessionV2()
+  const { status, canInteract, scheduleTimeout } = useSessionV2()
   
   const [refreshIndicatorVisible, setRefreshIndicatorVisible] = useState(false)
 
   const handleSelectEntity = (entity: Entity) => {
     // Guard: Prevent navigation if session is not ready
-    if (status === 'connecting' || status === 'auth_required') {
+    if (!canInteract) {
       console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
       return
     }
@@ -69,7 +69,7 @@ export function NamespaceView({
 
   const handleSelectSubscription = (subscription: Subscription, topicName: string) => {
     // Guard: Prevent navigation if session is not ready
-    if (status === 'connecting' || status === 'auth_required') {
+    if (!canInteract) {
       console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
       return
     }
@@ -86,7 +86,7 @@ export function NamespaceView({
 
   const handleSelectDLQ = (entity: Entity) => {
     // Guard: Prevent navigation if session is not ready
-    if (status === 'connecting' || status === 'auth_required') {
+    if (!canInteract) {
       console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
       return
     }
@@ -129,7 +129,7 @@ export function NamespaceView({
 
   const handleRefreshEntities = useCallback(async (triggeredByUser = false) => {
     // Guard: Prevent refresh if session is not ready
-    if (status === 'connecting' || status === 'auth_required') {
+    if (!canInteract) {
       console.log('[NamespaceView] Refresh blocked: session not ready (status=' + status + ')')
       return
     }
@@ -148,7 +148,8 @@ export function NamespaceView({
       } else {
         // Background auto-refresh - show subtle indicator
         setRefreshIndicatorVisible(true)
-        setTimeout(() => setRefreshIndicatorVisible(false), 2000)
+        const key = `ns-refresh-indicator-${namespace.sessionId}`
+        scheduleTimeout(key, 2000, () => setRefreshIndicatorVisible(false))
       }
     } catch (err) {
       console.error('Failed to refresh entities:', err)
@@ -157,7 +158,7 @@ export function NamespaceView({
     } finally {
       setRefreshing(false)
     }
-  }, [namespace.sessionId, onUpdateNamespace, toast, status])
+  }, [namespace.sessionId, onUpdateNamespace, toast, status, canInteract, scheduleTimeout])
 
 
   return (

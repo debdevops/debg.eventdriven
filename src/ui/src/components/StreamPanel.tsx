@@ -49,8 +49,8 @@ export default function StreamPanel({
   aiInsights
 }: StreamPanelProps) {
   const mode: StreamMode = 'peek' // Read-only mode
-  const { status, registerTimer } = useSessionV2()
-  const controlsDisabled = status !== 'connected' || isSessionExpired
+  const { status, canInteract, scheduleTimeout, scheduleInterval, clearTimer } = useSessionV2()
+  const controlsDisabled = !canInteract || isSessionExpired
   const [messages, setMessages] = useState<MessageEnvelope[]>([])
   const [streaming, setStreaming] = useState(false)
   const [peekSize, setPeekSize] = useState(50)
@@ -89,10 +89,11 @@ export default function StreamPanel({
   // Toast auto-dismiss
   useEffect(() => {
     if (toast) {
-      const timer = setTimeout(() => setToast(null), 5000)
-      return () => clearTimeout(timer)
+      const key = `stream-toast-${sessionId}`
+      scheduleTimeout(key, 5000, () => setToast(null))
+      return () => clearTimer(key)
     }
-  }, [toast])
+  }, [toast, scheduleTimeout, clearTimer, sessionId])
 
   // Reusable function to load messages once
   const loadMessagesOnce = useCallback(async (silent = false) => {
@@ -132,6 +133,7 @@ export default function StreamPanel({
         return prevIds === newIds ? prevMessages : updatedMessages
       })
       
+      setLastUpdated(new Date())
       setError(null)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to load messages'
@@ -154,6 +156,7 @@ export default function StreamPanel({
 
   // Track last refresh time
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   // Auto-load messages when entity changes
   useEffect(() => {
@@ -206,66 +209,31 @@ export default function StreamPanel({
   // Single unified auto-refresh loop with Page Visibility API
   // Pauses during session expiry or reconnect
   useEffect(() => {
+    const timerKey = `stream-auto-refresh-${sessionId}-${entityName}-${subscriptionName || 'none'}-${isDLQ ? 'dlq' : 'main'}`
+
     if (frozenSnapshot || status !== 'connected') {
-      console.log('[StreamPanel] Auto-refresh paused:', 
-        frozenSnapshot ? 'Snapshot frozen' : `Session status: ${status}`)
-      return // Don't refresh when paused or not connected
+      clearTimer(timerKey)
+      return
     }
 
-    let intervalId: ReturnType<typeof setInterval> | null = null
     let isRefreshInProgress = false
-    
-    const performRefresh = async () => {
+
+    scheduleInterval(timerKey, 10000, async () => {
       if (isRefreshInProgress || document.hidden || status !== 'connected') return
-      
       try {
         isRefreshInProgress = true
         setIsRefreshing(true)
-        await loadMessagesOnce(true) // Silent refresh
+        await loadMessagesOnce(true)
       } catch (err) {
         console.error('[StreamPanel] Auto-refresh failed:', err)
       } finally {
         setIsRefreshing(false)
         isRefreshInProgress = false
       }
-    }
-    
-    const startAutoRefresh = () => {
-      if (intervalId) return // Prevent duplicate intervals
-      console.log('[StreamPanel] Starting auto-refresh (10s interval)')
-      intervalId = setInterval(performRefresh, 10000) // 10 seconds
-      registerTimer?.('stream-auto-refresh', intervalId) // Register with SessionContext
-    }
+    })
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Pause refresh when tab is hidden
-        if (intervalId) {
-          console.log('[StreamPanel] Pausing auto-refresh (tab hidden)')
-          clearInterval(intervalId)
-          intervalId = null
-        }
-      } else {
-        // Resume refresh when tab becomes visible
-        if (!intervalId && status === 'connected') {
-          console.log('[StreamPanel] Resuming auto-refresh (tab visible)')
-          startAutoRefresh()
-          performRefresh() // Immediate refresh on tab activation
-        }
-      }
-    }
-
-    startAutoRefresh()
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      if (intervalId) {
-        console.log('[StreamPanel] Cleaning up auto-refresh interval')
-        clearInterval(intervalId)
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [frozenSnapshot, status, loadMessagesOnce, registerTimer])
+    return () => clearTimer(timerKey)
+  }, [frozenSnapshot, status, loadMessagesOnce, scheduleInterval, clearTimer, sessionId, entityName, subscriptionName, isDLQ])
 
   // SSE Stream
   const streamURL = apiClient.getStreamURL(sessionId, entityName, mode, subscriptionName, isDLQ)
@@ -484,6 +452,18 @@ export default function StreamPanel({
     ? ` (Queue: ${selectedTarget.entity!.name})`
     : ''
 
+  // Format last updated time
+  const formatLastUpdated = (): string => {
+    if (!lastUpdated) return 'Not yet loaded'
+    const secondsAgo = Math.floor((Date.now() - lastUpdated.getTime()) / 1000)
+    if (secondsAgo < 10) return 'Just now'
+    if (secondsAgo < 60) return `${secondsAgo}s ago`
+    const minutesAgo = Math.floor(secondsAgo / 60)
+    if (minutesAgo < 60) return `${minutesAgo}m ago`
+    const hoursAgo = Math.floor(minutesAgo / 60)
+    return `${hoursAgo}h ago`
+  }
+
   return (
     <div className="stream-panel">
       {/* Session expired is now handled by SessionExpiryModal in NamespaceView */}
@@ -506,6 +486,12 @@ export default function StreamPanel({
           {displayContext && <span className="entity-context" title={displayContext.substring(2, displayContext.length - 1)}>{displayContext}</span>}
           <span className="message-count-badge" title="Total messages in grid">
             {messages.length}
+          </span>
+          <span className="read-mode-badge" title="Read-only peek mode - messages are not removed from queue">
+            📖 Peek Mode
+          </span>
+          <span className="last-updated-badge" title={lastUpdated ? `Last updated at ${lastUpdated.toLocaleTimeString()}` : 'Not yet loaded'}>
+            {formatLastUpdated()}
           </span>
         </div>
 

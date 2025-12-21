@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../config/api'
+import { useSessionV2 } from '../contexts/SessionContextV2'
 import './MetricsPanel.css'
 
 interface MetricsPanelProps {
@@ -29,6 +30,7 @@ interface MetricsData {
 }
 
 export function MetricsPanel({ sessionId, entityName, subscriptionName }: MetricsPanelProps) {
+  const { status, scheduleInterval, clearTimer, getAbortSignal, markExpired } = useSessionV2()
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -36,6 +38,10 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
   const [collapsed, setCollapsed] = useState(true) // Start collapsed for compact view
 
   const fetchMetrics = useCallback(async (silent = false) => {
+    if (status !== 'connected') {
+      return
+    }
+
     try {
       if (!silent) {
         setLoading(true)
@@ -46,12 +52,13 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
         ? `${API_BASE_URL}/api/namespace/${sessionId}/${entityName}/metrics?subscriptionName=${subscriptionName}`
         : `${API_BASE_URL}/api/namespace/${sessionId}/${entityName}/metrics`
 
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: getAbortSignal() })
 
       if (!response.ok) {
         // Silently ignore 401 errors during background refresh
-        if (response.status === 401 && silent) {
-          return
+        if (response.status === 401) {
+          markExpired({ reason: 'unauthorized', statusCode: 401 })
+          if (silent) return
         }
         throw new Error(`HTTP ${response.status}`)
       }
@@ -70,23 +77,30 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
         setLoading(false)
       }
     }
-  }, [sessionId, entityName, subscriptionName])
+  }, [sessionId, entityName, subscriptionName, status, getAbortSignal, markExpired])
 
   // Initial fetch
   useEffect(() => {
-    fetchMetrics(false) // Not silent for initial load
-  }, [fetchMetrics])
+    if (status === 'connected') {
+      fetchMetrics(false) // Not silent for initial load
+    }
+  }, [fetchMetrics, status])
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
-    if (!autoRefresh) return
+    const timerKey = `metrics-auto-refresh-${sessionId}-${entityName}-${subscriptionName || 'none'}`
+    if (!autoRefresh || status !== 'connected') {
+      clearTimer(timerKey)
+      return
+    }
 
-    const interval = setInterval(() => {
-      fetchMetrics(true) // Silent background refresh
-    }, 10000) // 10 seconds
+    scheduleInterval(timerKey, 10000, () => {
+      if (document.hidden || status !== 'connected') return
+      fetchMetrics(true)
+    })
 
-    return () => clearInterval(interval)
-  }, [autoRefresh, fetchMetrics])
+    return () => clearTimer(timerKey)
+  }, [autoRefresh, status, scheduleInterval, clearTimer, fetchMetrics, sessionId, entityName, subscriptionName])
 
   const formatBytes = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`

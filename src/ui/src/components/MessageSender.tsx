@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import './MessageSender.css';
 import { API_BASE_URL } from '../config/api';
+import { useSessionV2 } from '../contexts/SessionContextV2';
 
 interface MessageSenderProps {
   sessionId: string | null;
@@ -181,6 +182,8 @@ const SAMPLE_PAYLOADS = [
 ];
 
 export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entities = [], currentEntity, onMessageSent }) => {
+  const { scheduleTimeout, clearTimer } = useSessionV2();
+
   const [selectedEntity, setSelectedEntity] = useState('');
   const [message, setMessage] = useState('');
   const [showSamples, setShowSamples] = useState(false);
@@ -215,6 +218,17 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
   const [importing, setImporting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
+  const scheduleStatusClear = (delayMs: number) => {
+    scheduleTimeout('message-sender:status-clear', delayMs, () => setStatusMessage(null));
+  };
+
+  React.useEffect(() => {
+    return () => {
+      clearTimer('message-sender:status-clear');
+      clearTimer('message-sender:import-close');
+    };
+  }, [clearTimer]);
+
   // Load templates from localStorage on mount
   React.useEffect(() => {
     const savedTemplates = localStorage.getItem('messageTemplates');
@@ -230,7 +244,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
   const sendMessage = async () => {
     if (!sessionId || !selectedEntity || !message.trim()) {
       setStatusMessage({ text: 'Please select a queue/topic and enter a message', type: 'error' });
-      setTimeout(() => setStatusMessage(null), 3000);
+      scheduleStatusClear(3000);
       return;
     }
 
@@ -320,17 +334,15 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
         if (onMessageSent) {
           onMessageSent();
         }
-        
-        setTimeout(() => {
-          setStatusMessage(null);
-        }, 2000);
+
+        scheduleStatusClear(2000);
       } else {
         setStatusMessage({ text: `✗ Failed to send messages (${failCount} failed)`, type: 'error' });
-        setTimeout(() => setStatusMessage(null), 5000);
+        scheduleStatusClear(5000);
       }
     } catch (error) {
       setStatusMessage({ text: `✗ Error: ${error instanceof Error ? error.message : 'Failed to send'}`, type: 'error' });
-      setTimeout(() => setStatusMessage(null), 5000);
+      scheduleStatusClear(5000);
     } finally {
       setIsLoading(false);
     }
@@ -351,7 +363,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
   const saveTemplate = () => {
     if (!templateName.trim() || !message.trim()) {
       setStatusMessage({ text: 'Template name and message are required', type: 'error' });
-      setTimeout(() => setStatusMessage(null), 3000);
+      scheduleStatusClear(3000);
       return;
     }
 
@@ -375,7 +387,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
     setTemplateName('');
     setShowSaveTemplate(false);
     setStatusMessage({ text: '✓ Template saved!', type: 'success' });
-    setTimeout(() => setStatusMessage(null), 2000);
+    scheduleStatusClear(2000);
   };
 
   const loadTemplate = (template: MessageTemplate) => {
@@ -384,7 +396,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
     setCustomProperties(props.length > 0 ? props : [{ key: '', value: '' }]);
     setShowTemplates(false);
     setStatusMessage({ text: `✓ Loaded template: ${template.name}`, type: 'success' });
-    setTimeout(() => setStatusMessage(null), 2000);
+    scheduleStatusClear(2000);
   };
 
   const deleteTemplate = (templateId: string) => {
@@ -392,7 +404,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
     setTemplates(updatedTemplates);
     localStorage.setItem('messageTemplates', JSON.stringify(updatedTemplates));
     setStatusMessage({ text: '✓ Template deleted', type: 'success' });
-    setTimeout(() => setStatusMessage(null), 2000);
+    scheduleStatusClear(2000);
   };
 
   // Custom properties management
@@ -440,7 +452,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
       await processImportFile(jsonFile);
     } else {
       setStatusMessage({ text: '✗ Please drop a JSON file', type: 'error' });
-      setTimeout(() => setStatusMessage(null), 3000);
+      scheduleStatusClear(3000);
     }
   };
 
@@ -456,7 +468,7 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
   const processImportFile = async (file: File) => {
     if (!selectedEntity || !sessionId) {
       setStatusMessage({ text: '✗ Please select a queue/topic first', type: 'error' });
-      setTimeout(() => setStatusMessage(null), 3000);
+      scheduleStatusClear(3000);
       return;
     }
 
@@ -526,17 +538,17 @@ export const MessageSender: React.FC<MessageSenderProps> = ({ sessionId, entitie
         type: result.failCount > 0 ? 'error' : 'success'
       });
 
-      setTimeout(() => {
+      scheduleTimeout('message-sender:import-close', 3000, () => {
         setStatusMessage(null);
         setShowImport(false);
-      }, 3000);
+      });
 
     } catch (error) {
       setStatusMessage({
         text: `✗ Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         type: 'error'
       });
-      setTimeout(() => setStatusMessage(null), 5000);
+      scheduleStatusClear(5000);
     } finally {
       setImporting(false);
     }

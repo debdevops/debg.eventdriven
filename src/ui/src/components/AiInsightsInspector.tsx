@@ -280,10 +280,11 @@ export function AiInsightsInspector({
             </div>
 
             <div className="overview-summary">
-              <h4>Summary</h4>
+              <h4>Analysis Summary</h4>
               <p>{aiInsights.summary}</p>
               <div className="analysis-meta">
                 <span>Analyzed at: {new Date(aiInsights.analyzedAt).toLocaleString()}</span>
+                <span className="confidence-note">• Only showing patterns with high confidence (≥60%)</span>
               </div>
             </div>
 
@@ -409,7 +410,7 @@ export function AiInsightsInspector({
         {activeTab === 'anomalies' && (
           <div className="anomalies-tab">
             <div className="anomalies-note">
-              Showing high-confidence anomalies (≥60%). AI stays silent on uncertain patterns.
+              💡 Showing only high-confidence anomalies (≥60%). Lower confidence patterns are filtered out to avoid false alarms.
             </div>
             <div className="grid-container">
               <table className="inspector-grid">
@@ -418,10 +419,10 @@ export function AiInsightsInspector({
                     <th>Message ID</th>
                     <th>Source</th>
                     <th>Event Type</th>
-                    <th>Anomaly Type</th>
-                    <th>Severity</th>
+                    <th>Why Flagged</th>
+                    <th>Impact</th>
                     <th>Confidence</th>
-                    <th>Reason</th>
+                    <th>Root Cause</th>
                     <th>Expected vs Actual</th>
                   </tr>
                 </thead>
@@ -451,7 +452,7 @@ export function AiInsightsInspector({
                         </span>
                       </td>
                       <td>
-                        <span className="confidence-badge">
+                        <span className="confidence-badge" title={`AI is ${outlier.confidence || 100}% confident this is anomalous`}>
                           {outlier.confidence || 100}%
                         </span>
                       </td>
@@ -482,7 +483,7 @@ export function AiInsightsInspector({
               </table>
 
               {allOutliers.length === 0 && (
-                <div className="empty-grid">✅ No high-confidence anomalies detected</div>
+                <div className="empty-grid">✅ No high-confidence anomalies detected - all messages appear normal</div>
               )}
             </div>
 

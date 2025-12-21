@@ -6,7 +6,7 @@
 
 import './StatusDot.css'
 
-type ConnectionStatus = 'connected' | 'expired' | 'connecting'
+type ConnectionStatus = 'connected' | 'expired' | 'connecting' | 'failed'
 
 interface StatusDotProps {
   status: ConnectionStatus
@@ -28,11 +28,13 @@ export function StatusDot({
         return 'Session expired • Click to reconnect'
       case 'connecting':
         return 'Connecting...'
+      case 'failed':
+        return 'Connection failed • Click to reconnect'
     }
   }
 
   const handleClick = () => {
-    if (status === 'expired') {
+    if (status === 'expired' || status === 'failed') {
       onReconnect()
     }
   }

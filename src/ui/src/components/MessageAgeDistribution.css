@@ -1,14 +1,17 @@
 /* COMPACT HEALTH INDICATOR - Fixed height, visually subordinate to message grid */
 .message-age-distribution {
-  background: var(--surface-2);
-  height: 32px; /* ULTRA-COMPACT - reduced from 48px */
-  max-height: 32px;
-  min-height: 32px;
+  background: var(--surface);
+  height: 28px;
+  max-height: 28px;
+  min-height: 28px;
   overflow: hidden;
-  padding: 2px 12px; /* Reduced from 4px 16px */
+  padding: 2px 16px;
   border-bottom: 1px solid var(--border-color);
   box-sizing: border-box;
-  flex-shrink: 0; /* Prevent flex container from shrinking this */
+  flex-shrink: 0;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: 16px;
 }
 
 .message-age-distribution.collapsed {
@@ -51,11 +54,11 @@
 }
 
 .distribution-title {
-  font-size: 8px; /* Reduced from 9px */
-  font-weight: 500; /* Reduced from 600 for less visual weight */
-  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.2px; /* Reduced from 0.3px */
+  letter-spacing: 0.3px;
 }
 
 .distribution-total {
@@ -63,11 +66,11 @@
   color: var(--text-muted);
 }
 
-/* ULTRA-COMPACT bars - 18px height total */
+/* ULTRA-COMPACT bars - 16px height total */
 .distribution-bars {
   display: flex;
-  gap: 3px; /* Reduced from 4px */
-  height: 18px; /* Reduced from 24px */
+  gap: 4px;
+  height: 16px;
 }
 
 /* Subtle, scannable buckets - no heavy visual weight */

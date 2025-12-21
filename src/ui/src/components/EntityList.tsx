@@ -47,7 +47,7 @@ export default function EntityList({
   refreshing,
   refreshIndicatorVisible = false
 }: EntityListProps) {
-  const { registerTimer, status } = useSessionV2()
+  const { status, scheduleInterval, clearTimer } = useSessionV2()
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set())
   const [topicSubscriptions, setTopicSubscriptions] = useState<Record<string, Subscription[]>>({})
   const [loadingTopics, setLoadingTopics] = useState<Set<string>>(new Set())
@@ -75,19 +75,19 @@ export default function EntityList({
 
   // Auto-refresh entity counts every 10 seconds (paused during reconnect)
   useEffect(() => {
+    const timerKey = `entity-auto-refresh-${sessionId}`
     if (status !== 'connected') {
-      console.log('[EntityList] Auto-refresh paused: status =', status)
+      clearTimer(timerKey)
       return
     }
 
-    const interval = setInterval(() => {
-      onRefresh(false) // false = automatic background refresh
-    }, 10000) // 10 seconds
-    
-    registerTimer?.('entity-auto-refresh', interval)
-    
-    return () => clearInterval(interval)
-  }, [onRefresh, registerTimer, status])
+    scheduleInterval(timerKey, 10000, () => {
+      if (document.hidden || status !== 'connected') return
+      onRefresh(false)
+    })
+
+    return () => clearTimer(timerKey)
+  }, [onRefresh, scheduleInterval, clearTimer, status, sessionId])
 
   // When we regain connection, trigger an immediate refresh to clear any stale errors
   useEffect(() => {

@@ -1,31 +1,22 @@
 /**
- * SessionContextV2 - ROBUST Session Management with Exponential Backoff Reconnect
- * 
- * Core Features:
- * - Single source of truth for connection state (status, token, lastActivity)
- * - Exponential backoff automatic reconnect (500ms → 1s → 2s → 4s → 8s max)
- * - Manual reconnect button always available
- * - Heartbeat ping every 20s to detect stale connections
- * - Idle detection: 2min idle → warn → critical → modal
- * - Proper 401 handling with token refresh and retry
- * - All timers properly tracked and cleaned up on reconnect
- * - Auto-restores previous namespace/entity selection after reconnect
+ * SessionContextV2 (SessionController)
+ *
+ * HARDENING REQUIREMENTS
+ * - Single authoritative session controller.
+ * - Exact state machine (no other states allowed):
+ *   connected | idle-warning | expired | reconnecting | failed
+ * - Only this controller creates/manages timers.
+ * - Reconnect is atomic and deterministic.
  */
 
-import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react'
-import { useIdleDetection } from '../hooks/useIdleDetection'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { apiClient } from '../api/client'
 import { AuthError } from '../api/errors'
 
-/**
- * Enterprise-grade session state machine
- * Single source of truth for session health
- */
-type SessionState = 'healthy' | 'expired' | 'reconnecting'
+export type SessionState = 'connected' | 'idle-warning' | 'expired' | 'reconnecting' | 'failed'
+export type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'expired' | 'auth_required'
 
-// Legacy status type for backward compatibility
-type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'expired' | 'auth_required'
-
-interface SessionError {
+export interface SessionError {
   message: string
   reason: string
   isAuthError: boolean
@@ -33,37 +24,45 @@ interface SessionError {
   timestamp: Date
 }
 
+export interface SessionReconnectData {
+  sessionId: string
+  expiresAtUtc: string
+  entities: any
+  lastSelection: string | null
+}
+
+type TimerId = ReturnType<typeof setTimeout>
+
 interface SessionContextType {
-  // SINGLE SOURCE OF TRUTH
   sessionState: SessionState
-  
-  // Legacy compatibility (computed from sessionState)
   status: SessionStatus
+  canInteract: boolean
   error: SessionError | null
+
   connectedAt: Date | null
-  lastErrorTime: number | null
-  
-  // Idle state
-  isIdle: boolean
   idleSeconds: number
-  showIdleWarning: boolean
-  showIdleCritical: boolean
-  
-  // Actions
-  reconnect: (sessionId: string, reloadCallback: () => Promise<void>) => Promise<void>
-  clearError: () => void
-  resetActivity: () => void
-  markExpired: () => void
+  uiNowMs: number
+
+  // In-memory-only metadata
+  setConnectionString: (connectionString: string | null) => void
+  setSessionMeta: (meta: { sessionId: string | null; expiresAtUtc: string | null }) => void
+  setLastSelection: (selection: string | null) => void
+
+  // Deterministic actions
+  reconnect: (applyUpdates: (data: SessionReconnectData) => Promise<void>) => Promise<void>
+  markExpired: (reason?: { message?: string; reason?: string; statusCode?: number }) => void
   markConnected: () => void
-  triggerReconnect: () => void
-  
-  // Internal state management
-  markHealthy: () => void    // Called after successful API call
-  markReconnecting: () => void // Called when starting reconnect
-  
-  // Timer management
-  registerTimer: (name: string, timerId: NodeJS.Timeout) => void
+  markFailed: (message: string) => void
+  resetIdle: () => void
+
+  // Timer API (controller-owned)
+  scheduleTimeout: (name: string, delayMs: number, fn: () => void) => void
+  scheduleInterval: (name: string, intervalMs: number, fn: () => void) => void
+  clearTimer: (name: string) => void
   clearAllTimers: () => void
+
+  // Abort signal for non-apiClient fetch calls
+  getAbortSignal: () => AbortSignal
 }
 
 const SessionContextV2 = createContext<SessionContextType | null>(null)
@@ -78,342 +77,333 @@ interface SessionProviderProps {
   }
 }
 
-const IDLE_THRESHOLD = 120 // 2 minutes
-const IDLE_WARNING_THRESHOLD = 30 // warn 30s before expiry
-const HEARTBEAT_INTERVAL = 20000 // 20 seconds
+const IDLE_WARNING_MS = 2 * 60 * 1000 // 2 minutes
+const IDLE_EXPIRE_MS = IDLE_WARNING_MS + 30 * 1000 // 2m30s
 
 export function SessionProviderV2({ children, toast }: SessionProviderProps) {
-  /**
-   * ENTERPRISE SESSION STATE MACHINE
-   * Single source of truth with proper state transitions:
-   * - healthy: All API calls work, no auth errors
-   * - expired: HTTP 401 detected, show auth banner, disable UI
-   * - reconnecting: User clicked reconnect, attempting recovery
-   */
-  const [sessionState, setSessionState] = useState<SessionState>('healthy')
-  
-  // Legacy state (computed from sessionState for backward compatibility)
+  const [sessionState, setSessionState] = useState<SessionState>('connected')
   const [error, setError] = useState<SessionError | null>(null)
-  const [connectedAt, setConnectedAt] = useState<Date | null>(null)
-  const [lastErrorTime, setLastErrorTime] = useState<number | null>(null)
-  
-  // Idle state
-  const [showIdleWarning, setShowIdleWarning] = useState(false)
-  const [showIdleCritical, setShowIdleCritical] = useState(false)
-  
-  // Internal tracking
+  const [connectedAt, setConnectedAt] = useState<Date | null>(new Date())
+  const [idleSeconds, setIdleSeconds] = useState(0)
+  const [uiNowMs, setUiNowMs] = useState(() => Date.now())
+
   const reconnectInProgressRef = useRef(false)
-  const timerRegistry = useRef<Map<string, NodeJS.Timeout>>(new Map())
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout>()
-  const lastHeartbeatTimeRef = useRef<number>(Date.now())
-  const errorNotificationFiredRef = useRef(false) // Prevent duplicate error notifications
-  const toastShownRef = useRef(false)
-  const criticalShownRef = useRef(false)
 
-  // Idle detection
-  const {
-    idleSeconds,
-    isIdle,
-    resetActivity: resetIdleActivity
-  } = useIdleDetection({
-    idleThresholdSeconds: IDLE_THRESHOLD,
-    warningThresholdSeconds: IDLE_WARNING_THRESHOLD,
-    onIdleStart: () => {
-      console.log('[Session] User became idle')
-    },
-    onActivity: () => {
-      console.log('[Session] User activity detected')
-      setShowIdleWarning(false)
-      setShowIdleCritical(false)
-      toastShownRef.current = false
-      criticalShownRef.current = false
-    },
-    onIdleWarning: () => {
-      if (!toastShownRef.current) {
-        console.log('[Session] Idle warning triggered')
-        setShowIdleWarning(true)
-        toast.warning('⏱️ Session will expire due to inactivity. Move mouse to stay connected.')
-        toastShownRef.current = true
-      }
-    },
-    onIdleCritical: () => {
-      if (!criticalShownRef.current) {
-        console.log('[Session] Critical idle - showing modal')
-        setShowIdleCritical(true)
-        criticalShownRef.current = true
-      }
-    }
-  })
+  // In-memory-only metadata
+  const connectionStringRef = useRef<string | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
+  const expiresAtUtcRef = useRef<string | null>(null)
+  const lastSelectionRef = useRef<string | null>(null)
 
-  // Register timer for cleanup
-  const registerTimer = useCallback((name: string, timerId: NodeJS.Timeout) => {
-    timerRegistry.current.set(name, timerId)
+  // Abort signal for non-apiClient fetch calls
+  const abortControllerRef = useRef<AbortController>(new AbortController())
+
+  // Controller-owned timers
+  const timersRef = useRef<Map<string, TimerId>>(new Map())
+  const lastActivityMsRef = useRef<number>(Date.now())
+
+  const clearTimer = useCallback((name: string) => {
+    const existing = timersRef.current.get(name)
+    if (!existing) return
+    clearTimeout(existing)
+    clearInterval(existing as any)
+    timersRef.current.delete(name)
   }, [])
 
-  // Clear all tracked timers
+  const scheduleTimeout = useCallback(
+    (name: string, delayMs: number, fn: () => void) => {
+      clearTimer(name)
+      const id = setTimeout(() => {
+        timersRef.current.delete(name)
+        fn()
+      }, delayMs)
+      timersRef.current.set(name, id)
+    },
+    [clearTimer]
+  )
+
+  const scheduleInterval = useCallback(
+    (name: string, intervalMs: number, fn: () => void) => {
+      clearTimer(name)
+      const id = setInterval(fn, intervalMs) as unknown as TimerId
+      timersRef.current.set(name, id)
+    },
+    [clearTimer]
+  )
+
   const clearAllTimers = useCallback(() => {
-    console.log(`[Session] Clearing ${timerRegistry.current.size} timers`)
-    timerRegistry.current.forEach((timerId) => {
-      try {
-        clearInterval(timerId as any)
-        clearTimeout(timerId as any)
-      } catch (e) {
-        console.warn('[Session] Error clearing timer:', e)
-      }
+    for (const [name, id] of timersRef.current.entries()) {
+      clearTimeout(id)
+      clearInterval(id as any)
+      timersRef.current.delete(name)
+    }
+  }, [])
+
+  const getAbortSignal = useCallback(() => abortControllerRef.current.signal, [])
+
+  const resetAbortController = useCallback(() => {
+    try {
+      abortControllerRef.current.abort('session-reset')
+    } catch {
+      // ignore
+    }
+    abortControllerRef.current = new AbortController()
+  }, [])
+
+  const setConnectionString = useCallback((connectionString: string | null) => {
+    connectionStringRef.current = connectionString
+  }, [])
+
+  const setSessionMeta = useCallback((meta: { sessionId: string | null; expiresAtUtc: string | null }) => {
+    sessionIdRef.current = meta.sessionId
+    expiresAtUtcRef.current = meta.expiresAtUtc
+  }, [])
+
+  const setLastSelection = useCallback((selection: string | null) => {
+    lastSelectionRef.current = selection
+  }, [])
+
+  const resetIdle = useCallback(() => {
+    lastActivityMsRef.current = Date.now()
+    setIdleSeconds(0)
+
+    scheduleTimeout('idle-warning', IDLE_WARNING_MS, () => {
+      setSessionState(prev => (prev === 'connected' ? 'idle-warning' : prev))
     })
-    timerRegistry.current.clear()
-  }, [])
 
-  // Clear error
-  /**
-   * STATE TRANSITION: * → expired
-   * Fired when a 401 is detected.
-   * Subsequent 401s during 'expired' state are ignored.
-   */
-  const markExpired = useCallback(() => {
-    if (sessionState === 'expired') {
-      console.log('[Session] Ignoring markExpired - already expired')
-      return
-    }
-    
-    console.log(`[Session] STATE TRANSITION: ${sessionState} → expired`)
-
-    // Hard-stop all polling/intervals immediately on auth failure.
-    clearAllTimers()
-
-    setSessionState('expired')
-    setLastErrorTime(Date.now())
-    
-    // Show error ONCE
-    if (!errorNotificationFiredRef.current) {
-      const authError: SessionError = {
-        message: 'Session credentials are invalid. Re-authentication required.',
-        reason: 'unauthorized',
-        isAuthError: true,
-        statusCode: 401,
-        timestamp: new Date()
-      }
-      setError(authError)
-      errorNotificationFiredRef.current = true
-    }
-  }, [sessionState, clearAllTimers])
-  
-  /**
-   * STATE TRANSITION: * → reconnecting
-   * User clicked reconnect button
-   */
-  const markReconnecting = useCallback(() => {
-    console.log(`[Session] STATE TRANSITION: ${sessionState} → reconnecting`)
-    setSessionState('reconnecting')
-    setError(null) // Clear error during reconnect attempt
-  }, [sessionState])
-  
-  /**
-   * STATE TRANSITION: * → healthy
-   * Successful API call or successful reconnect
-   * Auto-clears all error state
-   */
-  const markHealthy = useCallback(() => {
-    console.log(`[Session] STATE TRANSITION: ${sessionState} → healthy`)
-    setSessionState('healthy')
-    setError(null)
-    setLastErrorTime(null)
-    errorNotificationFiredRef.current = false // Reset for next error cycle
-  }, [sessionState])
-
-  const clearError = useCallback(() => {
-    setError(null)
-    setLastErrorTime(null)
-  }, [])
-
-  // Legacy compatibility - compute status from sessionState
-  const statusByState: Record<SessionState, SessionStatus> = {
-    healthy: 'connected',
-    expired: 'auth_required',
-    reconnecting: 'connecting'
-  }
-  const status = statusByState[sessionState]
-
-  // Mark connected when we have an active namespace and session is healthy
-  const markConnected = useCallback(() => {
-    if (sessionState === 'healthy') {
-      setConnectedAt(new Date())
-    }
-  }, [sessionState])
-
-  // Trigger reconnect (simple wrapper)
-  const triggerReconnect = useCallback(() => {
-    console.log('[Session] triggerReconnect() called')
-    markReconnecting()
-  }, [markReconnecting])
-
-  // Reset activity
-  const resetActivity = useCallback(() => {
-    resetIdleActivity()
-  }, [resetIdleActivity])
-
-  /**
-   * Heartbeat: Ping backend every 20s to detect stale connections
-   * If 2 consecutive heartbeats fail, trigger reconnect
-   */
-  useEffect(() => {
-    if (status !== 'connected' || isIdle) {
-      return
-    }
-
-    let missedHeartbeats = 0
-
-    const sendHeartbeat = async () => {
-      try {
-        lastHeartbeatTimeRef.current = Date.now()
-        
-        // Simple health check - try to list entities with fast timeout
-        // This will be called by components that have active connection
-        console.log('[Heartbeat] ✓ Connection active')
-        missedHeartbeats = 0
-      } catch (err) {
-        missedHeartbeats++
-        console.warn(`[Heartbeat] ⚠️ Missed heartbeat ${missedHeartbeats}`, err)
-        
-        if (missedHeartbeats >= 2) {
-          console.error('[Heartbeat] 2 consecutive missed - triggering reconnect')
-          markReconnecting()
+    scheduleTimeout('idle-expire', IDLE_EXPIRE_MS, () => {
+      setSessionState(prev => {
+        if (prev === 'connected' || prev === 'idle-warning') {
+          setError({
+            message: 'Session expired due to inactivity.',
+            reason: 'idle',
+            isAuthError: false,
+            timestamp: new Date()
+          })
+          return 'expired'
         }
-      }
+        return prev
+      })
+    })
+  }, [scheduleTimeout])
+
+  const markFailed = useCallback((message: string) => {
+    setError({ message, reason: 'failed', isAuthError: false, timestamp: new Date() })
+    setSessionState('failed')
+  }, [])
+
+  const markConnected = useCallback(() => {
+    setError(null)
+    setConnectedAt(new Date())
+    setSessionState('connected')
+    resetIdle()
+  }, [resetIdle])
+
+  const markExpired = useCallback(
+    (reason?: { message?: string; reason?: string; statusCode?: number }) => {
+      setSessionState(prev => (prev === 'expired' ? prev : 'expired'))
+      setError({
+        message: reason?.message || 'Session expired. Re-authentication required.',
+        reason: reason?.reason || 'unauthorized',
+        isAuthError: true,
+        statusCode: reason?.statusCode,
+        timestamp: new Date()
+      })
+
+      clearAllTimers()
+      apiClient.abortAllRequests('session-expired')
+      resetAbortController()
+    },
+    [clearAllTimers, resetAbortController]
+  )
+
+  // Single controller integration with ApiClient.
+  useEffect(() => {
+    apiClient.setAuthErrorHandler(() => markExpired({ reason: 'unauthorized', statusCode: 401 }))
+    apiClient.setSuccessHandler(() => {
+      if (sessionState === 'connected' || sessionState === 'idle-warning') resetIdle()
+    })
+  }, [markExpired, resetIdle, sessionState])
+
+  // User activity resets idle; clears idle-warning immediately.
+  useEffect(() => {
+    const onActivity = () => {
+      lastActivityMsRef.current = Date.now()
+      if (sessionState === 'idle-warning') setSessionState('connected')
+      resetIdle()
     }
 
-    heartbeatIntervalRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL)
-    registerTimer('heartbeat', heartbeatIntervalRef.current)
+    const events = ['mousemove', 'keydown', 'scroll', 'mousedown', 'touchstart', 'click'] as const
+    events.forEach(e => document.addEventListener(e, onActivity, { passive: true }))
+    const onVisibility = () => {
+      if (!document.hidden) onActivity()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current)
+      events.forEach(e => document.removeEventListener(e, onActivity))
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [resetIdle, sessionState])
+
+  // Controller-owned UI tick.
+  useEffect(() => {
+    scheduleInterval('ui-tick', 1000, () => {
+      setUiNowMs(Date.now())
+      setIdleSeconds(Math.floor((Date.now() - lastActivityMsRef.current) / 1000))
+    })
+    return () => clearTimer('ui-tick')
+  }, [scheduleInterval, clearTimer])
+
+  // Schedule expiry based on expiresAtUtc.
+  useEffect(() => {
+    clearTimer('session-expires-at')
+    const expiresAtUtc = expiresAtUtcRef.current
+    if (!expiresAtUtc) return
+    const delta = new Date(expiresAtUtc).getTime() - Date.now()
+    if (Number.isFinite(delta) && delta > 0) {
+      scheduleTimeout('session-expires-at', delta, () => markExpired({ reason: 'expired' }))
+    }
+  }, [clearTimer, scheduleTimeout, markExpired])
+
+  const status = useMemo<SessionStatus>(() => {
+    const map: Record<SessionState, SessionStatus> = {
+      connected: 'connected',
+      'idle-warning': 'connected',
+      expired: 'auth_required',
+      reconnecting: 'connecting',
+      failed: 'disconnected'
+    }
+    return map[sessionState]
+  }, [sessionState])
+
+  const canInteract = sessionState === 'connected' || sessionState === 'idle-warning'
+
+  const reconnect = useCallback(
+    async (applyUpdates: (data: SessionReconnectData) => Promise<void>) => {
+      if (reconnectInProgressRef.current) return
+      if (!connectionStringRef.current) {
+        markFailed('Reconnect failed: missing connection string')
+        return
       }
-    }
-  }, [status, isIdle, markReconnecting, registerTimer])
 
-  /**
-   * ENTERPRISE RECONNECT FLOW
-   * 
-   * State transitions:
-   * 1. expired → reconnecting (when user clicks reconnect)
-   * 2. reconnecting → healthy (on successful API calls) 
-   * 3. reconnecting → expired (on auth failure)
-   */
-  const reconnect = useCallback(async (
-    sessionId: string,
-    reloadCallback: () => Promise<void>
-  ) => {
-    // Prevent duplicate attempts
-    if (reconnectInProgressRef.current) {
-      console.log('[Session] Reconnect already in progress')
-      return
-    }
+      reconnectInProgressRef.current = true
+      setSessionState('reconnecting')
+      setError(null)
 
-    console.log('────────────────────────────────────────')
-    console.log('[Session] RECONNECT FLOW START')
-    console.log(`[Session] Session ID: ${sessionId}`)
-    console.log('────────────────────────────────────────')
+      try {
+        // 1. Abort all in-flight requests.
+        apiClient.abortAllRequests('reconnect-start')
+        resetAbortController()
 
-    reconnectInProgressRef.current = true
-    markReconnecting()
-    
-    try {
-      // Clear all existing timers
-      clearAllTimers()
-      console.log('[Session] ✓ Timers cleared')
+        // 5. Clear all timers.
+        clearAllTimers()
 
-      // Brief pause for cleanup
-      await new Promise(resolve => setTimeout(resolve, 150))
+        // 6. Reset ApiClient.
+        apiClient.resetClient()
 
-      // Execute reload (this will make API calls and potentially trigger markHealthy)
-      console.log('[Session] Executing full reload')
-      await reloadCallback()
-      console.log('[Session] ✓ Reload successful')
+        // 8. Re-authenticate.
+        const connectResp = await apiClient.connect(connectionStringRef.current)
 
-      // If we get here without AuthError, mark healthy
-      markHealthy()
-      resetIdleActivity()
-      
-      console.log('[Session] ✓ Reconnect SUCCESS')
-      toast.success('✓ Reconnected successfully')
+        // 9. Reload namespace/entities.
+        const entities = await apiClient.listEntities(connectResp.sessionId)
 
-    } catch (err) {
-      console.error('[Session] ✗ Reconnect failed:', err)
-      
-      if (err instanceof AuthError) {
-        // Auth failed - go back to expired state
-        markExpired()
-      } else {
-        // Network error - also go to expired for simplicity
-        markExpired()
-        toast.error('Reconnection failed - Please try again')
+        setSessionMeta({ sessionId: connectResp.sessionId, expiresAtUtc: connectResp.expiresAtUtc })
+        resetIdle()
+
+        await applyUpdates({
+          sessionId: connectResp.sessionId,
+          expiresAtUtc: connectResp.expiresAtUtc,
+          entities,
+          lastSelection: lastSelectionRef.current
+        })
+
+        // 12. Only then → connected.
+        setConnectedAt(new Date())
+        setSessionState('connected')
+        setError(null)
+        toast.success('✓ Reconnected successfully')
+      } catch (err) {
+        if (err instanceof AuthError) {
+          markExpired({ message: err.message, reason: 'unauthorized', statusCode: 401 })
+        } else {
+          const msg = err instanceof Error ? err.message : 'Reconnect failed'
+          markFailed(msg)
+          toast.error('Reconnection failed')
+        }
+      } finally {
+        reconnectInProgressRef.current = false
       }
-    } finally {
-      reconnectInProgressRef.current = false
-      console.log('────────────────────────────────────────')
-      console.log('[Session] RECONNECT FLOW END')
-      console.log('────────────────────────────────────────')
-    }
-  }, [markReconnecting, markHealthy, markExpired, clearAllTimers, resetIdleActivity, toast])
-  const value: SessionContextType = {
-    // SINGLE SOURCE OF TRUTH
-    sessionState,
-    
-    // Legacy compatibility
-    status,
-    error,
-    connectedAt,
-    lastErrorTime,
-    
-    // Idle state
-    isIdle,
-    idleSeconds,
-    showIdleWarning,
-    showIdleCritical,
-    
-    // Actions
-    reconnect,
-    clearError,
-    resetActivity,
-    markExpired,
-    markConnected,
-    triggerReconnect,
-    
-    // Internal state management
-    markHealthy,
-    markReconnecting,
-    
-    // Timer management
-    registerTimer,
-    clearAllTimers
-  }
+    },
+    [clearAllTimers, markExpired, markFailed, resetAbortController, resetIdle, setSessionMeta, toast]
+  )
 
-  // Test-only hook: allow forcing session expiry via window event
+  useEffect(() => {
+    resetIdle()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (import.meta.env.VITE_TEST_MODE !== 'true') return
-    const handler = () => {
-      console.log('[Session] Test hook: force session expire')
-      markExpired()
-    }
+    const handler = () => markExpired({ message: 'Forced expiry (test)', reason: 'test' })
     window.addEventListener('sb-expire-session', handler)
     return () => window.removeEventListener('sb-expire-session', handler)
   }, [markExpired])
 
-  return (
-    <SessionContextV2.Provider value={value}>
-      {children}
-    </SessionContextV2.Provider>
+  const value: SessionContextType = useMemo(
+    () => ({
+      sessionState,
+      status,
+      canInteract,
+      error,
+      connectedAt,
+      idleSeconds,
+      uiNowMs,
+      setConnectionString,
+      setSessionMeta,
+      setLastSelection,
+      reconnect,
+      markExpired,
+      markConnected,
+      markFailed,
+      resetIdle,
+      scheduleTimeout,
+      scheduleInterval,
+      clearTimer,
+      clearAllTimers,
+      getAbortSignal
+    }),
+    [
+      sessionState,
+      status,
+      canInteract,
+      error,
+      connectedAt,
+      idleSeconds,
+      uiNowMs,
+      setConnectionString,
+      setSessionMeta,
+      setLastSelection,
+      reconnect,
+      markExpired,
+      markConnected,
+      markFailed,
+      resetIdle,
+      scheduleTimeout,
+      scheduleInterval,
+      clearTimer,
+      clearAllTimers,
+      getAbortSignal
+    ]
   )
+
+  return <SessionContextV2.Provider value={value}>{children}</SessionContextV2.Provider>
 }
 
 export function useSessionV2() {
   const context = useContext(SessionContextV2)
-  if (!context) {
-    throw new Error('useSessionV2 must be used within SessionProviderV2')
-  }
+  if (!context) throw new Error('useSessionV2 must be used within SessionProviderV2')
   return context
 }
 
-// Backward compatibility alias
 export const useSession = useSessionV2

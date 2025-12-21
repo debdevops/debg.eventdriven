@@ -161,7 +161,8 @@ tr:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--overlay-backdrop);
+  background-color: rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;

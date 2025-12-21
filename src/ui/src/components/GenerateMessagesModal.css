@@ -6,8 +6,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--overlay-backdrop);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(3px);
   z-index: 1000;
   animation: fadeIn 0.2s ease-out;
 }

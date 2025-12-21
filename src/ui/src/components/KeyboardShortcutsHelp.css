@@ -5,7 +5,8 @@
 .keyboard-shortcuts-overlay {
   position: fixed;
   inset: 0;
-  background-color: var(--overlay-backdrop);
+  background-color: rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(3px);
   z-index: 10000;
   display: flex;
   align-items: center;

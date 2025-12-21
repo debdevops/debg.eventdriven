@@ -20,10 +20,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
+  padding: 16px 20px;
   cursor: pointer;
   transition: background 0.2s;
   user-select: none;
+  background: var(--surface);
 }
 
 .panel-header:hover {

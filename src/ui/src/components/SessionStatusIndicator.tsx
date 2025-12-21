@@ -4,7 +4,7 @@
  * Replaces all redundant session indicators across the app
  */
 
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import './SessionStatusIndicator.css'
 
 interface SessionStatusIndicatorProps {
@@ -12,43 +12,31 @@ interface SessionStatusIndicatorProps {
   connectedAt: Date
   isConnected: boolean
   isExpired?: boolean
+  uiNowMs?: number
 }
 
 export function SessionStatusIndicator({ 
   namespaceName, 
   connectedAt, 
   isConnected,
-  isExpired = false 
+  isExpired = false,
+  uiNowMs
 }: SessionStatusIndicatorProps) {
-  const [activeTime, setActiveTime] = useState('00:00:00')
+  const activeTime = useMemo(() => {
+    if (!isConnected || isExpired) return '00:00:00'
+    const now = uiNowMs ?? Date.now()
+    const elapsed = Math.max(0, Math.floor((now - connectedAt.getTime()) / 1000))
 
-  useEffect(() => {
-    if (!isConnected || isExpired) {
-      return
-    }
+    const hours = Math.floor(elapsed / 3600)
+    const minutes = Math.floor((elapsed % 3600) / 60)
+    const seconds = elapsed % 60
 
-    const updateActiveTime = () => {
-      const now = Date.now()
-      const elapsed = Math.floor((now - connectedAt.getTime()) / 1000)
-      
-      const hours = Math.floor(elapsed / 3600)
-      const minutes = Math.floor((elapsed % 3600) / 60)
-      const seconds = elapsed % 60
-
-      const formatted = [
-        hours.toString().padStart(2, '0'),
-        minutes.toString().padStart(2, '0'),
-        seconds.toString().padStart(2, '0')
-      ].join(':')
-
-      setActiveTime(formatted)
-    }
-
-    updateActiveTime()
-    const interval = setInterval(updateActiveTime, 1000)
-
-    return () => clearInterval(interval)
-  }, [connectedAt, isConnected, isExpired])
+    return [
+      hours.toString().padStart(2, '0'),
+      minutes.toString().padStart(2, '0'),
+      seconds.toString().padStart(2, '0')
+    ].join(':')
+  }, [uiNowMs, connectedAt, isConnected, isExpired])
 
   const getStatusLabel = () => {
     if (isExpired) return 'Expired'

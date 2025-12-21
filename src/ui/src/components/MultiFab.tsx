@@ -9,19 +9,27 @@ import './MultiFab.css'
 interface MultiFabProps {
   onSendMessage: () => void
   onGenerateMessages: () => void
+  disabled?: boolean
 }
 
-export default function MultiFab({ onSendMessage, onGenerateMessages }: MultiFabProps) {
+export default function MultiFab({ onSendMessage, onGenerateMessages, disabled = false }: MultiFabProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const handleToggle = () => {
+    if (disabled) return
     setIsExpanded(!isExpanded)
   }
 
   const handleAction = (action: () => void) => {
+    if (disabled) return
     action()
     setIsExpanded(false)
   }
+
+  // Ensure we don't leave the menu open while disabled.
+  useEffect(() => {
+    if (disabled && isExpanded) setIsExpanded(false)
+  }, [disabled, isExpanded])
 
   // Close on Escape
   useEffect(() => {
@@ -51,6 +59,7 @@ export default function MultiFab({ onSendMessage, onGenerateMessages }: MultiFab
             <button
               className="fab-action-btn"
               onClick={() => handleAction(onGenerateMessages)}
+              disabled={disabled}
               title="Generate test messages with anomalies"
             >
               <span className="action-icon">🤖</span>
@@ -59,6 +68,7 @@ export default function MultiFab({ onSendMessage, onGenerateMessages }: MultiFab
             <button
               className="fab-action-btn"
               onClick={() => handleAction(onSendMessage)}
+              disabled={disabled}
               title="Send a custom message"
             >
               <span className="action-icon">✉️</span>
@@ -71,6 +81,7 @@ export default function MultiFab({ onSendMessage, onGenerateMessages }: MultiFab
         <button
           className="fab-main-btn"
           onClick={handleToggle}
+          disabled={disabled}
           title={isExpanded ? 'Close menu' : 'Quick actions'}
           aria-label={isExpanded ? 'Close menu' : 'Quick actions'}
         >

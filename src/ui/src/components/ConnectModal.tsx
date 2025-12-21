@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import { apiClient } from '../api/client'
+import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Namespace } from '../types'
 import './ConnectModal.css'
 
@@ -13,6 +14,7 @@ interface ConnectModalProps {
 }
 
 export function ConnectModal({ onConnect, onClose }: ConnectModalProps) {
+  const { setConnectionString: setSessionConnectionString, setSessionMeta, markConnected } = useSessionV2()
   const [connectionString, setConnectionString] = useState('')
   const [friendlyName, setFriendlyName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -32,6 +34,11 @@ export function ConnectModal({ onConnect, onClose }: ConnectModalProps) {
     try {
       const response = await apiClient.connect(connectionString.trim())
       const entities = await apiClient.listEntities(response.sessionId)
+
+      // Store in SessionController for deterministic reconnect.
+      setSessionConnectionString(connectionString.trim())
+      setSessionMeta({ sessionId: response.sessionId, expiresAtUtc: response.expiresAtUtc })
+      markConnected()
 
       const namespace: Namespace = {
         ...response,

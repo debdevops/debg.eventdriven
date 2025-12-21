@@ -4,22 +4,27 @@
  */
 
 import { useEffect } from 'react'
+import { useSessionV2 } from '../contexts/SessionContextV2'
 import './Toast.css'
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
 
 export interface ToastProps {
+  id: string
   message: string
   type: ToastType
   duration?: number
   onClose: () => void
 }
 
-export function Toast({ message, type, duration = 3000, onClose }: ToastProps) {
+export function Toast({ id, message, type, duration = 3000, onClose }: ToastProps) {
+  const { scheduleTimeout, clearTimer } = useSessionV2()
+
   useEffect(() => {
-    const timer = setTimeout(onClose, duration)
-    return () => clearTimeout(timer)
-  }, [duration, onClose])
+    const timerName = `toast:${id}`
+    scheduleTimeout(timerName, duration, onClose)
+    return () => clearTimer(timerName)
+  }, [clearTimer, duration, id, onClose, scheduleTimeout])
 
   const icons = {
     success: '✓',
@@ -47,6 +52,7 @@ export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
       {toasts.map(toast => (
         <Toast
           key={toast.id}
+          id={toast.id}
           message={toast.message}
           type={toast.type}
           onClose={() => onRemove(toast.id)}
