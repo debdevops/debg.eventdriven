@@ -25,6 +25,12 @@ public record GenerateMessagesRequest
     /// Name of the target topic (required if TargetType is Topic or Both).
     /// </summary>
     public string? TopicName { get; init; }
+
+    /// <summary>
+    /// Optional: when generating topic DLQ cases, dead-letter only into this subscription.
+    /// If omitted, the API selects a deterministic subscription (alphabetically) to keep results verifiable.
+    /// </summary>
+    public string? SubscriptionName { get; init; }
     
     /// <summary>
     /// Whether to include messages designed to fail and land in DLQ.
@@ -40,6 +46,11 @@ public record GenerateMessagesResponse
     public int TotalGenerated { get; init; }
     public int AnomalousCount { get; init; }
     public int DlqCandidates { get; init; }
+    public int DlqDeadLettered { get; init; }
+    public int DlqDeadLetteredQueue { get; init; }
+    public int DlqDeadLetteredSubscriptions { get; init; }
+    public string? DlqTopicName { get; init; }
+    public string? DlqSubscriptionName { get; init; }
     public List<string> Errors { get; init; } = new();
     public bool Success { get; init; }
 }

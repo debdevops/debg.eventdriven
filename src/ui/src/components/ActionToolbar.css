@@ -3,12 +3,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  height: 48px;
+  padding: 0 12px;
+  height: 36px;
   background: var(--surface);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
-  gap: 16px;
+  gap: 10px;
 }
 
 .toolbar-left {
@@ -60,7 +60,7 @@
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -73,8 +73,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 4px 8px;
+  font-size: 12px;
   font-weight: 500;
   background: var(--surface-2);
   border: 1px solid var(--border-color);

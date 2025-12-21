@@ -33,6 +33,7 @@ public class ServiceBusStreamer
     public async Task StreamMessagesAsync(
         string connectionString,
         string entityName,
+        string? subscriptionName,
         string mode,
         bool isDLQ,
         int prefetch,
@@ -43,7 +44,10 @@ public class ServiceBusStreamer
     {
         // SECURITY: Never log connection string
         var dlqSuffix = isDLQ ? " (DLQ)" : "";
-        _logger.LogInformation("Starting {Mode} stream for entity {EntityName}{DLQSuffix}", mode, entityName, dlqSuffix);
+        var entityPath = string.IsNullOrEmpty(subscriptionName)
+            ? entityName
+            : $"{entityName}/subscriptions/{subscriptionName}";
+        _logger.LogInformation("Starting {Mode} stream for entity {EntityPath}{DLQSuffix}", mode, entityPath, dlqSuffix);
 
         await using var client = new ServiceBusClient(connectionString);
         
@@ -58,7 +62,9 @@ public class ServiceBusStreamer
             receiverOptions.SubQueue = SubQueue.DeadLetter;
         }
         
-        await using var receiver = client.CreateReceiver(entityName, receiverOptions);
+        await using var receiver = string.IsNullOrEmpty(subscriptionName)
+            ? client.CreateReceiver(entityName, receiverOptions)
+            : client.CreateReceiver(entityName, subscriptionName, receiverOptions);
 
         var writer = new StreamWriter(outputStream, Encoding.UTF8, leaveOpen: true);
 

@@ -51,7 +51,14 @@ export default function StreamPanel({
   const mode: StreamMode = 'peek' // Read-only mode
   const { status, canInteract, scheduleTimeout, scheduleInterval, clearTimer } = useSessionV2()
   const controlsDisabled = !canInteract || isSessionExpired
-  const [messages, setMessages] = useState<MessageEnvelope[]>([])
+
+  // DLQ mode must be derived ONLY from navigation selection state.
+  const isDLQ = selectedTarget.type === 'dlq'
+
+  const [activeMessages, setActiveMessages] = useState<MessageEnvelope[]>([])
+  const [dlqMessages, setDlqMessages] = useState<MessageEnvelope[]>([])
+  const messages = isDLQ ? dlqMessages : activeMessages
+  const setMessages = isDLQ ? setDlqMessages : setActiveMessages
   const [streaming, setStreaming] = useState(false)
   const [peekSize, setPeekSize] = useState(50)
   const [loading, setLoading] = useState(false)
@@ -75,16 +82,21 @@ export default function StreamPanel({
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('closed')
   const [selectedMessage, setSelectedMessage] = useState<MessageEnvelope | null>(null)
 
-  // Get entity name and subscription name based on target type
-  const entityName = selectedTarget.type === 'queue' || selectedTarget.type === 'dlq'
-    ? selectedTarget.entity!.name 
-    : selectedTarget.topicName!
-  
-  const subscriptionName = selectedTarget.type === 'subscription' 
-    ? selectedTarget.subscription!.name 
+  // Resolve target identity.
+  // For subscription DLQ, entityName must be the topic and subscriptionName must be present.
+  const entityName = selectedTarget.type === 'queue'
+    ? selectedTarget.entity!.name
+    : selectedTarget.type === 'subscription'
+    ? selectedTarget.topicName!
+    : selectedTarget.subscription && selectedTarget.topicName
+    ? selectedTarget.topicName
+    : selectedTarget.entity!.name
+
+  const subscriptionName = selectedTarget.type === 'subscription'
+    ? selectedTarget.subscription!.name
+    : selectedTarget.type === 'dlq' && selectedTarget.subscription
+    ? selectedTarget.subscription.name
     : undefined
-  
-  const isDLQ = selectedTarget.isDLQ || false
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -113,7 +125,7 @@ export default function StreamPanel({
       // Fetch fresh from backend
       const response = await apiClient.peekMessages(sessionId, entityName, peekSize, subscriptionName, isDLQ)
       
-      // Save to local store with correct entity type
+      // Persist (optional) but render from the live response to keep DLQ vs active isolated.
       await messageStore.saveMessages(
         response.messages,
         sessionId,
@@ -122,16 +134,9 @@ export default function StreamPanel({
         'peeked',
         subscriptionName
       )
-      
-      // Reload all stored messages for this entity (filtered by type)
-      const updatedMessages = await messageStore.getMessages(sessionId, entityName, entityType)
-      
-      // Only update state if messages actually changed (prevents UI flicker)
-      setMessages(prevMessages => {
-        const prevIds = prevMessages.map(m => m.sequenceNumber).sort().join(',')
-        const newIds = updatedMessages.map(m => m.sequenceNumber).sort().join(',')
-        return prevIds === newIds ? prevMessages : updatedMessages
-      })
+
+      // Never merge active+DLQ. Replace only the current view's message set.
+      setMessages(response.messages)
       
       setLastUpdated(new Date())
       setError(null)
@@ -160,7 +165,8 @@ export default function StreamPanel({
 
   // Auto-load messages when entity changes
   useEffect(() => {
-    setMessages([])
+    setActiveMessages([])
+    setDlqMessages([])
     setError(null)
     setSuccess(null)
     setStreaming(false)
@@ -241,8 +247,8 @@ export default function StreamPanel({
   const handleMessage = useCallback((message: MessageEnvelope) => {
     // Save to local store
     const entityType = selectedTarget.type === 'dlq' ? 'dlq' : 
-                      selectedTarget.type === 'subscription' ? 'subscription' : 
-                      selectedTarget.type === 'queue' ? 'queue' : 'topic'
+              selectedTarget.type === 'subscription' ? 'subscription' : 
+              selectedTarget.type === 'queue' ? 'queue' : 'topic'
     
     messageStore.saveMessage(
       message,
@@ -441,12 +447,23 @@ export default function StreamPanel({
   } */
 
   // Display name for header
-  const displayName = selectedTarget.type === 'queue' || selectedTarget.type === 'dlq'
+  const displayName = selectedTarget.type === 'queue'
     ? selectedTarget.entity!.name
-    : selectedTarget.subscription!.name
-  
-  const displayType = selectedTarget.type === 'queue' ? 'Queue' : selectedTarget.type === 'dlq' ? 'Dead Letter Queue' : 'Subscription'
-  const displayContext = selectedTarget.type === 'subscription' 
+    : selectedTarget.type === 'subscription'
+    ? selectedTarget.subscription!.name
+    : selectedTarget.subscription?.name
+    ? `${selectedTarget.subscription.name} (DLQ)`
+    : `${selectedTarget.entity!.name} (DLQ)`
+
+  const displayType = selectedTarget.type === 'queue'
+    ? 'Queue'
+    : selectedTarget.type === 'dlq'
+    ? 'Dead Letter Queue'
+    : 'Subscription'
+
+  const displayContext = selectedTarget.type === 'subscription'
+    ? ` (Topic: ${selectedTarget.topicName})`
+    : selectedTarget.type === 'dlq' && selectedTarget.subscription && selectedTarget.topicName
     ? ` (Topic: ${selectedTarget.topicName})`
     : selectedTarget.type === 'dlq'
     ? ` (Queue: ${selectedTarget.entity!.name})`
@@ -496,14 +513,19 @@ export default function StreamPanel({
         </div>
 
         <div className="action-buttons-compact">
-          {/* Auto Mode badge */}
-          {!frozenSnapshot && (
-            <div className="auto-mode-badge" title="Auto-refresh active - refreshes every 10 seconds">
-              <span className="auto-icon">⚡</span>
-              <span className="auto-text">Auto Mode</span>
-              {isRefreshing && <span className="refreshing-dot"></span>}
-            </div>
-          )}
+          {/* Auto Mode badge (always rendered to avoid layout shift) */}
+          <div
+            className={`auto-mode-badge ${frozenSnapshot ? 'paused' : ''}`}
+            title={
+              frozenSnapshot
+                ? 'Auto-refresh paused'
+                : 'Auto-refresh active - refreshes every 10 seconds'
+            }
+          >
+            <span className="auto-icon">⚡</span>
+            <span className="auto-text">{frozenSnapshot ? 'Paused' : 'Auto Mode'}</span>
+            {!frozenSnapshot && isRefreshing && <span className="refreshing-dot"></span>}
+          </div>
           
           {/* Manual refresh button */}
           <button
@@ -542,7 +564,14 @@ export default function StreamPanel({
       {/* DLQ explanation banner - simplified one-liner */}
       {isDLQ && (
         <div className="dlq-banner">
-          💀 <strong>Dead Letter Queue:</strong> These messages failed delivery or exceeded max delivery attempts. Use Replay to reprocess.
+          <div className="dlq-banner-title">Dead-letter queue (DLQ)</div>
+          <div className="dlq-banner-subtitle">
+            {subscriptionName
+              ? `Topic / Subscription DLQ: ${entityName} / ${subscriptionName}`
+              : `Queue DLQ: ${entityName}`}
+            <span className="dlq-banner-sep"> • </span>
+            Messages failed delivery and require manual investigation
+          </div>
         </div>
       )}
 
@@ -603,13 +632,21 @@ export default function StreamPanel({
             totalMessageCount={
               selectedTarget.type === 'subscription'
                 ? selectedTarget.subscription?.messageCount
+                : selectedTarget.type === 'dlq' && selectedTarget.subscription
+                ? selectedTarget.subscription?.deadLetterMessageCount
                 : selectedTarget.entity?.messageCount
             }
             sessionId={sessionId}
             entityName={entityName}
             subscriptionName={subscriptionName}
             isDLQ={isDLQ}
-            dlqCount={selectedTarget.entity?.deadLetterMessageCount || 0}
+            dlqCount={
+              selectedTarget.type === 'subscription'
+                ? (selectedTarget.subscription?.deadLetterMessageCount || 0)
+                : selectedTarget.type === 'dlq' && selectedTarget.subscription
+                ? (selectedTarget.subscription?.deadLetterMessageCount || 0)
+                : (selectedTarget.entity?.deadLetterMessageCount || 0)
+            }
             onRefresh={handlePeekNow}
             onLoadNextBatch={handleLoadNextBatch}
             disabled={controlsDisabled}

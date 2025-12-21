@@ -25,6 +25,7 @@ interface EntityListProps {
   sessionId: string
   onSelectEntity: (entity: Entity) => void
   onSelectSubscription: (subscription: Subscription, topicName: string) => void
+  onSelectSubscriptionDLQ: (subscription: Subscription, topicName: string) => void
   onSelectDLQ: (entity: Entity) => void
   onRefresh: (triggeredByUser?: boolean) => void
   refreshing: boolean
@@ -42,6 +43,7 @@ export default function EntityList({
   sessionId,
   onSelectEntity,
   onSelectSubscription,
+  onSelectSubscriptionDLQ,
   onSelectDLQ,
   onRefresh,
   refreshing,
@@ -267,10 +269,12 @@ export default function EntityList({
                   isLoading={loadingTopics.has(topic.name)}
                   sessionId={sessionId}
                   selectedSubscriptionName={selectedTarget?.type === 'subscription' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
+                  selectedDlqSubscriptionName={selectedTarget?.type === 'dlq' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
                   onToggle={() => toggleTopic(topic.name)}
                   onCreateTempSubscription={(e) => handleCreateTempSubscription(topic.name, e)}
                   onDeleteSubscription={(subName, e) => handleDeleteSubscription(topic.name, subName, e)}
                   onSelectSubscription={onSelectSubscription}
+                  onSelectSubscriptionDLQ={onSelectSubscriptionDLQ}
                 />
               ))}
             </div>
@@ -356,10 +360,12 @@ interface TopicItemProps {
   isLoading: boolean
   sessionId: string
   selectedSubscriptionName?: string
+  selectedDlqSubscriptionName?: string
   onToggle: () => void
   onCreateTempSubscription: (e: React.MouseEvent) => void
   onDeleteSubscription: (subscriptionName: string, e: React.MouseEvent) => void
   onSelectSubscription: (subscription: Subscription, topicName: string) => void
+  onSelectSubscriptionDLQ: (subscription: Subscription, topicName: string) => void
 }
 
 function TopicItem({
@@ -368,10 +374,13 @@ function TopicItem({
   subscriptions,
   isLoading,
   selectedSubscriptionName,
+  selectedDlqSubscriptionName,
   onToggle,
   onCreateTempSubscription,
   onDeleteSubscription,
   onSelectSubscription
+: onSelectSubscription,
+  onSelectSubscriptionDLQ
 }: TopicItemProps) {
   const { status } = useSessionV2()
   const totalMessages = subscriptions.reduce((sum, sub) => sum + sub.messageCount, 0)
@@ -424,10 +433,15 @@ function TopicItem({
                   key={sub.name}
                   subscription={sub}
                   topicName={topic.name}
-                  isSelected={sub.name === selectedSubscriptionName}
+                  isSelected={sub.name === selectedSubscriptionName || sub.name === selectedDlqSubscriptionName}
+                  isDlqSelected={sub.name === selectedDlqSubscriptionName}
                   onSelect={(subscription, topicName) => {
                     if (status !== 'connected') return
                     onSelectSubscription(subscription, topicName)
+                  }}
+                  onSelectDLQ={(subscription, topicName) => {
+                    if (status !== 'connected') return
+                    onSelectSubscriptionDLQ(subscription, topicName)
                   }}
                   onDelete={(subscriptionName, e) => {
                     if (status !== 'connected') return
@@ -447,36 +461,54 @@ interface SubscriptionItemProps {
   subscription: Subscription
   topicName: string
   isSelected: boolean
+  isDlqSelected: boolean
   onSelect: (subscription: Subscription, topicName: string) => void
+  onSelectDLQ: (subscription: Subscription, topicName: string) => void
   onDelete: (subscriptionName: string, e: React.MouseEvent) => void
 }
 
-function SubscriptionItem({ subscription, topicName, isSelected, onSelect, onDelete }: SubscriptionItemProps) {
+function SubscriptionItem({ subscription, topicName, isSelected, isDlqSelected, onSelect, onSelectDLQ, onDelete }: SubscriptionItemProps) {
   const isTemp = subscription.name.startsWith('temp-sub-')
   const hasDLQ = subscription.deadLetterMessageCount > 0
   
   return (
-    <div className="subscription-card-wrapper">
-      <EntityCard
-        type="subscription"
-        name={subscription.name}
-        messageCount={subscription.messageCount}
-        isSelected={isSelected}
-        isDLQ={false}
-        isTemp={isTemp}
-        hasWarning={hasDLQ}
-        onSelect={() => onSelect(subscription, topicName)}
-      />
-      <button
-        className="delete-sub-btn-v2"
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete(subscription.name, e)
-        }}
-        title="Delete subscription"
-      >
-        🗑️
-      </button>
+    <div className="subscription-item-group">
+      <div className="subscription-card-wrapper">
+        <EntityCard
+          type="subscription"
+          name={subscription.name}
+          messageCount={subscription.messageCount}
+          isSelected={isSelected && !isDlqSelected}
+          isDLQ={false}
+          isTemp={isTemp}
+          onSelect={() => onSelect(subscription, topicName)}
+        />
+
+        <button
+          className="delete-sub-btn-v2"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(subscription.name, e)
+          }}
+          title="Delete subscription"
+        >
+          🗑️
+        </button>
+      </div>
+
+      {hasDLQ && (
+        <button
+          className={`subscription-dlq-child ${isDlqSelected ? 'selected' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onSelectDLQ(subscription, topicName)
+          }}
+          title={`View subscription DLQ (${subscription.deadLetterMessageCount})`}
+        >
+          <span className="subscription-dlq-icon">💀</span>
+          <span className="subscription-dlq-label">DLQ ({subscription.deadLetterMessageCount})</span>
+        </button>
+      )}
     </div>
   )
 }

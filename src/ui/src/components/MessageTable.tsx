@@ -11,7 +11,7 @@ import { QueueHealthHeader } from './QueueHealthHeader'
 import { MessageAgeDistribution } from './MessageAgeDistribution'
 import { EventTypeChip } from './EventTypeChip'
 import { RiskSignalGroup } from './RiskSignalBadge'
-import { formatTimestamp, formatRelativeTime, truncate } from '../utils/formatters'
+import { formatTimestamp, formatRelativeTime } from '../utils/formatters'
 import { extractEventType, type AgeDistribution } from '../utils/eventTypeExtractor'
 import { API_BASE_URL } from '../config/api'
 import type { MessageEnvelope } from '../types'
@@ -218,6 +218,220 @@ export default function MessageTable({
 
   const handleAgeBucketClick = (bucket: keyof AgeDistribution) => {
     setAgeBucketFilter(ageBucketFilter === bucket ? null : bucket)
+  }
+
+  const toSingleLine = (value: string) => value.replace(/\s+/g, ' ').trim()
+
+  const safeParseJson = (text: string): any | null => {
+    const trimmed = text.trim()
+    if (!trimmed) return null
+    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return null
+    try {
+      return JSON.parse(trimmed)
+    } catch {
+      return null
+    }
+  }
+
+  const ellipsize = (text: string, maxChars: number) => {
+    const singleLine = toSingleLine(text)
+    if (singleLine.length <= maxChars) return singleLine
+    return singleLine.slice(0, maxChars) + '…'
+  }
+
+  const getValueByKey = (obj: any, key: string): string | null => {
+    if (!obj || typeof obj !== 'object') return null
+    const value = obj[key]
+    if (value === undefined || value === null) return null
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    return null
+  }
+
+  const pruneForTooltip = (value: any, depth: number): any => {
+    if (value === null || value === undefined) return value
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+    if (depth <= 0) {
+      return Array.isArray(value) ? '[…]' : '{…}'
+    }
+
+    if (Array.isArray(value)) {
+      const maxItems = 20
+      const sliced = value.slice(0, maxItems).map((v) => pruneForTooltip(v, depth - 1))
+      if (value.length > maxItems) sliced.push('…')
+      return sliced
+    }
+
+    if (typeof value === 'object') {
+      const out: Record<string, any> = {}
+      const keys = Object.keys(value).slice(0, 30)
+      for (const k of keys) {
+        const lk = k.toLowerCase()
+        // Exclude system/internal keys from tooltip to reduce noise.
+        if (
+          lk === 'message_id' ||
+          lk === 'messageid' ||
+          lk === 'id' ||
+          lk === 'correlationid' ||
+          lk === 'generationid' ||
+          lk === 'internal' ||
+          lk === 'system' ||
+          lk.startsWith('_') ||
+          lk.startsWith('$')
+        ) {
+          continue
+        }
+        out[k] = pruneForTooltip(value[k], depth - 1)
+      }
+      if (Object.keys(value).length > keys.length) {
+        out['…'] = '…'
+      }
+      return out
+    }
+
+    return String(value)
+  }
+
+  const buildPayloadSummaryAndTooltip = (message: MessageEnvelope, maxChars = 120) => {
+    const rawBody = message.body || ''
+    if (!rawBody) {
+      return { summary: '—', tooltip: '' }
+    }
+
+    const json = safeParseJson(rawBody)
+    const data = json && typeof json === 'object' ? (json.data ?? null) : null
+    const top = json && typeof json === 'object' && !Array.isArray(json) ? json : null
+
+    const getAny = (...candidates: Array<[any, string]>) => {
+      for (const [obj, key] of candidates) {
+        const v = getValueByKey(obj, key)
+        if (v) return v
+      }
+      return null
+    }
+
+    // Determine event type ONLY for tooltip highlighting and to avoid duplicating it in summary.
+    const eventType =
+      getAny(
+        [data, 'event_type'],
+        [data, 'eventType'],
+        [top, 'event_type'],
+        [top, 'eventType'],
+        [message.applicationProperties, 'event_type'],
+        [message.applicationProperties, 'eventType']
+      ) || message.subject || null
+
+    // Payload Summary MUST be business data (not event type). Pick 2–4 preferred keys.
+    const preferredKeys = [
+      'orderId',
+      'paymentId',
+      'sku',
+      'amount',
+      'currency',
+      'status',
+      'reason',
+      'failureReason',
+      'customerId',
+      'carrier',
+      'quantity',
+      'delta'
+    ]
+
+    const excludedKeys = new Set([
+      'message_id',
+      'messageid',
+      'id',
+      'correlationid',
+      'generationid',
+      'event_type',
+      'eventtype',
+      'internal',
+      'system'
+    ])
+
+    const collectFromObject = (obj: any) => {
+      const pairs: Array<[string, string]> = []
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return pairs
+
+      for (const key of preferredKeys) {
+        const lk = key.toLowerCase()
+        if (excludedKeys.has(lk)) continue
+        const v = getValueByKey(obj, key)
+        if (v) pairs.push([key, v])
+      }
+
+      return pairs
+    }
+
+    const pairs: Array<[string, string]> = []
+    // Prefer nested data payload if present, then top-level.
+    pairs.push(...collectFromObject(data))
+    for (const [k, v] of collectFromObject(top)) {
+      if (!pairs.some(([ek]) => ek === k)) pairs.push([k, v])
+    }
+
+    // If none of the preferred keys exist, fallback to first 2–3 safe top-level keys.
+    if (pairs.length === 0 && top) {
+      const keys = Object.keys(top)
+        .filter((k) => {
+          const lk = k.toLowerCase()
+          if (excludedKeys.has(lk)) return false
+          if (lk.startsWith('_') || lk.startsWith('$')) return false
+          return true
+        })
+        .slice(0, 3)
+
+      for (const k of keys) {
+        const v = getValueByKey(top, k)
+        if (v) pairs.push([k, v])
+      }
+    }
+
+    const selectedPairs = pairs.slice(0, 4)
+    const baseSummary = selectedPairs.length > 0
+      ? selectedPairs.map(([k, v]) => `${k}=${v}`).join(' · ')
+      : (() => {
+          const raw = toSingleLine(rawBody)
+          // Ensure summary never equals event type.
+          if (eventType && raw === String(eventType)) return `body=${raw}`
+          return raw
+        })()
+
+    const summary = ellipsize(baseSummary, maxChars)
+
+    // Tooltip: highlight important fields + pretty JSON (depth-limited) or raw string.
+    const importantLines: string[] = []
+    if (eventType) importantLines.push(`★ eventType: ${eventType}`)
+    const findPair = (key: string) => selectedPairs.find(([k]) => k === key)?.[1] || null
+    const orderId = findPair('orderId')
+    const reason = findPair('reason') || findPair('failureReason')
+    const status = findPair('status')
+    if (orderId) importantLines.push(`★ orderId: ${orderId}`)
+    if (reason) importantLines.push(`★ reason: ${reason}`)
+    if (status) importantLines.push(`★ status: ${status}`)
+
+    let payloadBlock = ''
+    if (json) {
+      const pruned = pruneForTooltip(json, 2)
+      payloadBlock = JSON.stringify(pruned, null, 2)
+    } else {
+      payloadBlock = rawBody
+    }
+
+    // Keep tooltip bounded.
+    const maxTooltipChars = 4000
+    const tooltipRaw = [
+      importantLines.length > 0 ? ['IMPORTANT', ...importantLines].join('\n') : '',
+      '---',
+      'PAYLOAD',
+      payloadBlock
+    ].filter(Boolean).join('\n')
+
+    const tooltip = tooltipRaw.length > maxTooltipChars
+      ? tooltipRaw.slice(0, maxTooltipChars) + '\n…'
+      : tooltipRaw
+
+    return { summary, tooltip }
   }
 
   /**
@@ -445,6 +659,20 @@ export default function MessageTable({
         <>
           <div className="table-wrapper">
             <table className="message-table">
+              <colgroup>
+                {selectMode && <col style={{ width: '32px' }} />}
+                {isDLQ && dlqClassifications && <col style={{ width: '110px' }} />}
+                <col style={{ width: '60px' }} />
+                <col style={{ width: '110px' }} />
+                <col style={{ width: '90px' }} />
+                {isDLQ && <col style={{ width: '160px' }} />}
+                {isDLQ && <col style={{ width: '240px' }} />}
+                <col style={{ width: '160px' }} />
+                <col style={{ width: '260px' }} />
+                {/* Message ID takes remaining width */}
+                <col />
+                <col style={{ width: '72px' }} />
+              </colgroup>
             <thead>
               <tr>
                 {selectMode && (
@@ -471,7 +699,14 @@ export default function MessageTable({
                 <th onClick={() => handleSort('deliveryCount')} className="sortable delivery-col">
                   Delivery {sortField === 'deliveryCount' && (sortAsc ? '▲' : '▼')}
                 </th>
+                {isDLQ && (
+                  <>
+                    <th className="dlq-reason-col">DeadLetterReason</th>
+                    <th className="dlq-error-col">DeadLetterErrorDescription</th>
+                  </>
+                )}
                 <th className="eventtype-col">Event Type</th>
+                <th className="body-col">Payload Summary</th>
                 <th className="id-col">Message ID</th>
                 <th className="actions-col">Actions</th>
               </tr>
@@ -532,8 +767,24 @@ export default function MessageTable({
                     {formatRelativeTime(message.enqueuedTimeUtc)}
                   </td>
                   <td className="delivery-col">
-                    <DeliveryBadge count={message.deliveryCount} size="small" />
+                    {isDLQ ? (
+                      <span className="dlq-delivery-count" title={`DeliveryCount: ${message.deliveryCount}`}>
+                        {message.deliveryCount}
+                      </span>
+                    ) : (
+                      <DeliveryBadge count={message.deliveryCount} size="small" />
+                    )}
                   </td>
+                  {isDLQ && (
+                    <>
+                      <td className="dlq-reason-col" title={message.deadLetterReason || ''}>
+                        <span className="dlq-text-ellipsis">{message.deadLetterReason || '—'}</span>
+                      </td>
+                      <td className="dlq-error-col" title={message.deadLetterErrorDescription || ''}>
+                        <span className="dlq-text-ellipsis">{message.deadLetterErrorDescription || '—'}</span>
+                      </td>
+                    </>
+                  )}
                   <td className="eventtype-col">
                     <EventTypeChip 
                       message={message}
@@ -543,24 +794,38 @@ export default function MessageTable({
                       }}
                     />
                   </td>
+                  {(() => {
+                    const { summary, tooltip } = buildPayloadSummaryAndTooltip(message, 120)
+                    const dlqPrefix = isDLQ ? '⚠️ ' : ''
+                    const title = tooltip ? `${dlqPrefix}${tooltip}` : ''
+                    return (
+                      <td className="body-col" title={title}>
+                        <span className={`message-body-preview ${isDLQ ? 'dlq' : ''}`}>
+                          {dlqPrefix}{summary}
+                        </span>
+                      </td>
+                    )
+                  })()}
                   <td className="id-col" title={message.messageId}>
-                    {truncate(message.messageId, 35)}
+                    <span className="message-id">{message.messageId}</span>
                   </td>
                   <td className="actions-col" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => onMessageSelect && onMessageSelect(message)}
-                      className="btn-icon-only"
-                      title="View details"
-                    >
-                      👁
-                    </button>
-                    <button
-                      onClick={() => handleDownload(message)}
-                      className="btn-icon-only"
-                      title="Download as JSON"
-                    >
-                      📄
-                    </button>
+                    <div className="action-buttons">
+                      <button
+                        onClick={() => onMessageSelect && onMessageSelect(message)}
+                        className="btn-icon-only"
+                        title="View details"
+                      >
+                        👁
+                      </button>
+                      <button
+                        onClick={() => handleDownload(message)}
+                        className="btn-icon-only"
+                        title="Download as JSON"
+                      >
+                        📄
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

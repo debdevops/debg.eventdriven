@@ -555,7 +555,8 @@ app.MapGet("/api/stream/{sessionId}/{entityName}", async (
 
         await streamer.StreamMessagesAsync(
             session.ConnectionString,
-            entityPath,
+            entityName,
+            subscriptionName,
             mode.ToLowerInvariant(),
             isDLQ,
             prefetch,
@@ -599,26 +600,35 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
 
     try
     {
-        var entityPath = string.IsNullOrEmpty(subscriptionName) 
-            ? entityName 
-            : $"{entityName}/subscriptions/{subscriptionName}";
-
         await using var client = new ServiceBusClient(session.ConnectionString);
         
         var receiverOptions = new ServiceBusReceiverOptions();
         if (isDLQ)
         {
             receiverOptions.SubQueue = SubQueue.DeadLetter;
-            app.Logger.LogInformation("Creating DLQ receiver for {EntityPath} with SubQueue.DeadLetter", entityPath);
         }
-        else
-        {
-            app.Logger.LogInformation("Creating main queue receiver for {EntityPath}", entityPath);
-        }
-        
-        await using var receiver = client.CreateReceiver(entityPath, receiverOptions);
 
-        var messages = await receiver.PeekMessagesAsync(request.MaxMessages ?? 10);
+        var entityType = string.IsNullOrEmpty(subscriptionName) ? "queue" : "topic-subscription";
+        var maxMessages = request.MaxMessages ?? 10;
+        app.Logger.LogInformation(
+            "Peek request: entityType={EntityType} topicOrQueue={EntityName} subscriptionName={SubscriptionName} isDLQ={IsDLQ} maxMessages={MaxMessages}",
+            entityType,
+            entityName,
+            string.IsNullOrEmpty(subscriptionName) ? null : subscriptionName,
+            isDLQ,
+            maxMessages);
+
+        app.Logger.LogInformation(
+            "Creating receiver: entityType={EntityType} createMethod={CreateMethod} subQueue={SubQueue}",
+            entityType,
+            string.IsNullOrEmpty(subscriptionName) ? "CreateReceiver(queue)" : "CreateReceiver(topic, subscription)",
+            isDLQ ? "DeadLetter" : "None");
+        
+        await using var receiver = string.IsNullOrEmpty(subscriptionName)
+            ? client.CreateReceiver(entityName, receiverOptions)
+            : client.CreateReceiver(entityName, subscriptionName, receiverOptions);
+
+        var messages = await receiver.PeekMessagesAsync(maxMessages);
 
         var result = messages.Select(msg => new
         {
@@ -634,20 +644,37 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
             deadLetterSource = msg.DeadLetterSource
         }).ToList();
 
-        var dlqSuffix = isDLQ ? " (DLQ)" : "";
-        app.Logger.LogInformation("Peeked {Count} messages from {EntityPath}{DLQSuffix} - First message DeadLetterReason: {DLR}", 
-            result.Count, entityPath, dlqSuffix, result.FirstOrDefault()?.deadLetterReason ?? "null");
+        app.Logger.LogInformation(
+            "Peek result: entityType={EntityType} topicOrQueue={EntityName} subscriptionName={SubscriptionName} isDLQ={IsDLQ} peekedCount={PeekedCount}",
+            entityType,
+            entityName,
+            string.IsNullOrEmpty(subscriptionName) ? null : subscriptionName,
+            isDLQ,
+            result.Count);
+
+        if (isDLQ)
+        {
+            app.Logger.LogInformation(
+                "[DLQ Peek] entityType={EntityType} topicName={TopicName} subscriptionName={SubscriptionName} isDLQ=true peekedCount={PeekedCount}",
+                entityType,
+                entityName,
+                string.IsNullOrEmpty(subscriptionName) ? null : subscriptionName,
+                result.Count);
+        }
 
         return Results.Ok(new { messages = result, peekedCount = result.Count });
     }
     catch (Exception ex)
     {
-        var entityPath = string.IsNullOrEmpty(subscriptionName) 
-            ? entityName 
-            : $"{entityName}/subscriptions/{subscriptionName}";
-        var dlqSuffix = isDLQ ? " (DLQ)" : "";
-        app.Logger.LogError(ex, "Peek failed for session {SessionId}, entity {EntityPath}{DLQSuffix}", 
-            sessionId, entityPath, dlqSuffix);
+        var entityType = string.IsNullOrEmpty(subscriptionName) ? "queue" : "topic-subscription";
+        app.Logger.LogError(
+            ex,
+            "Peek failed: sessionId={SessionId} entityType={EntityType} topicOrQueue={EntityName} subscriptionName={SubscriptionName} isDLQ={IsDLQ}",
+            sessionId,
+            entityType,
+            entityName,
+            string.IsNullOrEmpty(subscriptionName) ? null : subscriptionName,
+            isDLQ);
         return Results.Problem("Peek failed");
     }
 })
@@ -697,7 +724,9 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/receive", async (
             receiverOptions.SubQueue = SubQueue.DeadLetter;
         }
         
-        await using var receiver = client.CreateReceiver(entityPath, receiverOptions);
+        await using var receiver = string.IsNullOrEmpty(subscriptionName)
+            ? client.CreateReceiver(entityName, receiverOptions)
+            : client.CreateReceiver(entityName, subscriptionName, receiverOptions);
 
         foreach (var token in request.Tokens)
         {
@@ -1494,12 +1523,16 @@ app.MapGet("/api/debug/{sessionId}/peek-compare", async (
         
         // Peek from main queue
         var mainReceiverOptions = new ServiceBusReceiverOptions();
-        await using var mainReceiver = client.CreateReceiver(entityPath, mainReceiverOptions);
+        await using var mainReceiver = string.IsNullOrEmpty(subscriptionName)
+            ? client.CreateReceiver(queue, mainReceiverOptions)
+            : client.CreateReceiver(queue, subscriptionName, mainReceiverOptions);
         var mainMessages = await mainReceiver.PeekMessagesAsync(20);
         
         // Peek from DLQ
         var dlqReceiverOptions = new ServiceBusReceiverOptions { SubQueue = SubQueue.DeadLetter };
-        await using var dlqReceiver = client.CreateReceiver(entityPath, dlqReceiverOptions);
+        await using var dlqReceiver = string.IsNullOrEmpty(subscriptionName)
+            ? client.CreateReceiver(queue, dlqReceiverOptions)
+            : client.CreateReceiver(queue, subscriptionName, dlqReceiverOptions);
         var dlqMessages = await dlqReceiver.PeekMessagesAsync(20);
 
         // Return metadata only (no body for comparison - keeps response small and secure)
@@ -1581,10 +1614,102 @@ app.MapPost("/api/messages/generate", async (
             out int anomalousCount,
             out int dlqCount
         );
+
+        static bool IsDlqCandidate(ServiceBusMessage message)
+        {
+            if (!message.ApplicationProperties.TryGetValue("ForceDlq", out var value))
+            {
+                return false;
+            }
+
+            return value switch
+            {
+                bool b => b,
+                string s => string.Equals(s, "true", StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
+        }
+
+        static async Task<int> DeadLetterByMessageIdAsync(
+            ServiceBusReceiver receiver,
+            HashSet<string> targetMessageIds,
+            string deadLetterReason,
+            string deadLetterErrorDescription,
+            TimeSpan maxDuration)
+        {
+            if (targetMessageIds.Count == 0)
+            {
+                return 0;
+            }
+
+            var deadline = DateTime.UtcNow.Add(maxDuration);
+            var deadLettered = 0;
+            var consecutiveEmptyReceives = 0;
+
+            while (targetMessageIds.Count > 0 && DateTime.UtcNow < deadline)
+            {
+                var batchSize = Math.Min(20, Math.Max(1, targetMessageIds.Count));
+                var received = await receiver.ReceiveMessagesAsync(batchSize, TimeSpan.FromSeconds(1));
+
+                if (received.Count == 0)
+                {
+                    consecutiveEmptyReceives++;
+                    if (consecutiveEmptyReceives >= 5)
+                    {
+                        break;
+                    }
+                    continue;
+                }
+
+                consecutiveEmptyReceives = 0;
+
+                foreach (var message in received)
+                {
+                    if (targetMessageIds.Contains(message.MessageId))
+                    {
+                        await receiver.DeadLetterMessageAsync(
+                            message,
+                            deadLetterReason: deadLetterReason,
+                            deadLetterErrorDescription: deadLetterErrorDescription);
+                        targetMessageIds.Remove(message.MessageId);
+                        deadLettered++;
+                    }
+                    else
+                    {
+                        // Not one of the requested DLQ candidates; release lock without removing from the queue.
+                        await receiver.AbandonMessageAsync(message);
+                    }
+                }
+            }
+
+            return deadLettered;
+        }
+
+        var generationId = Guid.NewGuid().ToString("N");
+        foreach (var message in messages)
+        {
+            message.ApplicationProperties["GenerationId"] = generationId;
+        }
+
+        var dlqCandidateMessageIds = messages
+            .Where(IsDlqCandidate)
+            .Select(m => m.MessageId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var dlqCandidateMessages = messages.Where(IsDlqCandidate).ToList();
+        var nonDlqMessages = messages.Where(m => !IsDlqCandidate(m)).ToList();
+
+        var deadLetterReasonText = "Generated DLQ test case";
+        var deadLetterDescriptionText = $"GenerationId={generationId}";
         
         var client = new ServiceBusClient(session.ConnectionString);
+        var adminClient = new ServiceBusAdministrationClient(session.ConnectionString);
         var errors = new List<string>();
         int totalSent = 0;
+        int queueDeadLettered = 0;
+        int subscriptionDeadLettered = 0;
+        var fatalSendErrors = 0;
         
         // Send to queue if specified
         if (!string.IsNullOrEmpty(request.QueueName) && 
@@ -1592,17 +1717,44 @@ app.MapPost("/api/messages/generate", async (
         {
             try
             {
-                var sender = client.CreateSender(request.QueueName);
+                await using var sender = client.CreateSender(request.QueueName);
                 
-                // Send messages (SDK handles batching internally for better performance)
-                await sender.SendMessagesAsync(messages);
-                totalSent += messages.Count;
-                
-                await sender.CloseAsync();
+                // Send DLQ candidates first to reduce race/ordering issues during the dead-letter pass.
+                if (dlqCandidateMessages.Count > 0)
+                {
+                    await sender.SendMessagesAsync(dlqCandidateMessages);
+                    totalSent += dlqCandidateMessages.Count;
+                }
+                if (nonDlqMessages.Count > 0)
+                {
+                    await sender.SendMessagesAsync(nonDlqMessages);
+                    totalSent += nonDlqMessages.Count;
+                }
+
+                // Force a subset into the real DLQ by receiving + dead-lettering them.
+                if (request.IncludeDlqTestCases && dlqCandidateMessageIds.Count > 0)
+                {
+                    var receiverOptions = new ServiceBusReceiverOptions
+                    {
+                        ReceiveMode = ServiceBusReceiveMode.PeekLock,
+                        PrefetchCount = Math.Min(200, Math.Max(20, request.Count))
+                    };
+                    await using var receiver = client.CreateReceiver(request.QueueName, receiverOptions);
+
+                    // Deterministic retry window: bounded and proportional to candidate count.
+                    var maxDuration = TimeSpan.FromSeconds(Math.Min(30, Math.Max(8, dlqCandidateMessageIds.Count * 2)));
+                    queueDeadLettered = await DeadLetterByMessageIdAsync(
+                        receiver,
+                        new HashSet<string>(dlqCandidateMessageIds, StringComparer.Ordinal),
+                        deadLetterReasonText,
+                        deadLetterDescriptionText,
+                        maxDuration);
+                }
             }
             catch (Exception ex)
             {
                 errors.Add($"Queue send error: {ex.Message}");
+                fatalSendErrors++;
                 app.Logger.LogError(ex, "Failed to send messages to queue {Queue}", request.QueueName);
             }
         }
@@ -1613,17 +1765,79 @@ app.MapPost("/api/messages/generate", async (
         {
             try
             {
-                var sender = client.CreateSender(request.TopicName);
+                await using var sender = client.CreateSender(request.TopicName);
                 
-                // Send messages (SDK handles batching internally)
-                await sender.SendMessagesAsync(messages);
-                totalSent += messages.Count;
-                
-                await sender.CloseAsync();
+                // Send DLQ candidates first for consistency (DLQ for topics is subscription-scoped).
+                if (dlqCandidateMessages.Count > 0)
+                {
+                    await sender.SendMessagesAsync(dlqCandidateMessages);
+                    totalSent += dlqCandidateMessages.Count;
+                }
+                if (nonDlqMessages.Count > 0)
+                {
+                    await sender.SendMessagesAsync(nonDlqMessages);
+                    totalSent += nonDlqMessages.Count;
+                }
+
+                // Topic DLQ is subscription-scoped. To keep DLQ generation verifiable and UI-friendly,
+                // dead-letter into a single explicit subscription.
+                if (request.IncludeDlqTestCases && dlqCandidateMessageIds.Count > 0)
+                {
+                    string? targetSubscriptionName = null;
+
+                    if (!string.IsNullOrWhiteSpace(request.SubscriptionName))
+                    {
+                        targetSubscriptionName = request.SubscriptionName;
+                    }
+                    else
+                    {
+                        var subscriptionNames = new List<string>();
+                        await foreach (var subProperties in adminClient.GetSubscriptionsAsync(request.TopicName))
+                        {
+                            if (!string.IsNullOrWhiteSpace(subProperties.SubscriptionName))
+                            {
+                                subscriptionNames.Add(subProperties.SubscriptionName);
+                            }
+                        }
+                        targetSubscriptionName = subscriptionNames
+                            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                            .FirstOrDefault();
+                    }
+
+                    if (string.IsNullOrWhiteSpace(targetSubscriptionName))
+                    {
+                        errors.Add($"Cannot DLQ topic messages for '{request.TopicName}': no subscriptions exist");
+                    }
+                    else
+                    {
+                        var receiverOptions = new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.PeekLock };
+                        await using var receiver = client.CreateReceiver(request.TopicName, targetSubscriptionName, receiverOptions);
+
+                        var maxDuration = TimeSpan.FromSeconds(Math.Min(20, Math.Max(5, dlqCandidateMessageIds.Count)));
+                        subscriptionDeadLettered = await DeadLetterByMessageIdAsync(
+                            receiver,
+                            new HashSet<string>(dlqCandidateMessageIds, StringComparer.Ordinal),
+                            deadLetterReasonText,
+                            deadLetterDescriptionText,
+                            maxDuration);
+
+                        app.Logger.LogInformation(
+                            "DLQ generation (topic): topicName={TopicName} subscriptionName={SubscriptionName} dlqCandidates={DlqCandidates} deadLettered={DeadLettered} generationId={GenerationId}",
+                            request.TopicName,
+                            targetSubscriptionName,
+                            dlqCandidateMessageIds.Count,
+                            subscriptionDeadLettered,
+                            generationId);
+
+                        // Persist for response
+                        request = request with { SubscriptionName = targetSubscriptionName };
+                    }
+                }
             }
             catch (Exception ex)
             {
                 errors.Add($"Topic send error: {ex.Message}");
+                fatalSendErrors++;
                 app.Logger.LogError(ex, "Failed to send messages to topic {Topic}", request.TopicName);
             }
         }
@@ -1635,14 +1849,29 @@ app.MapPost("/api/messages/generate", async (
             TotalGenerated = totalSent,
             AnomalousCount = anomalousCount,
             DlqCandidates = dlqCount,
+            DlqDeadLettered = queueDeadLettered + subscriptionDeadLettered,
+            DlqDeadLetteredQueue = queueDeadLettered,
+            DlqDeadLetteredSubscriptions = subscriptionDeadLettered,
+            DlqTopicName = request.TopicName,
+            DlqSubscriptionName = request.SubscriptionName,
             Errors = errors,
-            Success = errors.Count == 0
+            Success = fatalSendErrors == 0
         };
         
         app.Logger.LogInformation(
             "Generated {Count} messages for session {SessionId}: {Anomalous} anomalous, {DLQ} DLQ candidates",
             totalSent, sessionId, anomalousCount, dlqCount
         );
+
+        if (request.IncludeDlqTestCases && dlqCandidateMessageIds.Count > 0)
+        {
+            app.Logger.LogInformation(
+                "DLQ generation summary for session {SessionId}: queueDeadLettered={QueueDLQ}, subscriptionDeadLettered={SubDLQ}, generationId={GenerationId}",
+                sessionId,
+                queueDeadLettered,
+                subscriptionDeadLettered,
+                generationId);
+        }
         
         return Results.Ok(response);
     }

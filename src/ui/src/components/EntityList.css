@@ -171,6 +171,13 @@
   border-radius: var(--radius);
   margin-bottom: 2px;
   transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.entity-item.selected {
+  background: rgba(0, 120, 212, 0.12);
+  border-left-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 /* Queue Item Expandable */
@@ -184,9 +191,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background 0.2s;
+  transition: all 0.2s;
   font-size: 13px;
   min-height: 28px;
+  border-left: 3px solid transparent;
 }
 .queue-header:hover {
   background: var(--light);
@@ -194,8 +202,11 @@
 }
 
 .queue-header.selected {
-  background: var(--primary);
-  color: white;
+  background: rgba(0, 120, 212, 0.12);
+  border-left-color: var(--accent);
+  font-weight: 600;
+  color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .queue-header.selected .message-count,
@@ -621,6 +632,49 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.subscription-item-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subscription-dlq-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 18px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+  color: rgba(185, 28, 28, 0.95);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: left;
+}
+
+.subscription-dlq-child:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.subscription-dlq-child.selected {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+.subscription-dlq-icon {
+  font-size: 12px;
+}
+
+.subscription-dlq-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .subscription-card-wrapper .entity-card {

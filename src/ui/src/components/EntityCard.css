@@ -46,8 +46,8 @@
 }
 
 .entity-card-selected {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 6px 12px rgba(0, 0, 0, 0.18);
-  filter: brightness(0.95) contrast(1.05);
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25), 0 6px 12px rgba(0, 0, 0, 0.18);
+  filter: none;
 }
 
 /* Left accent bar when selected */
@@ -65,15 +65,15 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--surface-3);
+  background: rgba(0, 120, 212, 0.08);
   border-radius: 8px;
   pointer-events: none;
 }
 
-.entity-card-queue.entity-card-selected::before { background: #ffffff; }
-.entity-card-topic.entity-card-selected::before { background: #ffffff; }
-.entity-card-subscription.entity-card-selected::before { background: #ffffff; }
-.entity-card-dlq.entity-card-selected::before { background: #ffffff; }
+.entity-card-queue.entity-card-selected::before { background: var(--accent); }
+.entity-card-topic.entity-card-selected::before { background: var(--accent); }
+.entity-card-subscription.entity-card-selected::before { background: var(--accent); }
+.entity-card-dlq.entity-card-selected::before { background: var(--danger); }
 
 /* Small check badge */
 .entity-card-selected-badge {
@@ -92,6 +92,9 @@
   border-radius: 9999px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
+
+.entity-card-selected .entity-card-name {
+  font-weight: 800;
 }
 
 .entity-card-expanded {

@@ -65,7 +65,7 @@
 }
 
 .delivery-badge.small {
-  padding: 2px 6px;
+  padding: 1px 5px;
   font-size: 10px;
   border-radius: 10px;
 }
@@ -105,7 +105,7 @@
 
 /* Hover effects */
 .delivery-badge:hover {
-  transform: scale(1.05);
+  transform: none;
 }
 
 .delivery-badge.green:hover {

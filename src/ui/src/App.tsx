@@ -52,7 +52,6 @@ function AppContent({
     error,
     idleSeconds,
     reconnect,
-    scheduleTimeout,
     setLastSelection
   } = useSession()
   
@@ -175,21 +174,36 @@ function AppContent({
   }, [activeNamespace, currentEntityName, aiInsights, aiCacheTime, toast, addAuditEntry])
 
   // Handle successful message generation
-  const handleGenerateSuccess = useCallback((result: { totalGenerated: number; anomalousCount: number; dlqCandidates: number }) => {
+  const handleGenerateSuccess = useCallback((result: {
+    totalGenerated: number
+    anomalousCount: number
+    dlqCandidates: number
+    dlqDeadLettered: number
+    dlqDeadLetteredQueue: number
+    dlqDeadLetteredSubscriptions: number
+    dlqTopicName?: string
+    dlqSubscriptionName?: string
+  }) => {
+    const subLabel = result.dlqTopicName && result.dlqSubscriptionName
+      ? `${result.dlqTopicName}/${result.dlqSubscriptionName}`
+      : 'subs'
+
+    const dlqPart = result.dlqCandidates > 0
+      ? `, DLQ dead-lettered ${result.dlqDeadLettered}/${result.dlqCandidates} (queue ${result.dlqDeadLetteredQueue}, ${subLabel} ${result.dlqDeadLetteredSubscriptions})`
+      : ''
+
     toast.success(
-      `Generated ${result.totalGenerated} messages (${result.anomalousCount} anomalies, ${result.dlqCandidates} DLQ candidates)`
+      `Generated ${result.totalGenerated} messages (${result.anomalousCount} anomalies${dlqPart})`
     )
+
+    if (result.dlqCandidates > 0 && result.dlqDeadLettered < result.dlqCandidates) {
+      toast.warning('Some DLQ candidates were not dead-lettered (check queue activity and retry).')
+    }
     
     // Trigger auto-refresh of entities to update message counts
     // The NamespaceView will handle this
     
-    // Auto-run AI analysis after 1 second if we have 100+ messages
-    if (result.totalGenerated >= 100 && currentEntityName) {
-      scheduleTimeout('auto-ai-analysis', 1000, () => {
-        handleRunAiAnalysis()
-      })
-    }
-  }, [toast, currentEntityName, handleRunAiAnalysis, scheduleTimeout])
+  }, [toast])
 
   // Clear AI insights when entity changes
   useEffect(() => {

@@ -8,6 +8,7 @@
   background: var(--surface-2);
   margin: 0;
   padding: 0;
+  min-height: 0;
 }
 
 /* Thin session-expired banner at top */
@@ -178,7 +179,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 
 .btn-disabled {
@@ -202,7 +203,7 @@
 
 .btn-compact:not(:disabled):hover {
   transform: translateY(-1px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow);
 }
 
 .btn-compact.btn-primary {
@@ -216,29 +217,30 @@
   border: 2px solid var(--border-color);
 }
 
-/* Auto Mode badge - prominent and clean */
+/* Auto Mode badge - demoted to secondary styling for reduced clutter */
 .auto-mode-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--surface);
-  box-shadow: var(--shadow-lg);
-  letter-spacing: 0.3px;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(0, 120, 212, 0.08);
+  border: 1px solid rgba(0, 120, 212, 0.2);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  box-shadow: none;
+  letter-spacing: 0.2px;
 }
 
 .auto-icon {
-  font-size: 14px;
-  animation: glow 2s ease-in-out infinite;
+  font-size: 11px;
+  opacity: 0.8;
 }
 
 .auto-text {
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: 9px;
 }
 
 .refreshing-dot {
@@ -274,13 +276,30 @@
 
 /* DLQ Banner - simplified one-liner */
 .dlq-banner {
-  padding: 6px 12px;
-  background: var(--warning-bg);
-  border-left: 4px solid var(--warning);
-  border-bottom: 1px solid var(--warning-border);
+  padding: 8px 12px;
+  background: var(--danger-bg);
+  border-left: 4px solid var(--danger);
+  border-bottom: 1px solid var(--danger-border);
+  color: var(--danger-text);
+  text-align: left;
+}
+
+.dlq-banner-title {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.dlq-banner-subtitle {
   font-size: 11px;
-  color: var(--warning-text);
-  text-align: center;
+  font-weight: 600;
+  opacity: 0.95;
+  line-height: 1.2;
+}
+
+.dlq-banner-sep {
+  opacity: 0.75;
+  padding: 0 4px;
 }
 
 /* Read-only mode banner */

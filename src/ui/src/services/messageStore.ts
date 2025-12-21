@@ -6,7 +6,7 @@
 import type { MessageEnvelope } from '../types'
 
 const DB_NAME = 'ServiceBusInspector'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'messages'
 
 interface StoredMessage extends MessageEnvelope {
@@ -33,19 +33,23 @@ class MessageStore {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result
-        
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { 
-            keyPath: ['sessionId', 'entityName', 'messageId', 'sequenceNumber'] 
-          })
-          
-          // Indexes for querying
-          store.createIndex('sessionId', 'sessionId', { unique: false })
-          store.createIndex('entityName', 'entityName', { unique: false })
-          store.createIndex('storedAt', 'storedAt', { unique: false })
-          store.createIndex('messageId', 'messageId', { unique: false })
-          store.createIndex('sessionEntity', ['sessionId', 'entityName'], { unique: false })
+
+        // For correctness, recreate the store when upgrading schema.
+        // This avoids collisions between subscriptions and DLQ vs active messages.
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+          db.deleteObjectStore(STORE_NAME)
         }
+
+        const store = db.createObjectStore(STORE_NAME, {
+          keyPath: ['sessionId', 'entityName', 'subscriptionName', 'entityType', 'messageId', 'sequenceNumber']
+        })
+
+        // Indexes for querying
+        store.createIndex('sessionId', 'sessionId', { unique: false })
+        store.createIndex('entityName', 'entityName', { unique: false })
+        store.createIndex('storedAt', 'storedAt', { unique: false })
+        store.createIndex('messageId', 'messageId', { unique: false })
+        store.createIndex('sessionEntity', ['sessionId', 'entityName'], { unique: false })
       }
     })
   }
@@ -128,7 +132,8 @@ class MessageStore {
   async getMessages(
     sessionId: string,
     entityName: string,
-    entityType?: 'queue' | 'dlq' | 'subscription' | 'topic'
+    entityType?: 'queue' | 'dlq' | 'subscription' | 'topic',
+    subscriptionName?: string
   ): Promise<StoredMessage[]> {
     if (!this.db) await this.init()
 
@@ -144,6 +149,11 @@ class MessageStore {
         // Filter by entityType if specified (important for Queue vs DLQ distinction)
         if (entityType) {
           messages = messages.filter(m => m.entityType === entityType)
+        }
+
+        // Further filter by subscription name when provided (important for subscription DLQ).
+        if (subscriptionName) {
+          messages = messages.filter(m => m.subscriptionName === subscriptionName)
         }
         
         // Sort by storedAt descending (newest first)
@@ -187,7 +197,9 @@ class MessageStore {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([STORE_NAME], 'readwrite')
       const store = transaction.objectStore(STORE_NAME)
-      const request = store.delete([sessionId, entityName, messageId, sequenceNumber])
+      // Back-compat note: delete by key is only used by older flows; new schema keys include subscriptionName+entityType.
+      // This method is not used by the current UI flows.
+      const request = store.delete([sessionId, entityName, undefined, 'queue', messageId, sequenceNumber] as any)
 
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)

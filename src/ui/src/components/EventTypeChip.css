@@ -1,14 +1,14 @@
 .event-type-chip {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
   font-weight: 600;
   font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
   border: 1px solid transparent;
   white-space: nowrap;
-  max-width: 200px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: all 0.15s ease;
@@ -56,7 +56,7 @@
 
 .event-type-chip.clickable:hover {
   opacity: 0.8;
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .event-type-chip.unknown {

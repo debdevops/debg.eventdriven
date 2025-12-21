@@ -35,7 +35,6 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoRefresh] = useState(true)
-  const [collapsed, setCollapsed] = useState(true) // Start collapsed for compact view
 
   const fetchMetrics = useCallback(async (silent = false) => {
     if (status !== 'connected') {
@@ -136,7 +135,7 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
   if (!metrics) return null
 
   return (
-    <div className={`metrics-panel-compact ${collapsed ? 'collapsed' : 'expanded'}`}>
+    <div className="metrics-panel-compact">
       <div className="metrics-inline">
         <div className="metric-inline-item">
           <span className="metric-inline-label">Active:</span>
@@ -173,13 +172,6 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
           </div>
         )}
         
-        <button 
-          className="metrics-collapse-btn"
-          onClick={() => setCollapsed(!collapsed)}
-          title={collapsed ? 'Expand metrics' : 'Collapse metrics'}
-        >
-          {collapsed ? '▼' : '▲'}
-        </button>
       </div>
     </div>
   )

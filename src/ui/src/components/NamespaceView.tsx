@@ -84,6 +84,23 @@ export function NamespaceView({
     onEntitySelect?.(`${topicName}/subscriptions/${subscription.name}`)
   }
 
+  const handleSelectSubscriptionDLQ = (subscription: Subscription, topicName: string) => {
+    // Guard: Prevent navigation if session is not ready
+    if (!canInteract) {
+      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      return
+    }
+
+    setSelectedTarget({
+      type: 'dlq',
+      entity: null,
+      subscription,
+      topicName,
+      isDLQ: true
+    })
+    onEntitySelect?.(`${topicName}/subscriptions/${subscription.name}/$DeadLetterQueue`)
+  }
+
   const handleSelectDLQ = (entity: Entity) => {
     // Guard: Prevent navigation if session is not ready
     if (!canInteract) {
@@ -184,6 +201,7 @@ export function NamespaceView({
               sessionId={namespace.sessionId}
               onSelectEntity={handleSelectEntity}
               onSelectSubscription={handleSelectSubscription}
+              onSelectSubscriptionDLQ={handleSelectSubscriptionDLQ}
               onSelectDLQ={handleSelectDLQ}
               onRefresh={handleRefreshEntities}
               refreshing={refreshing}

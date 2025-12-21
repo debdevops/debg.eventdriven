@@ -484,12 +484,18 @@ class ApiClient {
     count: number,
     queueName?: string,
     topicName?: string,
+    subscriptionName?: string,
     targetType: 'Queue' | 'Topic' | 'Both' = 'Queue',
     includeDlqTestCases = true
   ): Promise<{
     totalGenerated: number
     anomalousCount: number
     dlqCandidates: number
+    dlqDeadLettered: number
+    dlqDeadLetteredQueue: number
+    dlqDeadLetteredSubscriptions: number
+    dlqTopicName?: string
+    dlqSubscriptionName?: string
     errors: string[]
     success: boolean
   }> {
@@ -499,6 +505,7 @@ class ApiClient {
         count,
         queueName,
         topicName,
+        subscriptionName,
         targetType,
         includeDlqTestCases
       })
