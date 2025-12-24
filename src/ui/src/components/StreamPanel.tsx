@@ -360,6 +360,18 @@ export default function StreamPanel({
       if ((err as any)?.name === 'AbortError') {
         return
       }
+
+      // If selection changed mid-flight, or a newer request started, ignore this failure.
+      // This is the key race-condition guard that prevents transient "Failed to load" flashes
+      // when the *current* selection successfully loads shortly after.
+      if (
+        selectionEpochRef.current !== selectionEpochAtStart ||
+        snapshotEnabledRef.current ||
+        requestId !== loadRequestIdRef.current
+      ) {
+        return
+      }
+
       const errorMsg = err instanceof Error ? err.message : 'Failed to load messages'
       console.error('Load messages failed:', err)
       
@@ -375,7 +387,10 @@ export default function StreamPanel({
       }
     } finally {
       if (!silent) {
-        setLoading(false)
+        // Only the latest request is allowed to clear the loading indicator.
+        if (requestId === loadRequestIdRef.current) {
+          setLoading(false)
+        }
       }
     }
   }, [status, sessionId, entityName, peekSize, subscriptionName, isDLQ, selectedTarget.entityType])
@@ -628,6 +643,7 @@ export default function StreamPanel({
 
     const selectionEpochAtStart = selectionEpochRef.current
     const signal = selectionAbortRef.current.signal
+    const requestId = ++loadRequestIdRef.current
 
     try {
       setFetchStatus('loading')
@@ -639,8 +655,17 @@ export default function StreamPanel({
       // causing duplicates or a perceived "stuck" paging experience.
       const lastSeqNum = Math.max(...messages.map(m => m.sequenceNumber))
       
-      if (!lastSeqNum) {
+      if (!Number.isFinite(lastSeqNum) || lastSeqNum <= 0) {
+        if (
+          selectionEpochRef.current !== selectionEpochAtStart ||
+          snapshotEnabledRef.current ||
+          requestId !== loadRequestIdRef.current
+        ) {
+          return
+        }
+
         setError('No sequence number found in loaded messages')
+        setFetchStatus('error')
         return
       }
 
@@ -663,6 +688,10 @@ export default function StreamPanel({
       }
 
       if (snapshotEnabledRef.current) {
+        return
+      }
+
+      if (requestId !== loadRequestIdRef.current) {
         return
       }
 
@@ -714,12 +743,23 @@ export default function StreamPanel({
       if ((err as any)?.name === 'AbortError') {
         return
       }
+
+      if (
+        selectionEpochRef.current !== selectionEpochAtStart ||
+        snapshotEnabledRef.current ||
+        requestId !== loadRequestIdRef.current
+      ) {
+        return
+      }
+
       const errorMsg = err instanceof Error ? err.message : 'Failed to load next batch'
       console.error('Load next batch failed:', err)
       setError(errorMsg)
       setFetchStatus('error')
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestIdRef.current) {
+        setLoading(false)
+      }
     }
   }, [controlsDisabled, messages, sessionId, entityName, subscriptionName, isDLQ, selectedTarget.entityType, peekSize])
 
