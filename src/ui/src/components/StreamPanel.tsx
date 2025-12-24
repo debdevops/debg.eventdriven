@@ -118,6 +118,9 @@ export default function StreamPanel({
   // Unified Inspector state
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('closed')
   const [selectedMessage, setSelectedMessage] = useState<MessageEnvelope | null>(null)
+  const [selectedMessageLoading, setSelectedMessageLoading] = useState(false)
+  const [selectedMessageError, setSelectedMessageError] = useState<string | null>(null)
+  const selectedMessageRequestIdRef = useRef(0)
 
   // Resolve target identity.
   // For subscriptions (messages or DLQ), entityName must be the topic and subscriptionName must be present.
@@ -704,6 +707,68 @@ export default function StreamPanel({
     }
   }, [controlsDisabled, messages, sessionId, entityName, subscriptionName, isDLQ, selectedTarget.entityType, peekSize])
 
+  // Message detail selection: some rows may carry partial bodies (or truncated previews).
+  // UX invariant: never show an error banner until a detail hydration request actually fails.
+  const openMessageDetails = useCallback(async (message: MessageEnvelope) => {
+    setSelectedMessage(message)
+    setSelectedMessageError(null)
+
+    // Snapshot is a strict point-in-time lock: selecting is allowed, but no background fetch.
+    if (snapshotEnabledRef.current) {
+      setSelectedMessageLoading(false)
+      return
+    }
+
+    const hasUsableBody = Boolean(message.body && message.body.length > 0)
+    // Only hydrate if the current message appears incomplete.
+    if (hasUsableBody) {
+      setSelectedMessageLoading(false)
+      return
+    }
+
+    const requestId = ++selectedMessageRequestIdRef.current
+    const selectionEpochAtStart = selectionEpochRef.current
+    const signal = selectionAbortRef.current.signal
+
+    setSelectedMessageLoading(true)
+
+    try {
+      // Hydrate details by peeking a larger window and matching by messageId/sequenceNumber.
+      // This does NOT consume messages; it only improves the detail view.
+      const response = await apiClient.peekMessages(
+        sessionId,
+        entityName,
+        200,
+        subscriptionName,
+        isDLQ,
+        signal
+      )
+
+      // Ignore if selection changed, snapshot enabled, or a newer request started.
+      if (selectionEpochRef.current !== selectionEpochAtStart) return
+      if (snapshotEnabledRef.current || requestId !== selectedMessageRequestIdRef.current) return
+
+      const hydrated = (response.messages || []).find((m) => {
+        if (message.messageId && m.messageId && m.messageId === message.messageId) return true
+        return m.sequenceNumber !== undefined && m.sequenceNumber === message.sequenceNumber
+      })
+
+      // If not found, keep the original message (no error: this is a windowing limitation, not a failure).
+      if (hydrated) {
+        setSelectedMessage(hydrated)
+      }
+    } catch (err) {
+      if ((err as any)?.name === 'AbortError') return
+      // Only render error when the request truly fails.
+      const msg = err instanceof Error ? err.message : 'Failed to load message'
+      setSelectedMessageError(msg)
+    } finally {
+      if (requestId === selectedMessageRequestIdRef.current) {
+        setSelectedMessageLoading(false)
+      }
+    }
+  }, [entityName, isDLQ, sessionId, subscriptionName])
+
   // Start streaming
   /* const _handleStartStream = () => {
     setError(null)
@@ -953,7 +1018,7 @@ export default function StreamPanel({
               aiInsightsLoading={aiInsightsLoading}
               hasAiInsights={hasAiInsights}
               onMessageSelect={(message) => {
-                setSelectedMessage(message)
+                void openMessageDetails(message)
               }}
               aiPatternFilter={aiPatternFilter}
               dlqClassifications={dlqClassificationsMap}
@@ -986,7 +1051,7 @@ export default function StreamPanel({
               aiInsightsLoading={aiInsightsLoading}
               hasAiInsights={hasAiInsights}
               onMessageSelect={(message) => {
-                setSelectedMessage(message)
+                void openMessageDetails(message)
               }}
               aiPatternFilter={aiPatternFilter}
               peekSize={peekSize}
@@ -1020,13 +1085,78 @@ export default function StreamPanel({
         onClose={() => {
           setInspectorMode('closed')
         }}
-        onMessageSelect={(message) => setSelectedMessage(message)}
+        onMessageSelect={(message) => void openMessageDetails(message)}
         onAiRefresh={onAiInsights}
         onApplyAiPattern={handleApplyAiPattern}
       />
 
       {/* Message Detail (Right-side modal, restored) */}
       {selectedMessage && (
+        selectedMessageLoading ? (
+          <div className="message-detail-modal-overlay">
+            <div className="message-detail-modal-backdrop" onClick={() => {
+              selectedMessageRequestIdRef.current += 1
+              setSelectedMessage(null)
+              setSelectedMessageLoading(false)
+              setSelectedMessageError(null)
+            }} />
+            <div className="message-detail-modal">
+              <div className="message-detail-header">
+                <div className="message-detail-title">
+                  <span className="message-id-label">Message ID</span>
+                  <span className="message-id-value">{selectedMessage.messageId}</span>
+                </div>
+                <button
+                  className="btn-close-panel"
+                  onClick={() => {
+                    selectedMessageRequestIdRef.current += 1
+                    setSelectedMessage(null)
+                    setSelectedMessageLoading(false)
+                    setSelectedMessageError(null)
+                  }}
+                  aria-label="Close panel"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="message-detail-content">
+                <div className="alert alert-info">Loading message…</div>
+              </div>
+            </div>
+          </div>
+        ) : selectedMessageError ? (
+          <div className="message-detail-modal-overlay">
+            <div className="message-detail-modal-backdrop" onClick={() => {
+              selectedMessageRequestIdRef.current += 1
+              setSelectedMessage(null)
+              setSelectedMessageLoading(false)
+              setSelectedMessageError(null)
+            }} />
+            <div className="message-detail-modal">
+              <div className="message-detail-header">
+                <div className="message-detail-title">
+                  <span className="message-id-label">Message ID</span>
+                  <span className="message-id-value">{selectedMessage.messageId}</span>
+                </div>
+                <button
+                  className="btn-close-panel"
+                  onClick={() => {
+                    selectedMessageRequestIdRef.current += 1
+                    setSelectedMessage(null)
+                    setSelectedMessageLoading(false)
+                    setSelectedMessageError(null)
+                  }}
+                  aria-label="Close panel"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="message-detail-content">
+                <div className="alert alert-danger">{selectedMessageError}</div>
+              </div>
+            </div>
+          </div>
+        ) : (
         <MessageDetailPanel
           message={selectedMessage}
           messages={renderedMessages}
@@ -1035,14 +1165,19 @@ export default function StreamPanel({
               ? dlqClassificationsMap.get(selectedMessage.messageId) || null
               : null
           }
-          onClose={() => setSelectedMessage(null)}
+          onClose={() => {
+            selectedMessageRequestIdRef.current += 1
+            setSelectedMessage(null)
+            setSelectedMessageLoading(false)
+            setSelectedMessageError(null)
+          }}
           onPrevious={() => {
             const currentIndex = renderedMessages.findIndex((m) =>
               (m.messageId && selectedMessage.messageId && m.messageId === selectedMessage.messageId) ||
               (m.sequenceNumber !== undefined && m.sequenceNumber === selectedMessage.sequenceNumber)
             )
             const safeIndex = currentIndex >= 0 ? currentIndex : 0
-            if (safeIndex > 0) setSelectedMessage(renderedMessages[safeIndex - 1])
+            if (safeIndex > 0) void openMessageDetails(renderedMessages[safeIndex - 1])
           }}
           onNext={() => {
             const currentIndex = renderedMessages.findIndex((m) =>
@@ -1050,9 +1185,10 @@ export default function StreamPanel({
               (m.sequenceNumber !== undefined && m.sequenceNumber === selectedMessage.sequenceNumber)
             )
             const safeIndex = currentIndex >= 0 ? currentIndex : 0
-            if (safeIndex < renderedMessages.length - 1) setSelectedMessage(renderedMessages[safeIndex + 1])
+            if (safeIndex < renderedMessages.length - 1) void openMessageDetails(renderedMessages[safeIndex + 1])
           }}
         />
+        )
       )}
     </div>
   )
