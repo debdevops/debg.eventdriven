@@ -712,62 +712,15 @@ export default function StreamPanel({
   const openMessageDetails = useCallback(async (message: MessageEnvelope) => {
     setSelectedMessage(message)
     setSelectedMessageError(null)
+    setSelectedMessageLoading(false)
 
-    // Snapshot is a strict point-in-time lock: selecting is allowed, but no background fetch.
-    if (snapshotEnabledRef.current) {
-      setSelectedMessageLoading(false)
-      return
-    }
-
-    const hasUsableBody = Boolean(message.body && message.body.length > 0)
-    // Only hydrate if the current message appears incomplete.
-    if (hasUsableBody) {
-      setSelectedMessageLoading(false)
-      return
-    }
-
-    const requestId = ++selectedMessageRequestIdRef.current
-    const selectionEpochAtStart = selectionEpochRef.current
-    const signal = selectionAbortRef.current.signal
-
-    setSelectedMessageLoading(true)
-
-    try {
-      // Hydrate details by peeking a larger window and matching by messageId/sequenceNumber.
-      // This does NOT consume messages; it only improves the detail view.
-      const response = await apiClient.peekMessages(
-        sessionId,
-        entityName,
-        200,
-        subscriptionName,
-        isDLQ,
-        signal
-      )
-
-      // Ignore if selection changed, snapshot enabled, or a newer request started.
-      if (selectionEpochRef.current !== selectionEpochAtStart) return
-      if (snapshotEnabledRef.current || requestId !== selectedMessageRequestIdRef.current) return
-
-      const hydrated = (response.messages || []).find((m) => {
-        if (message.messageId && m.messageId && m.messageId === message.messageId) return true
-        return m.sequenceNumber !== undefined && m.sequenceNumber === message.sequenceNumber
-      })
-
-      // If not found, keep the original message (no error: this is a windowing limitation, not a failure).
-      if (hydrated) {
-        setSelectedMessage(hydrated)
-      }
-    } catch (err) {
-      if ((err as any)?.name === 'AbortError') return
-      // Only render error when the request truly fails.
-      const msg = err instanceof Error ? err.message : 'Failed to load message'
-      setSelectedMessageError(msg)
-    } finally {
-      if (requestId === selectedMessageRequestIdRef.current) {
-        setSelectedMessageLoading(false)
-      }
-    }
-  }, [entityName, isDLQ, sessionId, subscriptionName])
+    // IMPORTANT: Selecting a message row must be a purely local UI action.
+    // The inspector already has the message payload from the peek/SSE pipelines.
+    // Triggering an extra peek here creates noisy failures and misleading UX.
+    // If a dedicated "get message details" API is added later, this is the place
+    // to wire it with an explicit loading state.
+    return
+  }, [])
 
   // Start streaming
   /* const _handleStartStream = () => {
