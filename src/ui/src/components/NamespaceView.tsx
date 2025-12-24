@@ -4,10 +4,11 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import EntityList from './EntityList'
-import StreamPanel from './StreamPanel'
+import StreamPanel from '../views/StreamPanelView'
 import { apiClient } from '../api/client'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Namespace, Entity, Subscription, AuditEntry } from '../types'
+import { selectionKey, type SelectedTarget } from '../entities/selection'
 import { queueEntityId, topicEntityId } from '../utils/entityIdentity'
 import './NamespaceView.css'
 
@@ -21,14 +22,6 @@ interface NamespaceViewProps {
   aiInsightsLoading?: boolean
   hasAiInsights?: boolean
   aiInsights?: any
-}
-
-interface SelectedTarget {
-  type: 'queue' | 'subscription' | 'dlq'
-  entity: Entity | null
-  subscription?: Subscription
-  topicName?: string
-  isDLQ?: boolean
 }
 
 export function NamespaceView({
@@ -60,11 +53,7 @@ export function NamespaceView({
       return
     }
     
-    setSelectedTarget({
-      type: 'queue',
-      entity,
-      isDLQ: false
-    })
+    setSelectedTarget({ entityType: 'queue', viewType: 'messages', entity })
     onEntitySelect?.(entity.name)
   }
 
@@ -75,13 +64,7 @@ export function NamespaceView({
       return
     }
     
-    setSelectedTarget({
-      type: 'subscription',
-      entity: null,
-      subscription,
-      topicName,
-      isDLQ: false
-    })
+    setSelectedTarget({ entityType: 'subscription', viewType: 'messages', subscription, topicName })
     onEntitySelect?.(`${topicName}/subscriptions/${subscription.name}`)
   }
 
@@ -91,14 +74,7 @@ export function NamespaceView({
       console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
       return
     }
-
-    setSelectedTarget({
-      type: 'dlq',
-      entity: null,
-      subscription,
-      topicName,
-      isDLQ: true
-    })
+    setSelectedTarget({ entityType: 'subscription', viewType: 'dlq', subscription, topicName })
     onEntitySelect?.(`${topicName}/subscriptions/${subscription.name}/$DeadLetterQueue`)
   }
 
@@ -109,11 +85,7 @@ export function NamespaceView({
       return
     }
     
-    setSelectedTarget({
-      type: 'dlq',
-      entity,
-      isDLQ: true
-    })
+    setSelectedTarget({ entityType: 'queue', viewType: 'dlq', entity })
     onEntitySelect?.(`${entity.name}/$DeadLetterQueue`)
   }
 
@@ -226,6 +198,8 @@ export function NamespaceView({
       <section className="right-pane">
         {selectedTarget ? (
           <StreamPanel
+            // FIX(ux): keyed remount clears grid immediately on view switch.
+            key={selectionKey(selectedTarget)}
             sessionId={namespace.sessionId}
             selectedTarget={selectedTarget}
             onAudit={onAudit}

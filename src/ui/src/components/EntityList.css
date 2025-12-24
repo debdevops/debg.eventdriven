@@ -6,6 +6,64 @@
   min-height: 0;
 }
 
+/* Generic nested child rows (Portal-aligned) */
+.entity-child-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.entity-child-row:hover {
+  background: var(--light);
+}
+
+.entity-child-row.selected {
+  background: rgba(0, 120, 212, 0.12);
+  border-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.entity-child-icon {
+  width: 16px;
+  text-align: center;
+}
+
+.entity-child-label {
+  flex: 1;
+  color: var(--text);
+}
+
+.entity-child-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.entity-dlq-row.warning {
+  border-color: var(--warning);
+}
+
+.entity-dlq-row.critical {
+  border-color: var(--danger);
+}
+
+.subscription-children {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Compact mode for 200px sidebar */
 .entity-list.compact {
   padding: 4px;

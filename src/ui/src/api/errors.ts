@@ -3,14 +3,21 @@
  */
 
 export class ApiError extends Error {
+  public errorCode?: string
+  public raw?: unknown
+
   constructor(
     message: string,
     public status: number,
     public endpoint: string,
-    public timestamp: Date = new Date()
+    public timestamp: Date = new Date(),
+    errorCode?: string,
+    raw?: unknown
   ) {
     super(message)
     this.name = 'ApiError'
+    this.errorCode = errorCode
+    this.raw = raw
   }
 
   get statusCode(): number {

@@ -13,17 +13,16 @@ export interface ToastProps {
   message: string
   type: ToastType
   duration?: number | null
-  onClose: () => void
+  onRemove: (id: string) => void
 }
 
-export function Toast({ id, message, type, duration = null, onClose }: ToastProps) {
-  // Keep id in props for stable keys; avoid unused param errors.
-  void id
+export function Toast({ id, message, type, duration = null, onRemove }: ToastProps) {
   useEffect(() => {
     if (duration == null) return
-    const t = window.setTimeout(() => onClose(), duration)
+    // FIX(toast): create timer once per toast; cleared on unmount.
+    const t = window.setTimeout(() => onRemove(id), duration)
     return () => window.clearTimeout(t)
-  }, [duration, onClose])
+  }, [duration, id, onRemove])
 
   const icons = {
     success: '✓',
@@ -33,7 +32,7 @@ export function Toast({ id, message, type, duration = null, onClose }: ToastProp
   }
 
   return (
-    <div className={`toast toast-${type}`} onClick={onClose}>
+    <div className={`toast toast-${type}`}>
       <span className="toast-icon">{icons[type]}</span>
       <span className="toast-message">{message}</span>
     </div>
@@ -55,7 +54,7 @@ export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
           message={toast.message}
           type={toast.type}
           duration={toast.duration}
-          onClose={() => onRemove(toast.id)}
+          onRemove={onRemove}
         />
       ))}
     </div>

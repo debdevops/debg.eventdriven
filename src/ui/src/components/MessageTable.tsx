@@ -3,7 +3,8 @@
  * Enhanced with: ActionToolbar, DeliveryBadge, Pagination, Select Mode
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ActionToolbar } from './ActionToolbar'
 import { DeliveryBadge } from './DeliveryBadge'
 import { Pagination } from './Pagination'
@@ -21,11 +22,14 @@ import './MessageTable.css'
 interface MessageTableProps {
   messages: MessageEnvelope[] // INSPECTOR MODE: loaded (peeked) messages, NOT total in queue
   totalMessageCount?: number // Total messages in queue (informational only, not paginated)
+  activeCount: number // Active message count for DLQ ratio health
   sessionId: string
   entityName: string
   subscriptionName?: string
   isDLQ?: boolean
   dlqCount?: number
+  oldestDlqEnqueuedTimeUtc?: string | null
+  sampledDlqMessages?: MessageEnvelope[] | null
   onRefresh?: () => void
   onLoadNextBatch?: () => void // Load next batch using last sequence number
   disabled?: boolean
@@ -46,11 +50,14 @@ interface MessageTableProps {
 export default function MessageTable({
   messages,
   totalMessageCount,
+  activeCount,
   sessionId,
   entityName,
   subscriptionName,
   isDLQ = false,
   dlqCount = 0,
+  oldestDlqEnqueuedTimeUtc = null,
+  sampledDlqMessages = null,
   onRefresh,
   onLoadNextBatch,
   disabled = false,
@@ -74,6 +81,50 @@ export default function MessageTable({
   const [replayLoading, setReplayLoading] = useState(false)
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('')
   const [ageBucketFilter, setAgeBucketFilter] = useState<keyof AgeDistribution | null>(null)
+
+  // FIX(tooltip): stable payload tooltip rendered via Portal (not inside table DOM).
+  // Spec: ~300ms delay, closes on row leave, fixed-position overlay.
+  const [payloadTooltip, setPayloadTooltip] = useState<{
+    content: string
+    anchorRect: DOMRect
+  } | null>(null)
+  const showTimerRef = useRef<number | null>(null)
+  const hideTimerRef = useRef<number | null>(null)
+
+  const clearTooltipTimers = () => {
+    if (showTimerRef.current != null) {
+      window.clearTimeout(showTimerRef.current)
+      showTimerRef.current = null
+    }
+    if (hideTimerRef.current != null) {
+      window.clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = null
+    }
+  }
+
+  const scheduleShowTooltip = (content: string, anchorEl: HTMLElement) => {
+    clearTooltipTimers()
+    showTimerRef.current = window.setTimeout(() => {
+      // Only one tooltip at a time.
+      setPayloadTooltip({ content, anchorRect: anchorEl.getBoundingClientRect() })
+      showTimerRef.current = null
+    }, 300)
+  }
+
+  const scheduleHideTooltip = () => {
+    clearTooltipTimers()
+    hideTimerRef.current = window.setTimeout(() => {
+      setPayloadTooltip(null)
+      hideTimerRef.current = null
+    }, 0)
+  }
+
+  useEffect(() => {
+    return () => {
+      clearTooltipTimers()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   
   // Select mode
   const [selectMode, setSelectMode] = useState(false)
@@ -310,7 +361,7 @@ export default function MessageTable({
       return null
     }
 
-    // Determine event type ONLY for tooltip highlighting and to avoid duplicating it in summary.
+    // Determine event type (prefer app props/body, fallback to subject).
     const eventType =
       getAny(
         [data, 'event_type'],
@@ -321,10 +372,32 @@ export default function MessageTable({
         [message.applicationProperties, 'eventType']
       ) || message.subject || null
 
-    // Payload Summary MUST be business data (not event type). Pick 2–4 preferred keys.
+    const correlationId =
+      getAny(
+        [message, 'correlationId'],
+        [message.applicationProperties, 'correlationId'],
+        [message.applicationProperties, 'correlation_id'],
+        [data, 'correlationId'],
+        [data, 'correlation_id'],
+        [top, 'correlationId'],
+        [top, 'correlation_id']
+      ) || null
+
+    const payloadTimestamp =
+      getAny(
+        [data, 'timestamp'],
+        [data, 'time'],
+        [top, 'timestamp'],
+        [top, 'time']
+      ) || null
+
+    // FIX(payload-summary): prefer eventType/correlationId/timestamp and business keys; exclude messageId.
+    // Summary stays compact; full JSON remains available in tooltip.
     const preferredKeys = [
+      'entityId',
       'orderId',
       'paymentId',
+      'accountId',
       'sku',
       'amount',
       'currency',
@@ -340,8 +413,11 @@ export default function MessageTable({
     const excludedKeys = new Set([
       'message_id',
       'messageid',
+      'messageId',
       'id',
-      'correlationid',
+      'sequenceNumber',
+      'sequencenumber',
+      'sequence_number',
       'generationid',
       'event_type',
       'eventtype',
@@ -364,8 +440,16 @@ export default function MessageTable({
     }
 
     const pairs: Array<[string, string]> = []
+
+    // Add high-signal fields first.
+    if (eventType) pairs.push(['eventType', String(eventType)])
+    if (correlationId) pairs.push(['correlationId', String(correlationId)])
+    if (payloadTimestamp) pairs.push(['timestamp', String(payloadTimestamp)])
+
     // Prefer nested data payload if present, then top-level.
-    pairs.push(...collectFromObject(data))
+    for (const [k, v] of collectFromObject(data)) {
+      if (!pairs.some(([ek]) => ek === k)) pairs.push([k, v])
+    }
     for (const [k, v] of collectFromObject(top)) {
       if (!pairs.some(([ek]) => ek === k)) pairs.push([k, v])
     }
@@ -392,7 +476,7 @@ export default function MessageTable({
       ? selectedPairs.map(([k, v]) => `${k}=${v}`).join(' · ')
       : (() => {
           const raw = toSingleLine(rawBody)
-          // Ensure summary never equals event type.
+          // Ensure summary never collapses to a single raw token.
           if (eventType && raw === String(eventType)) return `body=${raw}`
           return raw
         })()
@@ -432,6 +516,57 @@ export default function MessageTable({
       : tooltipRaw
 
     return { summary, tooltip }
+  }
+
+  // FIX(refactor): keep JSX mostly declarative; move cell composition into a helper.
+  const renderPayloadPreviewCell = (message: MessageEnvelope) => {
+    const { summary, tooltip } = buildPayloadSummaryAndTooltip(message, 120)
+    const dlqPrefix = isDLQ ? '⚠️ ' : ''
+    return (
+      <td
+        className="body-col"
+        onMouseEnter={(e) => {
+          if (!tooltip) {
+            setPayloadTooltip(null)
+            return
+          }
+          scheduleShowTooltip(tooltip, e.currentTarget as HTMLElement)
+        }}
+        onMouseLeave={() => {
+          scheduleHideTooltip()
+        }}
+      >
+        <span className={`message-body-preview ${isDLQ ? 'dlq' : ''}`}>
+          {dlqPrefix}{summary}
+        </span>
+      </td>
+    )
+  }
+
+  const renderPayloadTooltipPortal = () => {
+    if (!payloadTooltip) return null
+
+    const { anchorRect, content } = payloadTooltip
+    const margin = 12
+    const maxWidth = 420
+    const maxHeight = 520
+
+    const leftCandidate = anchorRect.right + margin
+    const left = Math.min(Math.max(leftCandidate, 12), window.innerWidth - maxWidth - 12)
+    const top = Math.min(Math.max(anchorRect.top, 12), window.innerHeight - maxHeight - 12)
+
+    return createPortal(
+      <div
+        className="payload-tooltip"
+        role="tooltip"
+        aria-label="Payload tooltip"
+        style={{ position: 'fixed', left, top, maxWidth, maxHeight, zIndex: 2000 }}
+      >
+        <div className="payload-tooltip-title">Payload (pretty JSON)</div>
+        <pre className="payload-tooltip-pre">{content}</pre>
+      </div>,
+      document.body
+    )
   }
 
   /**
@@ -536,6 +671,9 @@ export default function MessageTable({
       <QueueHealthHeader 
         messages={baseFilteredMessages}
         dlqCount={dlqCount}
+        activeCount={activeCount}
+        oldestDlqEnqueuedTimeUtc={oldestDlqEnqueuedTimeUtc}
+        sampledDlqMessages={sampledDlqMessages}
         entityName={entityName}
         isDLQ={isDLQ}
       />
@@ -794,18 +932,7 @@ export default function MessageTable({
                       }}
                     />
                   </td>
-                  {(() => {
-                    const { summary, tooltip } = buildPayloadSummaryAndTooltip(message, 120)
-                    const dlqPrefix = isDLQ ? '⚠️ ' : ''
-                    const title = tooltip ? `${dlqPrefix}${tooltip}` : ''
-                    return (
-                      <td className="body-col" title={title}>
-                        <span className={`message-body-preview ${isDLQ ? 'dlq' : ''}`}>
-                          {dlqPrefix}{summary}
-                        </span>
-                      </td>
-                    )
-                  })()}
+                  {renderPayloadPreviewCell(message)}
                   <td className="id-col" title={message.messageId}>
                     <span className="message-id">{message.messageId}</span>
                   </td>
@@ -845,6 +972,8 @@ export default function MessageTable({
         />
       </>
       )}
+
+      {renderPayloadTooltipPortal()}
     </div>
   )
 }

@@ -74,6 +74,11 @@
   font-weight: 700;
 }
 
+.metric.warning .metric-value {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
 .metric-label {
   font-size: 11px;
   color: #6b7280;

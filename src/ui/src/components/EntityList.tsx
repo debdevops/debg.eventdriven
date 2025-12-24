@@ -8,16 +8,10 @@ import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Entity, Topic, Subscription } from '../types'
 import { apiClient } from '../api/client'
 import { subscriptionEntityId } from '../utils/entityIdentity'
+import { computeDlqHealth } from '../utils/dlqHealth'
+import type { SelectedTarget } from '../entities/selection'
 import EntityCard from './EntityCard'
 import './EntityList.css'
-
-interface SelectedTarget {
-  type: 'queue' | 'subscription' | 'dlq'
-  entity: Entity | null
-  subscription?: Subscription
-  topicName?: string
-  isDLQ?: boolean
-}
 
 interface EntityListProps {
   queues: Entity[]
@@ -52,6 +46,8 @@ export default function EntityList({
 }: EntityListProps) {
   const { status, scheduleInterval, clearTimer } = useSessionV2()
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set())
+  const [expandedQueues, setExpandedQueues] = useState<Set<string>>(new Set())
+  const [expandedSubscriptions, setExpandedSubscriptions] = useState<Set<string>>(new Set())
   const [topicSubscriptions, setTopicSubscriptions] = useState<Record<string, Subscription[]>>({})
   const [loadingTopics, setLoadingTopics] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
@@ -129,23 +125,62 @@ export default function EntityList({
     }
   }
 
-  const loadSubscriptions = async (topicName: string) => {
+  const toggleQueue = (queueName: string) => {
+    setExpandedQueues((prev) => {
+      const next = new Set(prev)
+      if (next.has(queueName)) next.delete(queueName)
+      else next.add(queueName)
+      return next
+    })
+  }
+
+  const toggleSubscription = (subscriptionEntityId: string) => {
+    setExpandedSubscriptions((prev) => {
+      const next = new Set(prev)
+      if (next.has(subscriptionEntityId)) next.delete(subscriptionEntityId)
+      else next.add(subscriptionEntityId)
+      return next
+    })
+  }
+
+  const loadSubscriptions = async (topicName: string): Promise<Subscription[]> => {
     setLoadingTopics(prev => new Set(prev).add(topicName))
     setError(null)
     
     try {
       const response = await apiClient.listSubscriptions(sessionId, topicName)
+      const mapped: Subscription[] = response.subscriptions.map((raw: any) => {
+        // Be robust to backend serializer casing (camelCase vs PascalCase).
+        const name = String(raw?.name ?? raw?.Name ?? '')
+        const messageCount = Number(raw?.messageCount ?? raw?.MessageCount ?? 0)
+        const deadLetterMessageCount = Number(
+          raw?.deadLetterMessageCount ?? raw?.DeadLetterMessageCount ?? 0
+        )
+        const maxDeliveryCount = raw?.maxDeliveryCount ?? raw?.MaxDeliveryCount
+        const lockDuration = raw?.lockDuration ?? raw?.LockDuration
+        const status = String(raw?.status ?? raw?.Status ?? '')
+
+        return {
+          ...raw,
+          name,
+          topicName,
+          messageCount,
+          deadLetterMessageCount,
+          maxDeliveryCount,
+          lockDuration,
+          status,
+          entityId: subscriptionEntityId(topicName, name)
+        } as Subscription
+      })
       setTopicSubscriptions(prev => ({
         ...prev,
-        [topicName]: response.subscriptions.map((s: any) => ({
-          ...s,
-          topicName,
-          entityId: subscriptionEntityId(topicName, s.name)
-        }))
+        [topicName]: mapped
       }))
+      return mapped
     } catch (err) {
       console.error(`Failed to load subscriptions for ${topicName}:`, err)
       setError(`Failed to load subscriptions for ${topicName}`)
+      return []
     } finally {
       setLoadingTopics(prev => {
         const newSet = new Set(prev)
@@ -240,10 +275,12 @@ export default function EntityList({
                 <QueueItemExpandable
                   key={queue.entityId}
                   entity={queue}
-                  isSelected={selectedTarget?.type === 'queue' && selectedTarget.entity?.name === queue.name && !selectedTarget.isDLQ}
-                  isDLQSelected={selectedTarget?.type === 'dlq' && selectedTarget.entity?.name === queue.name}
-                  onSelectQueue={onSelectEntity}
-                  onSelectDLQ={onSelectDLQ}
+                  isExpanded={expandedQueues.has(queue.name)}
+                  onToggle={() => toggleQueue(queue.name)}
+                  isMessagesSelected={selectedTarget?.entityType === 'queue' && selectedTarget.viewType === 'messages' && selectedTarget.entity?.name === queue.name}
+                  isDLQSelected={selectedTarget?.entityType === 'queue' && selectedTarget.viewType === 'dlq' && selectedTarget.entity?.name === queue.name}
+                  onSelectMessages={() => onSelectEntity(queue)}
+                  onSelectDLQ={() => onSelectDLQ(queue)}
                 />
               ))}
             </div>
@@ -273,13 +310,16 @@ export default function EntityList({
                   subscriptions={topicSubscriptions[topic.name] || []}
                   isLoading={loadingTopics.has(topic.name)}
                   sessionId={sessionId}
-                  selectedSubscriptionName={selectedTarget?.type === 'subscription' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
-                  selectedDlqSubscriptionName={selectedTarget?.type === 'dlq' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
+                  selectedSubscriptionName={selectedTarget?.entityType === 'subscription' && selectedTarget.viewType === 'messages' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
+                  selectedDlqSubscriptionName={selectedTarget?.entityType === 'subscription' && selectedTarget.viewType === 'dlq' && selectedTarget.topicName === topic.name ? selectedTarget.subscription?.name : undefined}
                   onToggle={() => toggleTopic(topic.name)}
                   onCreateTempSubscription={(e) => handleCreateTempSubscription(topic.name, e)}
                   onDeleteSubscription={(subName, e) => handleDeleteSubscription(topic.name, subName, e)}
                   onSelectSubscription={onSelectSubscription}
                   onSelectSubscriptionDLQ={onSelectSubscriptionDLQ}
+                  onRefreshSubscriptions={loadSubscriptions}
+                  expandedSubscriptions={expandedSubscriptions}
+                  onToggleSubscription={toggleSubscription}
                 />
               ))}
             </div>
@@ -298,23 +338,31 @@ export default function EntityList({
 
 interface QueueItemExpandableProps {
   entity: Entity
-  isSelected: boolean
+  isExpanded: boolean
+  onToggle: () => void
+  isMessagesSelected: boolean
   isDLQSelected: boolean
-  onSelectQueue: (entity: Entity) => void
-  onSelectDLQ: (entity: Entity) => void
+  onSelectMessages: () => void
+  onSelectDLQ: () => void
 }
 
-function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue, onSelectDLQ }: QueueItemExpandableProps) {
-  const [isExpanded, setIsExpanded] = useState(true)
+function QueueItemExpandable({ entity, isExpanded, onToggle, isMessagesSelected, isDLQSelected, onSelectMessages, onSelectDLQ }: QueueItemExpandableProps) {
   // DLQ is a first-class entity node; do not derive its existence from count.
   const hasDLQ = true
   const { status } = useSessionV2()
 
-  const handleExpandClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (status !== 'connected') return
-    setIsExpanded(!isExpanded)
-  }
+  const dlqHealth = computeDlqHealth({
+    dlqCount: entity.deadLetterMessageCount,
+    activeCount: entity.messageCount,
+    oldestDlqEnqueuedTimeUtc: null,
+    sampledDlqMessages: null
+  })
+
+  const dlqRowClass = dlqHealth.severity === 'CRITICAL'
+    ? 'critical'
+    : dlqHealth.severity === 'WARNING'
+      ? 'warning'
+      : ''
 
   return (
     <div className="queue-card-container">
@@ -322,36 +370,48 @@ function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue,
         type="queue"
         name={entity.name}
         messageCount={entity.messageCount}
-        isSelected={isSelected}
+        isSelected={isMessagesSelected || isDLQSelected}
         isDLQ={false}
-        hasWarning={hasDLQ}
+        hasWarning={dlqHealth.severity !== 'HEALTHY'}
         onSelect={() => {
           if (status !== 'connected') return
-          onSelectQueue(entity)
+          // FIX(selection): parent rows expand/collapse only; never trigger data fetch.
+          onToggle()
         }}
+        isExpanded={isExpanded}
       />
-      
-      {hasDLQ && (
-        <div className="dlq-expansion">
+
+      {isExpanded && (
+        <div className="subscription-children">
           <button
-            className="dlq-expand-btn"
-            onClick={handleExpandClick}
-            aria-expanded={isExpanded}
+            className={`entity-child-row ${isMessagesSelected ? 'selected' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (status !== 'connected') return
+              // FIX(selection): only child rows trigger fetch/selection.
+              onSelectMessages()
+            }}
+            title="View queue messages"
           >
-            {isExpanded ? '▼' : '▶'} DLQ ({entity.deadLetterMessageCount})
+            <span className="entity-child-icon">📨</span>
+            <span className="entity-child-label">Messages</span>
           </button>
-          {isExpanded && (
-            <EntityCard
-              type="queue"
-              name={`${entity.name} (DLQ)`}
-              messageCount={entity.deadLetterMessageCount}
-              isSelected={isDLQSelected}
-              isDLQ={true}
-              onSelect={() => {
+
+          {hasDLQ && (
+            <button
+              className={`entity-child-row entity-dlq-row ${dlqRowClass} ${isDLQSelected ? 'selected' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation()
                 if (status !== 'connected') return
-                onSelectDLQ(entity)
+                // FIX(selection): only child rows trigger fetch/selection.
+                onSelectDLQ()
               }}
-            />
+              title={dlqHealth.whyTooltip}
+            >
+              <span className="entity-child-icon">💀</span>
+              <span className="entity-child-label">DLQ</span>
+              <span className="entity-child-badge">{entity.deadLetterMessageCount}</span>
+            </button>
           )}
         </div>
       )}
@@ -372,6 +432,9 @@ interface TopicItemProps {
   onDeleteSubscription: (subscriptionName: string, e: React.MouseEvent) => void
   onSelectSubscription: (subscription: Subscription, topicName: string) => void
   onSelectSubscriptionDLQ: (subscription: Subscription, topicName: string) => void
+  onRefreshSubscriptions: (topicName: string) => Promise<Subscription[]>
+  expandedSubscriptions: Set<string>
+  onToggleSubscription: (subscriptionEntityId: string) => void
 }
 
 function TopicItem({
@@ -384,12 +447,15 @@ function TopicItem({
   onToggle,
   onCreateTempSubscription,
   onDeleteSubscription,
-  onSelectSubscription
-: onSelectSubscription,
-  onSelectSubscriptionDLQ
+  onSelectSubscription,
+  onSelectSubscriptionDLQ,
+  onRefreshSubscriptions,
+  expandedSubscriptions,
+  onToggleSubscription
 }: TopicItemProps) {
   const { status } = useSessionV2()
   const totalMessages = subscriptions.reduce((sum, sub) => sum + sub.messageCount, 0)
+  const showExpandChevron = isLoading || subscriptions.length > 0
   
   return (
     <div className="topic-card-container">
@@ -404,7 +470,8 @@ function TopicItem({
           if (status !== 'connected') return
           onToggle()
         }}
-        isExpanded={isExpanded}
+        // FIX(sidebar): hide chevron when there are no children.
+        isExpanded={showExpandChevron ? isExpanded : undefined}
       />
       
       {isExpanded && (
@@ -436,18 +503,23 @@ function TopicItem({
             <div className="subscriptions-list">
               {subscriptions.map(sub => (
                 <SubscriptionItem
-                  key={sub.name}
+                  key={sub.entityId}
                   subscription={sub}
                   topicName={topic.name}
                   isSelected={sub.name === selectedSubscriptionName || sub.name === selectedDlqSubscriptionName}
                   isDlqSelected={sub.name === selectedDlqSubscriptionName}
+                  isExpanded={expandedSubscriptions.has(sub.entityId)}
+                  onToggleExpand={() => onToggleSubscription(sub.entityId)}
                   onSelect={(subscription, topicName) => {
                     if (status !== 'connected') return
                     onSelectSubscription(subscription, topicName)
                   }}
-                  onSelectDLQ={(subscription, topicName) => {
+                  onSelectDLQ={async (subscription, topicName) => {
                     if (status !== 'connected') return
-                    onSelectSubscriptionDLQ(subscription, topicName)
+                    // FIX(DLQ semantics): Refresh subscription runtime props so DLQ count is portal-aligned.
+                    const fresh = await onRefreshSubscriptions(topicName)
+                    const refreshed = fresh.find((s) => s.name === subscription.name) || subscription
+                    onSelectSubscriptionDLQ(refreshed, topicName)
                   }}
                   onDelete={(subscriptionName, e) => {
                     if (status !== 'connected') return
@@ -468,15 +540,30 @@ interface SubscriptionItemProps {
   topicName: string
   isSelected: boolean
   isDlqSelected: boolean
+  isExpanded: boolean
+  onToggleExpand: () => void
   onSelect: (subscription: Subscription, topicName: string) => void
   onSelectDLQ: (subscription: Subscription, topicName: string) => void
   onDelete: (subscriptionName: string, e: React.MouseEvent) => void
 }
 
-function SubscriptionItem({ subscription, topicName, isSelected, isDlqSelected, onSelect, onSelectDLQ, onDelete }: SubscriptionItemProps) {
+function SubscriptionItem({ subscription, topicName, isSelected, isDlqSelected, isExpanded, onToggleExpand, onSelect, onSelectDLQ, onDelete }: SubscriptionItemProps) {
   const isTemp = subscription.name.startsWith('temp-sub-')
   // DLQ is a first-class entity node; do not derive its existence from count.
   const hasDLQ = true
+
+  const dlqHealth = computeDlqHealth({
+    dlqCount: subscription.deadLetterMessageCount,
+    activeCount: subscription.messageCount,
+    oldestDlqEnqueuedTimeUtc: null,
+    sampledDlqMessages: null
+  })
+
+  const dlqRowClass = dlqHealth.severity === 'CRITICAL'
+    ? 'critical'
+    : dlqHealth.severity === 'WARNING'
+      ? 'warning'
+      : ''
   
   return (
     <div className="subscription-item-group">
@@ -485,10 +572,14 @@ function SubscriptionItem({ subscription, topicName, isSelected, isDlqSelected, 
           type="subscription"
           name={subscription.name}
           messageCount={subscription.messageCount}
-          isSelected={isSelected && !isDlqSelected}
+          isSelected={isSelected}
           isDLQ={false}
           isTemp={isTemp}
-          onSelect={() => onSelect(subscription, topicName)}
+          onSelect={() => {
+            // FIX(selection): parent rows expand/collapse only; never trigger data fetch.
+            onToggleExpand()
+          }}
+          isExpanded={isExpanded}
         />
 
         <button
@@ -503,18 +594,34 @@ function SubscriptionItem({ subscription, topicName, isSelected, isDlqSelected, 
         </button>
       </div>
 
-      {hasDLQ && (
-        <button
-          className={`subscription-dlq-child ${isDlqSelected ? 'selected' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onSelectDLQ(subscription, topicName)
-          }}
-          title={`View subscription DLQ (${subscription.deadLetterMessageCount})`}
-        >
-          <span className="subscription-dlq-icon">💀</span>
-          <span className="subscription-dlq-label">DLQ ({subscription.deadLetterMessageCount})</span>
-        </button>
+      {hasDLQ && isExpanded && (
+        <div className="subscription-children">
+          <button
+            className={`entity-child-row ${isSelected && !isDlqSelected ? 'selected' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              // FIX(selection): only child rows trigger fetch/selection.
+              onSelect(subscription, topicName)
+            }}
+            title="View subscription messages"
+          >
+            <span className="entity-child-icon">📨</span>
+            <span className="entity-child-label">Messages</span>
+          </button>
+          <button
+            className={`entity-child-row entity-dlq-row ${dlqRowClass} ${isDlqSelected ? 'selected' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              // FIX(selection): only child rows trigger fetch/selection.
+              onSelectDLQ(subscription, topicName)
+            }}
+            title={dlqHealth.whyTooltip}
+          >
+            <span className="entity-child-icon">💀</span>
+            <span className="entity-child-label">DLQ</span>
+            <span className="entity-child-badge">{subscription.deadLetterMessageCount}</span>
+          </button>
+        </div>
       )}
     </div>
   )

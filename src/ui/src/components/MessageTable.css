@@ -217,6 +217,42 @@
   color: var(--text-muted);
 }
 
+/* Fixed payload tooltip (pretty JSON) */
+.payload-tooltip {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: min(560px, calc(100vw - 24px));
+  max-height: 50vh;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  overflow: hidden;
+}
+
+.payload-tooltip-title {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-2);
+}
+
+.payload-tooltip-pre {
+  margin: 0;
+  padding: 10px;
+  max-height: calc(50vh - 38px);
+  overflow: auto;
+  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  white-space: pre;
+}
+
 /* Message ID: compact monospace with ellipsis */
 .id-col {
   width: 24ch;

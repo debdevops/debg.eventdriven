@@ -214,7 +214,7 @@ app.MapPost("/api/namespace/connect", async (ConnectRequest request, HttpContext
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "Failed to create session - connection string validation failed");
-        return Results.Problem("Failed to create session. Ensure the connection string is valid.");
+        return ProblemResults.FromException(ex, "Connect");
     }
 })
 .WithName("Connect")
@@ -361,7 +361,7 @@ app.MapGet("/api/namespace/{sessionId}/topic/{topicName}/subscriptions", async (
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "Failed to list subscriptions for topic {TopicName}", topicName);
-        return Results.Problem("Failed to list subscriptions");
+        return ProblemResults.FromException(ex, "List subscriptions", $"{topicName}/subscriptions");
     }
 })
 .WithName("ListSubscriptions")
@@ -685,7 +685,8 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
     string entityName,
     string? subscriptionName,
     PeekRequest request,
-    bool isDLQ = false) =>
+    bool isDLQ = false,
+    CancellationToken cancellationToken = default) =>
 {
     if (!sessions.TryGetValue(sessionId, out var session))
     {
@@ -773,7 +774,23 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
                 : client.CreateReceiver(entityName, receiverOptions))
             : client.CreateReceiver(entityName, subscriptionName, receiverOptions);
 
-        var messages = await receiver.PeekMessagesAsync(maxMessages);
+        // One-shot retry for transient Service Bus failures.
+        IReadOnlyList<ServiceBusReceivedMessage> messages;
+        try
+        {
+            messages = await receiver.PeekMessagesAsync(maxMessages, cancellationToken: cancellationToken);
+        }
+        catch (Exception ex) when (ServiceBusErrorClassifier.IsTransient(ex) && !cancellationToken.IsCancellationRequested)
+        {
+            app.Logger.LogWarning(ex,
+                "Transient peek failure (will retry once): entityType={EntityType} entityPath={EntityPath} isDLQ={IsDLQ}",
+                entityType,
+                effectiveEntityPath,
+                isDLQ);
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+            messages = await receiver.PeekMessagesAsync(maxMessages, cancellationToken: cancellationToken);
+        }
 
         var result = messages.Select(msg => new
         {
@@ -820,7 +837,14 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
             entityName,
             string.IsNullOrEmpty(subscriptionName) ? null : subscriptionName,
             isDLQ);
-        return Results.Problem("Peek failed");
+        var entityPathForProblem = isDLQ
+            ? (string.IsNullOrEmpty(subscriptionName)
+                ? $"{entityName}/$DeadLetterQueue"
+                : $"{entityName}/subscriptions/{subscriptionName}/$DeadLetterQueue")
+            : (string.IsNullOrEmpty(subscriptionName)
+                ? entityName
+                : $"{entityName}/subscriptions/{subscriptionName}");
+        return ProblemResults.FromException(ex, "Peek", entityPathForProblem);
     }
 })
 .WithName("PeekMessages")

@@ -238,6 +238,49 @@
   opacity: 0.8;
 }
 
+/* Snapshot (Frozen View) banner */
+.snapshot-banner {
+  margin: 8px 16px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+}
+
+.snapshot-banner-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.snapshot-banner-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.snapshot-banner-footnote {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* DLQ Frozen badge */
+.dlq-frozen-badge {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
 .auto-text {
   text-transform: uppercase;
   font-size: 9px;
@@ -295,6 +338,37 @@
   font-weight: 600;
   opacity: 0.95;
   line-height: 1.2;
+.dlq-severity-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.dlq-severity-badge.warning {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.dlq-severity-badge.critical {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.dlq-why {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: help;
+}
 }
 
 .dlq-banner-sep {
@@ -599,6 +673,8 @@
   font-weight: 500;
   min-width: 250px;
   animation: slideIn 0.3s ease-out;
+  /* FIX(toast): do not block UI interaction. */
+  pointer-events: none;
 }
 
 @keyframes slideIn {

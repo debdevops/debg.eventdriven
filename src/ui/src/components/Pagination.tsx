@@ -51,12 +51,18 @@ function renderInspectorMode(props: PaginationProps) {
   const { filteredCount = 0, loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, onLoadNextBatch, pageSizeOptions = [50, 100, 200], disabled = false } = props
   
   const showPeekSizeSelector = loadedCount >= peekSize
-  const hasMoreMessages = totalQueueCount !== undefined && filteredCount < totalQueueCount
+  // FIX(pagination): never show "Load next batch" when there is no data, total is 0,
+  // or when the last peek returned fewer than peekSize (typical "end" signal for DLQ).
+  // Also compute remaining based on loadedCount (not filteredCount) so filters don't create false "more".
+  const total = typeof totalQueueCount === 'number' ? totalQueueCount : undefined
+  const hasMoreMessages = total !== undefined && total > 0 && loadedCount > 0 && loadedCount < total
+  const showLoadNextBatch = Boolean(onLoadNextBatch) && hasMoreMessages && loadedCount >= peekSize
+  const remaining = total !== undefined ? Math.max(0, total - loadedCount) : null
 
   return (
     <div className="pagination-container inspector-footer">
       {/* Visual divider when more messages are available */}
-      {hasMoreMessages && (
+      {showLoadNextBatch && (
         <div className="messages-end-divider">
           <div className="divider-line"></div>
           <span className="divider-text">End of loaded messages</span>
@@ -83,7 +89,7 @@ function renderInspectorMode(props: PaginationProps) {
 
       <div className="inspector-controls">
         {/* Load next batch button - enhanced visibility */}
-        {hasMoreMessages && onLoadNextBatch && (
+        {showLoadNextBatch && (
           <div className="load-next-section">
             <button
               onClick={onLoadNextBatch}
@@ -91,7 +97,7 @@ function renderInspectorMode(props: PaginationProps) {
               title="Load next batch of messages using last sequence number"
               disabled={disabled}
             >
-              ⬇ Load next batch ({totalQueueCount && filteredCount ? totalQueueCount - filteredCount : '?'} more)
+              ⬇ Load next batch ({remaining === null ? '?' : remaining} more)
             </button>
             <div className="peek-hint">
               Scrolling won't load more - use button above

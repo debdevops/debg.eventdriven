@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../config/api'
 import { useSessionV2 } from '../contexts/SessionContextV2'
+import { computeDlqHealth } from '../utils/dlqHealth'
 import './MetricsPanel.css'
 
 interface MetricsPanelProps {
@@ -134,6 +135,20 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
 
   if (!metrics) return null
 
+  const dlqHealth = computeDlqHealth({
+    dlqCount: metrics.deadLetterMessageCount,
+    activeCount: metrics.activeMessageCount,
+    oldestDlqEnqueuedTimeUtc: null,
+    sampledDlqMessages: null
+  })
+
+  const dlqClass =
+    dlqHealth.severity === 'HEALTHY'
+      ? 'success'
+      : dlqHealth.severity === 'WARNING'
+        ? 'warning'
+        : 'critical'
+
   return (
     <div className="metrics-panel-compact">
       <div className="metrics-inline">
@@ -147,7 +162,7 @@ export function MetricsPanel({ sessionId, entityName, subscriptionName }: Metric
         {/* Dead Letter */}
         <div className="metric-inline-item">
           <span className="metric-inline-label">DLQ:</span>
-          <span className={`metric-inline-value ${metrics.deadLetterMessageCount > 0 ? 'critical' : 'success'}`}>
+          <span className={`metric-inline-value ${dlqClass}`} title={dlqHealth.whyTooltip}>
             💀 {metrics.deadLetterMessageCount}
           </span>
         </div>

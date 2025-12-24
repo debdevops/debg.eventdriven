@@ -71,10 +71,43 @@ class MessageStore {
     entityName: string,
     subscriptionName?: string
   ): string | null {
-    // IMPORTANT: entityId MUST be a non-empty string.
+    // FIX(indexeddb): entityId MUST be deterministic and a valid IndexedDB key (non-empty string).
     // If subscriptionName is required (subscription), treat missing as invalid.
     if (entityType === 'subscription' && !subscriptionName) return null
     return entityIdFromMessageStoreParams(entityType, entityName, subscriptionName)
+  }
+
+  async clearView(
+    sessionId: string,
+    entityType: 'queue' | 'topic' | 'subscription' | 'dlq',
+    entityName: string,
+    subscriptionName?: string
+  ): Promise<void> {
+    // FIX(state): best-effort clear of the per-entity+view persistence bucket.
+    // This prevents stale persisted data from carrying across navigation switches.
+    void sessionId
+    const db = await this.withDb()
+    if (!db) return
+
+    const entityId = this.buildEntityId(entityType, entityName, subscriptionName)
+    if (!isValidEntityId(entityId)) return
+
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite')
+        const store = transaction.objectStore(STORE_NAME)
+        const request = store.delete(entityId)
+
+        request.onsuccess = () => resolve()
+        request.onerror = () => {
+          this.warn('IndexedDB delete failed (non-fatal)', request.error)
+          resolve()
+        }
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
+        resolve()
+      }
+    })
   }
 
   async saveMessage(

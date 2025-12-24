@@ -251,7 +251,52 @@ class ApiClient {
 
         // Handle other errors
         if (!response.ok) {
+          const contentType = response.headers.get('content-type') || ''
           const errorText = await response.text().catch(() => 'Unknown error')
+
+          const tryParseJson = (text: string): any | null => {
+            if (!text) return null
+            try {
+              return JSON.parse(text)
+            } catch {
+              return null
+            }
+          }
+
+          const parsed =
+            contentType.includes('application/json') || contentType.includes('application/problem+json')
+              ? tryParseJson(errorText)
+              : tryParseJson(errorText)
+
+          const extractMessage = (payload: any, fallback: string): { message: string; errorCode?: string } => {
+            if (!payload || typeof payload !== 'object') {
+              return { message: fallback }
+            }
+
+            // Backend "{ error: "..." }" shape
+            if (typeof payload.error === 'string' && payload.error.trim()) {
+              return { message: payload.error.trim() }
+            }
+
+            // RFC7807 ProblemDetails shape
+            const title = typeof payload.title === 'string' ? payload.title.trim() : ''
+            const detail = typeof payload.detail === 'string' ? payload.detail.trim() : ''
+            const message = detail || title
+
+            const errorCode =
+              payload.extensions && typeof payload.extensions.errorCode === 'string'
+                ? payload.extensions.errorCode
+                : undefined
+
+            if (message) {
+              return { message, errorCode }
+            }
+
+            return { message: fallback, errorCode }
+          }
+
+          const fallbackMessage = errorText || `Request failed (${response.status})`
+          const { message: friendlyMessage, errorCode } = extractMessage(parsed, fallbackMessage)
           
           // Retry on 5xx if configured
           if (response.status >= 500 && config.retryOn5xx && attempt < config.maxRetries) {
@@ -259,11 +304,11 @@ class ApiClient {
             console.warn(`[ApiClient] ⚠️  ${response.status} on ${endpoint}, retrying in ${backoff}ms...`)
             await new Promise(resolve => setTimeout(resolve, backoff))
             attempt++
-            lastError = new ApiError(errorText, response.status, endpoint)
+            lastError = new ApiError(friendlyMessage, response.status, endpoint, new Date(), errorCode, parsed ?? errorText)
             continue
           }
 
-          throw new ApiError(errorText, response.status, endpoint)
+          throw new ApiError(friendlyMessage, response.status, endpoint, new Date(), errorCode, parsed ?? errorText)
         }
 
         // Success! Call success handler to mark session healthy
@@ -394,10 +439,27 @@ class ApiClient {
       url += (subscriptionName ? '&' : '?') + 'isDLQ=true';
     }
     
-    return this.request<PeekResponse>(url, {
-      method: 'POST',
-      body: JSON.stringify({ maxMessages })
-    })
+    const doRequest = () =>
+      this.request<PeekResponse>(
+        url,
+        {
+          method: 'POST',
+          body: JSON.stringify({ maxMessages })
+        },
+        // Avoid generic multi-retry behavior for peek; we do a single targeted retry below.
+        { maxRetries: 0 }
+      )
+
+    try {
+      return await doRequest()
+    } catch (err) {
+      // Targeted, one-shot retry for transient peek failures.
+      if (err instanceof ApiError && (err.status === 503 || err.errorCode === 'NOT_READY')) {
+        await new Promise(resolve => setTimeout(resolve, 300))
+        return doRequest()
+      }
+      throw err
+    }
   }
 
   /**

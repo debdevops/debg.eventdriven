@@ -2,7 +2,7 @@
  * Toast Management Hook
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import type { ToastType } from '../components/Toast'
 
 interface Toast {
@@ -13,19 +13,27 @@ interface Toast {
 }
 
 function durationFor(type: ToastType): number | null {
-  // UX policy:
-  // - success: auto-dismiss (3–4s)
-  // - info: auto-dismiss (4–5s)
-  // - warning/error: sticky
-  if (type === 'success') return 3500
-  if (type === 'info') return 4500
-  return null
+  // FIX(toast): auto-dismiss all toasts after 4–5 seconds.
+  // This keeps notifications lightweight and non-blocking.
+  void type
+  return 4500
 }
 
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const lastShownRef = useRef<Record<string, number>>({})
 
   const addToast = useCallback((message: string, type: ToastType = 'info') => {
+    // Avoid rapid repeat success/info/warning noise.
+    const key = `${type}:${message}`
+    const now = Date.now()
+    const last = lastShownRef.current[key] || 0
+    const throttleWindowMs = type === 'success' ? 2500 : 1500
+    if (now - last < throttleWindowMs) {
+      return
+    }
+    lastShownRef.current[key] = now
+
     // Deduplicate: Check if a toast with the same message and type already exists
     setToasts(prev => {
       const duplicate = prev.find(t => t.message === message && t.type === type)
