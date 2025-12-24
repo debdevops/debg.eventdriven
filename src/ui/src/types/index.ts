@@ -12,6 +12,7 @@ export interface Namespace {
 }
 
 export interface Entity {
+  entityId: string
   name: string
   type: 'Queue' | 'Topic' | 'Subscription'
   messageCount: number
@@ -21,6 +22,7 @@ export interface Entity {
 }
 
 export interface Topic {
+  entityId: string
   name: string
   type: 'Topic'
   messageCount: number
@@ -29,6 +31,7 @@ export interface Topic {
 }
 
 export interface Subscription {
+  entityId: string
   name: string
   topicName: string
   messageCount: number

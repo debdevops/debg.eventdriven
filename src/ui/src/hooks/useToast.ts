@@ -9,6 +9,17 @@ interface Toast {
   id: string
   message: string
   type: ToastType
+  duration?: number | null
+}
+
+function durationFor(type: ToastType): number | null {
+  // UX policy:
+  // - success: auto-dismiss (3–4s)
+  // - info: auto-dismiss (4–5s)
+  // - warning/error: sticky
+  if (type === 'success') return 3500
+  if (type === 'info') return 4500
+  return null
 }
 
 export function useToast() {
@@ -23,7 +34,7 @@ export function useToast() {
         return prev
       }
       const id = `toast-${Date.now()}-${Math.random()}`
-      return [...prev, { id, message, type }]
+      return [...prev, { id, message, type, duration: durationFor(type) }]
     })
   }, [])
 

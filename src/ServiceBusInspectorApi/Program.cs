@@ -504,6 +504,59 @@ app.MapPost("/api/namespace/{sessionId}/send", async (
 .WithName("SendMessage")
 .WithOpenApi();
 
+// ============================================================================
+// DLQ semantics enforcement
+// ============================================================================
+// IMPORTANT: Azure Service Bus has NO DLQ at Topic level.
+// DLQ exists only for:
+//  1) Queues        -> {queue}/$DeadLetterQueue
+//  2) Subscriptions -> {topic}/subscriptions/{subscription}/$DeadLetterQueue
+// These guards prevent confusing/invalid "topic DLQ" navigation from ever working.
+static async Task<(bool ExistsAsQueue, bool ExistsAsTopic)> ProbeEntityAsync(
+    ServiceBusAdministrationClient adminClient,
+    string entityName,
+    CancellationToken cancellationToken = default)
+{
+    try
+    {
+        await adminClient.GetQueueRuntimePropertiesAsync(entityName, cancellationToken);
+        return (true, false);
+    }
+    catch (Azure.RequestFailedException)
+    {
+        // Not a queue (or not accessible).
+    }
+
+    try
+    {
+        await adminClient.GetTopicRuntimePropertiesAsync(entityName, cancellationToken);
+        return (false, true);
+    }
+    catch (Azure.RequestFailedException)
+    {
+        // Not a topic (or not accessible).
+    }
+
+    return (false, false);
+}
+
+static async Task<bool> SubscriptionExistsAsync(
+    ServiceBusAdministrationClient adminClient,
+    string topicName,
+    string subscriptionName,
+    CancellationToken cancellationToken = default)
+{
+    try
+    {
+        await adminClient.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, cancellationToken);
+        return true;
+    }
+    catch (Azure.RequestFailedException)
+    {
+        return false;
+    }
+}
+
 // SSE Stream endpoint for real-time message streaming
 // SSE Stream endpoint for real-time message streaming
 // Supports both queues and subscriptions
@@ -537,10 +590,57 @@ app.MapGet("/api/stream/{sessionId}/{entityName}", async (
 
     try
     {
+        // DLQ SEMANTICS GUARD:
+        // - If subscriptionName is absent, this route is queue-scoped.
+        // - If subscriptionName is present, this route is topic-subscription scoped.
+        // - Topic-level DLQ must never exist.
+        var adminClient = new ServiceBusAdministrationClient(session.ConnectionString);
+        if (string.IsNullOrWhiteSpace(subscriptionName))
+        {
+            var probe = await ProbeEntityAsync(adminClient, entityName, context.RequestAborted);
+            if (!probe.ExistsAsQueue && probe.ExistsAsTopic)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "Topic-level DLQ does not exist. Select a subscription (or subscription DLQ) instead of a topic."
+                });
+            }
+            if (!probe.ExistsAsQueue && !probe.ExistsAsTopic)
+            {
+                return Results.BadRequest(new { error = $"Entity '{entityName}' was not found as a queue or topic" });
+            }
+        }
+        else
+        {
+            var exists = await SubscriptionExistsAsync(adminClient, entityName, subscriptionName, context.RequestAborted);
+            if (!exists)
+            {
+                return Results.BadRequest(new
+                {
+                    error = $"Subscription '{entityName}/subscriptions/{subscriptionName}' was not found"
+                });
+            }
+        }
+
         // Build entity path - for subscriptions: topicName/subscriptions/subscriptionName
         var entityPath = string.IsNullOrEmpty(subscriptionName) 
             ? entityName 
             : $"{entityName}/subscriptions/{subscriptionName}";
+
+        var entityType = string.IsNullOrEmpty(subscriptionName) ? "queue" : "topic-subscription";
+        var effectivePath = isDLQ
+            ? (string.IsNullOrEmpty(subscriptionName)
+                ? $"{entityName}/$DeadLetterQueue"
+                : $"{entityName}/subscriptions/{subscriptionName}/$DeadLetterQueue")
+            : entityPath;
+        app.Logger.LogInformation(
+            "Stream request: entityType={EntityType} entityPath={EntityPath} isDLQ={IsDLQ} mode={Mode} prefetch={Prefetch} batch={Batch}",
+            entityType,
+            effectivePath,
+            isDLQ,
+            mode,
+            prefetch,
+            batch);
 
         // Set SSE headers
         context.Response.Headers["Content-Type"] = "text/event-stream";
@@ -601,6 +701,37 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
     try
     {
         await using var client = new ServiceBusClient(session.ConnectionString);
+        var adminClient = new ServiceBusAdministrationClient(session.ConnectionString);
+
+        // DLQ SEMANTICS GUARD (no topic-level DLQ):
+        // If subscriptionName is absent, treat entityName as queue.
+        // If entityName is actually a topic, return a clear 400.
+        if (string.IsNullOrWhiteSpace(subscriptionName))
+        {
+            var probe = await ProbeEntityAsync(adminClient, entityName);
+            if (!probe.ExistsAsQueue && probe.ExistsAsTopic)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "Topic-level DLQ does not exist. To view DLQ for a topic, select a subscription DLQ."
+                });
+            }
+            if (!probe.ExistsAsQueue && !probe.ExistsAsTopic)
+            {
+                return Results.BadRequest(new { error = $"Entity '{entityName}' was not found as a queue or topic" });
+            }
+        }
+        else
+        {
+            var exists = await SubscriptionExistsAsync(adminClient, entityName, subscriptionName);
+            if (!exists)
+            {
+                return Results.BadRequest(new
+                {
+                    error = $"Subscription '{entityName}/subscriptions/{subscriptionName}' was not found"
+                });
+            }
+        }
         
         var receiverOptions = new ServiceBusReceiverOptions();
         if (isDLQ)
@@ -610,9 +741,19 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
 
         var entityType = string.IsNullOrEmpty(subscriptionName) ? "queue" : "topic-subscription";
         var maxMessages = request.MaxMessages ?? 10;
+
+        // Log the effective entity path (including DLQ suffix) for portal parity.
+        var effectiveEntityPath = isDLQ
+            ? (string.IsNullOrEmpty(subscriptionName)
+                ? $"{entityName}/$DeadLetterQueue"
+                : $"{entityName}/subscriptions/{subscriptionName}/$DeadLetterQueue")
+            : (string.IsNullOrEmpty(subscriptionName)
+                ? entityName
+                : $"{entityName}/subscriptions/{subscriptionName}");
         app.Logger.LogInformation(
-            "Peek request: entityType={EntityType} topicOrQueue={EntityName} subscriptionName={SubscriptionName} isDLQ={IsDLQ} maxMessages={MaxMessages}",
+            "Peek request: entityType={EntityType} entityPath={EntityPath} topicOrQueue={EntityName} subscriptionName={SubscriptionName} isDLQ={IsDLQ} maxMessages={MaxMessages}",
             entityType,
+            effectiveEntityPath,
             entityName,
             string.IsNullOrEmpty(subscriptionName) ? null : subscriptionName,
             isDLQ,
@@ -624,8 +765,12 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
             string.IsNullOrEmpty(subscriptionName) ? "CreateReceiver(queue)" : "CreateReceiver(topic, subscription)",
             isDLQ ? "DeadLetter" : "None");
         
+        // For queue DLQ, use the explicit {queue}/$DeadLetterQueue path.
+        // For subscription DLQ, use receiverOptions.SubQueue=DeadLetter on (topic, subscription).
         await using var receiver = string.IsNullOrEmpty(subscriptionName)
-            ? client.CreateReceiver(entityName, receiverOptions)
+            ? (isDLQ
+                ? client.CreateReceiver($"{entityName}/$DeadLetterQueue")
+                : client.CreateReceiver(entityName, receiverOptions))
             : client.CreateReceiver(entityName, subscriptionName, receiverOptions);
 
         var messages = await receiver.PeekMessagesAsync(maxMessages);

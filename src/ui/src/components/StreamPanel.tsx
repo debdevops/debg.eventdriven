@@ -126,14 +126,19 @@ export default function StreamPanel({
       const response = await apiClient.peekMessages(sessionId, entityName, peekSize, subscriptionName, isDLQ)
       
       // Persist (optional) but render from the live response to keep DLQ vs active isolated.
-      await messageStore.saveMessages(
-        response.messages,
-        sessionId,
-        entityName,
-        entityType,
-        'peeked',
-        subscriptionName
-      )
+      try {
+        await messageStore.saveMessages(
+          response.messages,
+          sessionId,
+          entityName,
+          entityType,
+          'peeked',
+          subscriptionName
+        )
+      } catch (err) {
+        // Regression protection: local persistence must never break the UI.
+        console.warn('[StreamPanel] IndexedDB persist failed (non-fatal)', err)
+      }
 
       // Never merge active+DLQ. Replace only the current view's message set.
       setMessages(response.messages)
@@ -392,14 +397,18 @@ export default function StreamPanel({
 
       if (response.messages && response.messages.length > 0) {
         // Save messages to local store
-        await messageStore.saveMessages(
-          response.messages,
-          sessionId,
-          entityName,
-          entityType,
-          'peeked',
-          subscriptionName
-        )
+        try {
+          await messageStore.saveMessages(
+            response.messages,
+            sessionId,
+            entityName,
+            entityType,
+            'peeked',
+            subscriptionName
+          )
+        } catch (err) {
+          console.warn('[StreamPanel] IndexedDB persist failed (non-fatal)', err)
+        }
 
         // Append new messages to current list
         setMessages(prev => {

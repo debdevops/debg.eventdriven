@@ -4,7 +4,7 @@
  * HARDENING REQUIREMENTS
  * - Single authoritative session controller.
  * - Exact state machine (no other states allowed):
- *   connected | idle-warning | expired | reconnecting | failed
+ *   idle | connected | idle-warning | expired | reconnecting | failed
  * - Only this controller creates/manages timers.
  * - Reconnect is atomic and deterministic.
  */
@@ -13,7 +13,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { apiClient } from '../api/client'
 import { AuthError } from '../api/errors'
 
-export type SessionState = 'connected' | 'idle-warning' | 'expired' | 'reconnecting' | 'failed'
+export type SessionState = 'idle' | 'connected' | 'idle-warning' | 'expired' | 'reconnecting' | 'failed'
 export type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'expired' | 'auth_required'
 
 export interface SessionError {
@@ -36,6 +36,7 @@ type TimerId = ReturnType<typeof setTimeout>
 interface SessionContextType {
   sessionState: SessionState
   status: SessionStatus
+  isConnected: boolean
   canInteract: boolean
   error: SessionError | null
 
@@ -52,6 +53,7 @@ interface SessionContextType {
   reconnect: (applyUpdates: (data: SessionReconnectData) => Promise<void>) => Promise<void>
   markExpired: (reason?: { message?: string; reason?: string; statusCode?: number }) => void
   markConnected: () => void
+  markIdle: () => void
   markFailed: (message: string) => void
   resetIdle: () => void
 
@@ -81,11 +83,17 @@ const IDLE_WARNING_MS = 2 * 60 * 1000 // 2 minutes
 const IDLE_EXPIRE_MS = IDLE_WARNING_MS + 30 * 1000 // 2m30s
 
 export function SessionProviderV2({ children, toast }: SessionProviderProps) {
-  const [sessionState, setSessionState] = useState<SessionState>('connected')
+  const [sessionState, setSessionState] = useState<SessionState>('idle')
   const [error, setError] = useState<SessionError | null>(null)
-  const [connectedAt, setConnectedAt] = useState<Date | null>(new Date())
+  const [connectedAt, setConnectedAt] = useState<Date | null>(null)
   const [idleSeconds, setIdleSeconds] = useState(0)
   const [uiNowMs, setUiNowMs] = useState(() => Date.now())
+
+  // Keep a ref so timer callbacks can reliably check current state.
+  const sessionStateRef = useRef<SessionState>('idle')
+  useEffect(() => {
+    sessionStateRef.current = sessionState
+  }, [sessionState])
 
   const reconnectInProgressRef = useRef(false)
 
@@ -101,6 +109,13 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   // Controller-owned timers
   const timersRef = useRef<Map<string, TimerId>>(new Map())
   const lastActivityMsRef = useRef<number>(Date.now())
+
+  const isConnected = sessionState !== 'idle'
+
+  const isIdleTimerEligible = useCallback(() => {
+    const s = sessionStateRef.current
+    return s === 'connected' || s === 'idle-warning'
+  }, [])
 
   const clearTimer = useCallback((name: string) => {
     const existing = timersRef.current.get(name)
@@ -164,6 +179,9 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   }, [])
 
   const resetIdle = useCallback(() => {
+    // Critical: Do NOT create any timers unless a namespace has connected successfully.
+    if (!isIdleTimerEligible()) return
+
     lastActivityMsRef.current = Date.now()
     setIdleSeconds(0)
 
@@ -187,17 +205,44 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
     })
   }, [scheduleTimeout])
 
-  const markFailed = useCallback((message: string) => {
-    setError({ message, reason: 'failed', isAuthError: false, timestamp: new Date() })
-    setSessionState('failed')
-  }, [])
+  const markFailed = useCallback(
+    (message: string) => {
+      setError({ message, reason: 'failed', isAuthError: false, timestamp: new Date() })
+      setSessionState('failed')
+      clearAllTimers()
+    },
+    [clearAllTimers]
+  )
 
   const markConnected = useCallback(() => {
     setError(null)
     setConnectedAt(new Date())
+    sessionStateRef.current = 'connected'
     setSessionState('connected')
     resetIdle()
   }, [resetIdle])
+
+  const markIdle = useCallback(() => {
+    // Explicit disconnect/idle: remove ALL timers and prevent any idle->expired transitions.
+    clearAllTimers()
+    setError(null)
+    setConnectedAt(null)
+    setIdleSeconds(0)
+    lastActivityMsRef.current = Date.now()
+
+    // Clear in-memory credentials so reconnect UI isn't available from idle.
+    connectionStringRef.current = null
+    sessionIdRef.current = null
+    expiresAtUtcRef.current = null
+    lastSelectionRef.current = null
+
+    apiClient.abortAllRequests('session-idle')
+    apiClient.resetClient()
+    resetAbortController()
+
+    sessionStateRef.current = 'idle'
+    setSessionState('idle')
+  }, [clearAllTimers, resetAbortController])
 
   const markExpired = useCallback(
     (reason?: { message?: string; reason?: string; statusCode?: number }) => {
@@ -229,7 +274,8 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   useEffect(() => {
     const onActivity = () => {
       lastActivityMsRef.current = Date.now()
-      if (sessionState === 'idle-warning') setSessionState('connected')
+      if (!isIdleTimerEligible()) return
+      if (sessionStateRef.current === 'idle-warning') setSessionState('connected')
       resetIdle()
     }
 
@@ -244,30 +290,37 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
       events.forEach(e => document.removeEventListener(e, onActivity))
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [resetIdle, sessionState])
+  }, [resetIdle, isIdleTimerEligible])
 
   // Controller-owned UI tick.
   useEffect(() => {
+    if (!isIdleTimerEligible()) {
+      clearTimer('ui-tick')
+      return
+    }
+
     scheduleInterval('ui-tick', 1000, () => {
       setUiNowMs(Date.now())
       setIdleSeconds(Math.floor((Date.now() - lastActivityMsRef.current) / 1000))
     })
     return () => clearTimer('ui-tick')
-  }, [scheduleInterval, clearTimer])
+  }, [scheduleInterval, clearTimer, isIdleTimerEligible, sessionState])
 
   // Schedule expiry based on expiresAtUtc.
   useEffect(() => {
     clearTimer('session-expires-at')
     const expiresAtUtc = expiresAtUtcRef.current
+    if (!isIdleTimerEligible()) return
     if (!expiresAtUtc) return
     const delta = new Date(expiresAtUtc).getTime() - Date.now()
     if (Number.isFinite(delta) && delta > 0) {
       scheduleTimeout('session-expires-at', delta, () => markExpired({ reason: 'expired' }))
     }
-  }, [clearTimer, scheduleTimeout, markExpired])
+  }, [clearTimer, scheduleTimeout, markExpired, isIdleTimerEligible])
 
   const status = useMemo<SessionStatus>(() => {
     const map: Record<SessionState, SessionStatus> = {
+      idle: 'disconnected',
       connected: 'connected',
       'idle-warning': 'connected',
       expired: 'auth_required',
@@ -338,10 +391,8 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
     [clearAllTimers, markExpired, markFailed, resetAbortController, resetIdle, setSessionMeta, toast]
   )
 
-  useEffect(() => {
-    resetIdle()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // IMPORTANT: No idle/expiry timers are created on initial load.
+  // Timers start only after markConnected() is called.
 
   useEffect(() => {
     if (import.meta.env.VITE_TEST_MODE !== 'true') return
@@ -354,6 +405,7 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
     () => ({
       sessionState,
       status,
+      isConnected,
       canInteract,
       error,
       connectedAt,
@@ -365,6 +417,7 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
       reconnect,
       markExpired,
       markConnected,
+      markIdle,
       markFailed,
       resetIdle,
       scheduleTimeout,
@@ -376,6 +429,7 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
     [
       sessionState,
       status,
+      isConnected,
       canInteract,
       error,
       connectedAt,
@@ -387,6 +441,7 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
       reconnect,
       markExpired,
       markConnected,
+      markIdle,
       markFailed,
       resetIdle,
       scheduleTimeout,

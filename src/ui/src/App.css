@@ -152,6 +152,7 @@ code {
   flex-direction: column;
   flex: 1;
   transition: all 0.2s ease;
+  min-height: 0;
 }
 
 /* Disabled state during auth errors */
@@ -170,6 +171,7 @@ code {
   overflow: hidden;
   background-color: var(--light);
   position: relative;
+  min-height: 0;
 }
 
 /* Empty State */

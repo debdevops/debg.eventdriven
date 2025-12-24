@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Entity, Topic, Subscription } from '../types'
 import { apiClient } from '../api/client'
+import { subscriptionEntityId } from '../utils/entityIdentity'
 import EntityCard from './EntityCard'
 import './EntityList.css'
 
@@ -136,7 +137,11 @@ export default function EntityList({
       const response = await apiClient.listSubscriptions(sessionId, topicName)
       setTopicSubscriptions(prev => ({
         ...prev,
-        [topicName]: response.subscriptions
+        [topicName]: response.subscriptions.map((s: any) => ({
+          ...s,
+          topicName,
+          entityId: subscriptionEntityId(topicName, s.name)
+        }))
       }))
     } catch (err) {
       console.error(`Failed to load subscriptions for ${topicName}:`, err)
@@ -233,7 +238,7 @@ export default function EntityList({
             <div className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
               {queues.map(queue => (
                 <QueueItemExpandable
-                  key={queue.name}
+                  key={queue.entityId}
                   entity={queue}
                   isSelected={selectedTarget?.type === 'queue' && selectedTarget.entity?.name === queue.name && !selectedTarget.isDLQ}
                   isDLQSelected={selectedTarget?.type === 'dlq' && selectedTarget.entity?.name === queue.name}
@@ -262,7 +267,7 @@ export default function EntityList({
             <div className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
               {topics.map(topic => (
                 <TopicItem
-                  key={topic.name}
+                  key={topic.entityId}
                   topic={topic}
                   isExpanded={expandedTopics.has(topic.name)}
                   subscriptions={topicSubscriptions[topic.name] || []}
@@ -300,8 +305,9 @@ interface QueueItemExpandableProps {
 }
 
 function QueueItemExpandable({ entity, isSelected, isDLQSelected, onSelectQueue, onSelectDLQ }: QueueItemExpandableProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const hasDLQ = entity.deadLetterMessageCount > 0
+  const [isExpanded, setIsExpanded] = useState(true)
+  // DLQ is a first-class entity node; do not derive its existence from count.
+  const hasDLQ = true
   const { status } = useSessionV2()
 
   const handleExpandClick = (e: React.MouseEvent) => {
@@ -469,7 +475,8 @@ interface SubscriptionItemProps {
 
 function SubscriptionItem({ subscription, topicName, isSelected, isDlqSelected, onSelect, onSelectDLQ, onDelete }: SubscriptionItemProps) {
   const isTemp = subscription.name.startsWith('temp-sub-')
-  const hasDLQ = subscription.deadLetterMessageCount > 0
+  // DLQ is a first-class entity node; do not derive its existence from count.
+  const hasDLQ = true
   
   return (
     <div className="subscription-item-group">

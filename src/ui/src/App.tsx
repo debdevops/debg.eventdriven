@@ -52,8 +52,16 @@ function AppContent({
     error,
     idleSeconds,
     reconnect,
+    markIdle,
     setLastSelection
   } = useSession()
+
+  type AppMode = 'idle' | 'connected' | 'expired'
+  const appMode: AppMode = namespaces.length === 0
+    ? 'idle'
+    : sessionState === 'expired'
+      ? 'expired'
+      : 'connected'
   
   // Local state for dismissing warnings only
   const [dismissedIdleWarning, setDismissedIdleWarning] = useState(false)
@@ -115,6 +123,13 @@ function AppContent({
   useEffect(() => {
     setLastSelection(currentEntityName)
   }, [currentEntityName, setLastSelection])
+
+  // If no namespace is connected, the app is in IDLE. No session timers should exist.
+  useEffect(() => {
+    if (namespaces.length === 0) {
+      markIdle()
+    }
+  }, [namespaces.length, markIdle])
 
   // Handle switch namespace - close current and open connect modal
   const handleSwitchNamespace = useCallback(() => {
@@ -212,7 +227,7 @@ function AppContent({
   }, [currentEntityName])
 
   return (
-    <div className={`app ${sessionState === 'expired' ? 'has-auth-error' : ''}`}>
+    <div className={`app ${appMode === 'expired' ? 'has-auth-error' : ''}`}>
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
       
       {/* Auth error banner - shown ONLY when sessionState === 'expired' */}
@@ -232,7 +247,7 @@ function AppContent({
       )}
       
       {/* Main application - disabled during expired state */}
-      <div className={`app-main ${canInteract ? '' : 'disabled'}`}>
+      <div className={`app-main ${appMode === 'expired' ? 'disabled' : ''}`}>
       {/* Idle warning banner - shown when user is idle but not expired yet */}
       {sessionState === 'idle-warning' && !dismissedIdleWarning && status === 'connected' && (
         <IdleWarningBanner
@@ -243,7 +258,7 @@ function AppContent({
 
       {/* Session Expired Modal - shown when idle timeout expires */}
       <SessionExpiredModal
-        isOpen={sessionState === 'expired' && error?.reason === 'idle'}
+        isOpen={appMode === 'expired' && error?.reason === 'idle'}
         onReconnect={handleReconnectFromModal}
         onSwitchNamespace={handleSwitchNamespace}
       />

@@ -43,11 +43,27 @@ public class ServiceBusStreamer
         CancellationToken cancellationToken)
     {
         // SECURITY: Never log connection string
+        // DLQ SEMANTICS (IMPORTANT):
+        // Azure Service Bus has NO DLQ at Topic level.
+        // DLQ exists only for queues and topic-subscriptions.
         var dlqSuffix = isDLQ ? " (DLQ)" : "";
-        var entityPath = string.IsNullOrEmpty(subscriptionName)
+        var baseEntityPath = string.IsNullOrEmpty(subscriptionName)
             ? entityName
             : $"{entityName}/subscriptions/{subscriptionName}";
-        _logger.LogInformation("Starting {Mode} stream for entity {EntityPath}{DLQSuffix}", mode, entityPath, dlqSuffix);
+        var effectiveEntityPath = isDLQ
+            ? (string.IsNullOrEmpty(subscriptionName)
+                ? $"{entityName}/$DeadLetterQueue"
+                : $"{entityName}/subscriptions/{subscriptionName}/$DeadLetterQueue")
+            : baseEntityPath;
+        var entityType = string.IsNullOrEmpty(subscriptionName) ? "queue" : "topic-subscription";
+        _logger.LogInformation(
+            "Starting {Mode} stream: entityType={EntityType} entityPath={EntityPath} isDLQ={IsDLQ} prefetch={Prefetch} batch={Batch}",
+            mode,
+            entityType,
+            effectiveEntityPath,
+            isDLQ,
+            prefetch,
+            batch);
 
         await using var client = new ServiceBusClient(connectionString);
         
@@ -62,6 +78,8 @@ public class ServiceBusStreamer
             receiverOptions.SubQueue = SubQueue.DeadLetter;
         }
         
+        // Guard against invalid topic-level usage:
+        // If subscriptionName is absent, this must be a queue receiver.
         await using var receiver = string.IsNullOrEmpty(subscriptionName)
             ? client.CreateReceiver(entityName, receiverOptions)
             : client.CreateReceiver(entityName, subscriptionName, receiverOptions);

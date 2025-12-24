@@ -8,6 +8,7 @@ import StreamPanel from './StreamPanel'
 import { apiClient } from '../api/client'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Namespace, Entity, Subscription, AuditEntry } from '../types'
+import { queueEntityId, topicEntityId } from '../utils/entityIdentity'
 import './NamespaceView.css'
 
 interface NamespaceViewProps {
@@ -155,8 +156,13 @@ export function NamespaceView({
     try {
       const entities = await apiClient.listEntities(namespace.sessionId)
       onUpdateNamespace({
-        queues: entities.queues,
-        topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
+        queues: entities.queues.map(q => ({ ...q, entityId: queueEntityId(q.name) })),
+        topics: entities.topics.map(t => ({
+          ...t,
+          entityId: topicEntityId(t.name),
+          type: 'Topic' as const,
+          subscriptions: []
+        }))
       })
       
       if (triggeredByUser) {

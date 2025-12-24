@@ -4,28 +4,44 @@
  */
 
 import type { MessageEnvelope } from '../types'
+import { entityIdFromMessageStoreParams, isValidEntityId } from '../utils/entityIdentity'
 
 const DB_NAME = 'ServiceBusInspector'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const STORE_NAME = 'messages'
 
 interface StoredMessage extends MessageEnvelope {
   storedAt: string
+  action: 'peeked' | 'received'
+}
+
+interface EntityMessagesRecord {
+  entityId: string
   sessionId: string
   entityName: string
   entityType: 'queue' | 'topic' | 'subscription' | 'dlq'
   subscriptionName?: string
-  action: 'peeked' | 'received'
+  messages: StoredMessage[]
 }
 
 class MessageStore {
   private db: IDBDatabase | null = null
 
+  private warn(msg: string, err?: unknown) {
+    // Regression protection: warn only; never throw.
+    // eslint-disable-next-line no-console
+    console.warn(`[MessageStore] ${msg}`, err)
+  }
+
   async init(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION)
 
-      request.onerror = () => reject(request.error)
+      request.onerror = () => {
+        this.warn('IndexedDB open failed; continuing without persistence', request.error)
+        this.db = null
+        resolve()
+      }
       request.onsuccess = () => {
         this.db = request.result
         resolve()
@@ -34,24 +50,31 @@ class MessageStore {
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result
 
-        // For correctness, recreate the store when upgrading schema.
-        // This avoids collisions between subscriptions and DLQ vs active messages.
-        if (db.objectStoreNames.contains(STORE_NAME)) {
-          db.deleteObjectStore(STORE_NAME)
-        }
+        // Schema change: migrate from per-message composite keys (which can become invalid
+        // when optional fields are undefined) to a single stable entityId key.
+        // On upgrade, delete the old store to clear any corrupted data.
+        if (db.objectStoreNames.contains(STORE_NAME)) db.deleteObjectStore(STORE_NAME)
 
-        const store = db.createObjectStore(STORE_NAME, {
-          keyPath: ['sessionId', 'entityName', 'subscriptionName', 'entityType', 'messageId', 'sequenceNumber']
-        })
-
-        // Indexes for querying
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'entityId' })
         store.createIndex('sessionId', 'sessionId', { unique: false })
-        store.createIndex('entityName', 'entityName', { unique: false })
-        store.createIndex('storedAt', 'storedAt', { unique: false })
-        store.createIndex('messageId', 'messageId', { unique: false })
-        store.createIndex('sessionEntity', ['sessionId', 'entityName'], { unique: false })
       }
     })
+  }
+
+  private async withDb(): Promise<IDBDatabase | null> {
+    if (!this.db) await this.init()
+    return this.db
+  }
+
+  private buildEntityId(
+    entityType: 'queue' | 'topic' | 'subscription' | 'dlq',
+    entityName: string,
+    subscriptionName?: string
+  ): string | null {
+    // IMPORTANT: entityId MUST be a non-empty string.
+    // If subscriptionName is required (subscription), treat missing as invalid.
+    if (entityType === 'subscription' && !subscriptionName) return null
+    return entityIdFromMessageStoreParams(entityType, entityName, subscriptionName)
   }
 
   async saveMessage(
@@ -62,25 +85,61 @@ class MessageStore {
     action: 'peeked' | 'received',
     subscriptionName?: string
   ): Promise<void> {
-    if (!this.db) await this.init()
+    const db = await this.withDb()
+    if (!db) return
+
+    const entityId = this.buildEntityId(entityType, entityName, subscriptionName)
+    if (!isValidEntityId(entityId)) {
+      this.warn('Skipping persist: invalid entityId', { entityType, entityName, subscriptionName })
+      return
+    }
 
     const storedMessage: StoredMessage = {
       ...message,
       storedAt: new Date().toISOString(),
-      sessionId,
-      entityName,
-      entityType,
-      subscriptionName,
       action
     }
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(STORE_NAME)
-      const request = store.put(storedMessage)
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite')
+        const store = transaction.objectStore(STORE_NAME)
+        const getReq = store.get(entityId)
 
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
+        getReq.onsuccess = () => {
+          const existing = getReq.result as EntityMessagesRecord | undefined
+          const record: EntityMessagesRecord = existing && existing.sessionId === sessionId
+            ? existing
+            : {
+                entityId,
+                sessionId,
+                entityName,
+                entityType,
+                subscriptionName,
+                messages: []
+              }
+
+          // Merge + de-dupe by sequenceNumber.
+          const bySeq = new Map<number, StoredMessage>(record.messages.map(m => [m.sequenceNumber, m]))
+          bySeq.set(storedMessage.sequenceNumber, storedMessage)
+          record.messages = Array.from(bySeq.values()).sort((a, b) => b.sequenceNumber - a.sequenceNumber)
+
+          const putReq = store.put(record)
+          putReq.onsuccess = () => resolve()
+          putReq.onerror = () => {
+            this.warn('IndexedDB put failed (non-fatal)', putReq.error)
+            resolve()
+          }
+        }
+
+        getReq.onerror = () => {
+          this.warn('IndexedDB get failed (non-fatal)', getReq.error)
+          resolve()
+        }
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
+        resolve()
+      }
     })
   }
 
@@ -92,40 +151,64 @@ class MessageStore {
     action: 'peeked' | 'received',
     subscriptionName?: string
   ): Promise<void> {
-    if (!this.db) await this.init()
+    const db = await this.withDb()
+    if (!db) return
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(STORE_NAME)
+    if (messages.length === 0) return
 
-      let completed = 0
-      const total = messages.length
+    const entityId = this.buildEntityId(entityType, entityName, subscriptionName)
+    if (!isValidEntityId(entityId)) {
+      this.warn('Skipping persist: invalid entityId', { entityType, entityName, subscriptionName })
+      return
+    }
 
-      if (total === 0) {
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite')
+        const store = transaction.objectStore(STORE_NAME)
+        const getReq = store.get(entityId)
+
+        getReq.onsuccess = () => {
+          const existing = getReq.result as EntityMessagesRecord | undefined
+          const record: EntityMessagesRecord = existing && existing.sessionId === sessionId
+            ? existing
+            : {
+                entityId,
+                sessionId,
+                entityName,
+                entityType,
+                subscriptionName,
+                messages: []
+              }
+
+          const bySeq = new Map<number, StoredMessage>(record.messages.map(m => [m.sequenceNumber, m]))
+          for (const message of messages) {
+            if (!message || typeof message.sequenceNumber !== 'number') continue
+            bySeq.set(message.sequenceNumber, {
+              ...message,
+              storedAt: new Date().toISOString(),
+              action
+            })
+          }
+
+          record.messages = Array.from(bySeq.values()).sort((a, b) => b.sequenceNumber - a.sequenceNumber)
+
+          const putReq = store.put(record)
+          putReq.onsuccess = () => resolve()
+          putReq.onerror = () => {
+            this.warn('IndexedDB put failed (non-fatal)', putReq.error)
+            resolve()
+          }
+        }
+
+        getReq.onerror = () => {
+          this.warn('IndexedDB get failed (non-fatal)', getReq.error)
+          resolve()
+        }
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
         resolve()
-        return
       }
-
-      messages.forEach(message => {
-        const storedMessage: StoredMessage = {
-          ...message,
-          storedAt: new Date().toISOString(),
-          sessionId,
-          entityName,
-          entityType,
-          subscriptionName,
-          action
-        }
-
-        const request = store.put(storedMessage)
-        
-        request.onsuccess = () => {
-          completed++
-          if (completed === total) resolve()
-        }
-        
-        request.onerror = () => reject(request.error)
-      })
     })
   }
 
@@ -135,54 +218,66 @@ class MessageStore {
     entityType?: 'queue' | 'dlq' | 'subscription' | 'topic',
     subscriptionName?: string
   ): Promise<StoredMessage[]> {
-    if (!this.db) await this.init()
+    const db = await this.withDb()
+    if (!db) return []
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readonly')
-      const store = transaction.objectStore(STORE_NAME)
-      const index = store.index('sessionEntity')
-      const request = index.getAll([sessionId, entityName])
+    const mappedType = entityType === 'dlq' ? 'dlq' : entityType
+    if (!mappedType) return []
 
-      request.onsuccess = () => {
-        let messages = request.result as StoredMessage[]
-        
-        // Filter by entityType if specified (important for Queue vs DLQ distinction)
-        if (entityType) {
-          messages = messages.filter(m => m.entityType === entityType)
+    const entityId = this.buildEntityId(mappedType as any, entityName, subscriptionName)
+    if (!isValidEntityId(entityId)) return []
+
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readonly')
+        const store = transaction.objectStore(STORE_NAME)
+        const request = store.get(entityId)
+
+        request.onsuccess = () => {
+          const record = request.result as EntityMessagesRecord | undefined
+          if (!record || record.sessionId !== sessionId) {
+            resolve([])
+            return
+          }
+          resolve(record.messages || [])
         }
 
-        // Further filter by subscription name when provided (important for subscription DLQ).
-        if (subscriptionName) {
-          messages = messages.filter(m => m.subscriptionName === subscriptionName)
+        request.onerror = () => {
+          this.warn('IndexedDB get failed (non-fatal)', request.error)
+          resolve([])
         }
-        
-        // Sort by storedAt descending (newest first)
-        messages.sort((a, b) => 
-          new Date(b.storedAt).getTime() - new Date(a.storedAt).getTime()
-        )
-        resolve(messages)
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
+        resolve([])
       }
-      request.onerror = () => reject(request.error)
     })
   }
 
   async getAllMessages(sessionId: string): Promise<StoredMessage[]> {
-    if (!this.db) await this.init()
+    const db = await this.withDb()
+    if (!db) return []
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readonly')
-      const store = transaction.objectStore(STORE_NAME)
-      const index = store.index('sessionId')
-      const request = index.getAll(sessionId)
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readonly')
+        const store = transaction.objectStore(STORE_NAME)
+        const index = store.index('sessionId')
+        const request = index.getAll(sessionId)
 
-      request.onsuccess = () => {
-        const messages = request.result as StoredMessage[]
-        messages.sort((a, b) => 
-          new Date(b.storedAt).getTime() - new Date(a.storedAt).getTime()
-        )
-        resolve(messages)
+        request.onsuccess = () => {
+          const records = request.result as EntityMessagesRecord[]
+          const messages = records.flatMap(r => r.messages || [])
+          messages.sort((a, b) => new Date(b.storedAt).getTime() - new Date(a.storedAt).getTime())
+          resolve(messages)
+        }
+        request.onerror = () => {
+          this.warn('IndexedDB query failed (non-fatal)', request.error)
+          resolve([])
+        }
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
+        resolve([])
       }
-      request.onerror = () => reject(request.error)
     })
   }
 
@@ -192,60 +287,90 @@ class MessageStore {
     messageId: string,
     sequenceNumber: number
   ): Promise<void> {
-    if (!this.db) await this.init()
+    const db = await this.withDb()
+    if (!db) return
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(STORE_NAME)
-      // Back-compat note: delete by key is only used by older flows; new schema keys include subscriptionName+entityType.
-      // This method is not used by the current UI flows.
-      const request = store.delete([sessionId, entityName, undefined, 'queue', messageId, sequenceNumber] as any)
+    // Best-effort deletion for queue main only (legacy API).
+    const entityId = this.buildEntityId('queue', entityName)
+    if (!isValidEntityId(entityId)) return
 
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite')
+        const store = transaction.objectStore(STORE_NAME)
+        const getReq = store.get(entityId)
+
+        getReq.onsuccess = () => {
+          const record = getReq.result as EntityMessagesRecord | undefined
+          if (!record || record.sessionId !== sessionId) {
+            resolve()
+            return
+          }
+          record.messages = (record.messages || []).filter(m => !(m.messageId === messageId && m.sequenceNumber === sequenceNumber))
+          const putReq = store.put(record)
+          putReq.onsuccess = () => resolve()
+          putReq.onerror = () => {
+            this.warn('IndexedDB put failed (non-fatal)', putReq.error)
+            resolve()
+          }
+        }
+
+        getReq.onerror = () => {
+          this.warn('IndexedDB get failed (non-fatal)', getReq.error)
+          resolve()
+        }
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
+        resolve()
+      }
     })
   }
 
   async clearEntity(sessionId: string, entityName: string): Promise<void> {
-    if (!this.db) await this.init()
+    // Legacy API: sessionId kept for compatibility.
+    void sessionId
+    const db = await this.withDb()
+    if (!db) return
 
-    const messages = await this.getMessages(sessionId, entityName)
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(STORE_NAME)
+    // Best-effort: clear the main queue bucket.
+    const entityId = this.buildEntityId('queue', entityName)
+    if (!isValidEntityId(entityId)) return
 
-      let completed = 0
-      const total = messages.length
-
-      if (total === 0) {
-        resolve()
-        return
-      }
-
-      messages.forEach(msg => {
-        const request = store.delete([sessionId, entityName, msg.messageId, msg.sequenceNumber])
-        
-        request.onsuccess = () => {
-          completed++
-          if (completed === total) resolve()
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite')
+        const store = transaction.objectStore(STORE_NAME)
+        const request = store.delete(entityId)
+        request.onsuccess = () => resolve()
+        request.onerror = () => {
+          this.warn('IndexedDB delete failed (non-fatal)', request.error)
+          resolve()
         }
-        
-        request.onerror = () => reject(request.error)
-      })
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
+        resolve()
+      }
     })
   }
 
   async clearAll(): Promise<void> {
-    if (!this.db) await this.init()
+    const db = await this.withDb()
+    if (!db) return
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(STORE_NAME)
-      const request = store.clear()
-
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite')
+        const store = transaction.objectStore(STORE_NAME)
+        const request = store.clear()
+        request.onsuccess = () => resolve()
+        request.onerror = () => {
+          this.warn('IndexedDB clear failed (non-fatal)', request.error)
+          resolve()
+        }
+      } catch (err) {
+        this.warn('IndexedDB transaction failed (non-fatal)', err)
+        resolve()
+      }
     })
   }
 
@@ -254,25 +379,46 @@ class MessageStore {
     byEntity: Record<string, number>
     byAction: { peeked: number; received: number }
   }> {
-    const messages = await this.getAllMessages(sessionId)
-    
-    const byEntity: Record<string, number> = {}
-    const byAction = { peeked: 0, received: 0 }
-
-    messages.forEach(msg => {
-      const key = msg.subscriptionName 
-        ? `${msg.entityName}/${msg.subscriptionName}`
-        : msg.entityName
-      
-      byEntity[key] = (byEntity[key] || 0) + 1
-      byAction[msg.action]++
-    })
-
-    return {
-      total: messages.length,
-      byEntity,
-      byAction
+    const db = await this.withDb()
+    if (!db) {
+      return { total: 0, byEntity: {}, byAction: { peeked: 0, received: 0 } }
     }
+
+    return new Promise((resolve) => {
+      try {
+        const transaction = db.transaction([STORE_NAME], 'readonly')
+        const store = transaction.objectStore(STORE_NAME)
+        const index = store.index('sessionId')
+        const request = index.getAll(sessionId)
+
+        request.onsuccess = () => {
+          const records = request.result as EntityMessagesRecord[]
+          const byEntity: Record<string, number> = {}
+          const byAction = { peeked: 0, received: 0 }
+
+          let total = 0
+          for (const record of records) {
+            const msgs = record.messages || []
+            byEntity[record.entityId] = msgs.length
+            total += msgs.length
+            for (const m of msgs) {
+              if (m.action === 'peeked') byAction.peeked++
+              if (m.action === 'received') byAction.received++
+            }
+          }
+
+          resolve({ total, byEntity, byAction })
+        }
+
+        request.onerror = () => {
+          this.warn('IndexedDB stats query failed (non-fatal)', request.error)
+          resolve({ total: 0, byEntity: {}, byAction: { peeked: 0, received: 0 } })
+        }
+      } catch (err) {
+        this.warn('IndexedDB stats transaction failed (non-fatal)', err)
+        resolve({ total: 0, byEntity: {}, byAction: { peeked: 0, received: 0 } })
+      }
+    })
   }
 }
 

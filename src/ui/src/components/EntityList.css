@@ -1,7 +1,9 @@
 .entity-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 4px;
+  min-height: 0;
 }
 
 /* Compact mode for 200px sidebar */

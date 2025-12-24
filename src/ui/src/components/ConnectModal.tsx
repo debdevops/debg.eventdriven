@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { apiClient } from '../api/client'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Namespace } from '../types'
+import { queueEntityId, topicEntityId } from '../utils/entityIdentity'
 import './ConnectModal.css'
 
 interface ConnectModalProps {
@@ -43,8 +44,13 @@ export function ConnectModal({ onConnect, onClose }: ConnectModalProps) {
       const namespace: Namespace = {
         ...response,
         friendlyName: friendlyName.trim() || undefined,
-        queues: entities.queues,
-        topics: entities.topics.map(t => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
+        queues: entities.queues.map(q => ({ ...q, entityId: queueEntityId(q.name) })),
+        topics: entities.topics.map(t => ({
+          ...t,
+          entityId: topicEntityId(t.name),
+          type: 'Topic' as const,
+          subscriptions: []
+        }))
       }
 
       onConnect(namespace)
