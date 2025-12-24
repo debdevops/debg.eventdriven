@@ -684,6 +684,7 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
     string sessionId,
     string entityName,
     string? subscriptionName,
+    long? fromSequenceNumber,
     PeekRequest request,
     bool isDLQ = false,
     CancellationToken cancellationToken = default) =>
@@ -752,13 +753,14 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
                 ? entityName
                 : $"{entityName}/subscriptions/{subscriptionName}");
         app.Logger.LogInformation(
-            "Peek request: entityType={EntityType} entityPath={EntityPath} topicOrQueue={EntityName} subscriptionName={SubscriptionName} isDLQ={IsDLQ} maxMessages={MaxMessages}",
+            "Peek request: entityType={EntityType} entityPath={EntityPath} topicOrQueue={EntityName} subscriptionName={SubscriptionName} isDLQ={IsDLQ} maxMessages={MaxMessages} fromSequenceNumber={FromSequenceNumber}",
             entityType,
             effectiveEntityPath,
             entityName,
             string.IsNullOrEmpty(subscriptionName) ? null : subscriptionName,
             isDLQ,
-            maxMessages);
+            maxMessages,
+            fromSequenceNumber);
 
         app.Logger.LogInformation(
             "Creating receiver: entityType={EntityType} createMethod={CreateMethod} subQueue={SubQueue}",
@@ -774,11 +776,18 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
                 : client.CreateReceiver(entityName, receiverOptions))
             : client.CreateReceiver(entityName, subscriptionName, receiverOptions);
 
+        // Peek semantics:
+        // - Peek is non-destructive: messages remain in the queue/subscription.
+        // - `fromSequenceNumber` is an offset into the sequence-number stream.
+        //   Clients MUST treat it as monotonic per selection; moving backwards re-reads old messages.
+        // - Counts (messageCount / deadLetterMessageCount) can change concurrently and are approximate.
         // One-shot retry for transient Service Bus failures.
         IReadOnlyList<ServiceBusReceivedMessage> messages;
         try
         {
-            messages = await receiver.PeekMessagesAsync(maxMessages, cancellationToken: cancellationToken);
+            messages = fromSequenceNumber.HasValue
+                ? await receiver.PeekMessagesAsync(maxMessages, fromSequenceNumber.Value, cancellationToken)
+                : await receiver.PeekMessagesAsync(maxMessages, cancellationToken: cancellationToken);
         }
         catch (Exception ex) when (ServiceBusErrorClassifier.IsTransient(ex) && !cancellationToken.IsCancellationRequested)
         {
@@ -789,7 +798,9 @@ app.MapPost("/api/queue/{sessionId}/{entityName}/peek", async (
                 isDLQ);
 
             await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
-            messages = await receiver.PeekMessagesAsync(maxMessages, cancellationToken: cancellationToken);
+            messages = fromSequenceNumber.HasValue
+                ? await receiver.PeekMessagesAsync(maxMessages, fromSequenceNumber.Value, cancellationToken)
+                : await receiver.PeekMessagesAsync(maxMessages, cancellationToken: cancellationToken);
         }
 
         var result = messages.Select(msg => new

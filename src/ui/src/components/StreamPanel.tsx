@@ -156,6 +156,14 @@ export default function StreamPanel({
   // Sample DLQ details (oldest age + reasons) when viewing active messages.
   // This keeps severity portal-aligned without changing backend contracts.
   useEffect(() => {
+    // FIX(snapshot): Snapshot must never trigger background fetches or mutate derived state.
+    // Invariant: Snapshot is a strict point-in-time render lock.
+    // That means *no* network fetch is allowed to complete and call setState while frozen,
+    // even for "secondary" data like DLQ sampling (otherwise the Snapshot UI can drift).
+    if (snapshotEnabledRef.current || snapshotEnabled) {
+      return
+    }
+
     if (status !== 'connected') {
       setSampledDlqMessages(null)
       setOldestDlqEnqueuedTimeUtc(null)
@@ -168,19 +176,47 @@ export default function StreamPanel({
       return
     }
 
+    const controller = new AbortController()
+
+    // Tie this request to the selection-level abort controller.
+    // Invariant: selection change cancels all in-flight requests so old entity/view
+    // results can never land in the new selection.
+    const selectionSignal = selectionAbortRef.current.signal
+    if (selectionSignal.aborted) {
+      try {
+        controller.abort((selectionSignal as any).reason || 'selection-abort')
+      } catch {
+        // ignore
+      }
+    } else {
+      selectionSignal.addEventListener(
+        'abort',
+        () => {
+          try {
+            controller.abort((selectionSignal as any).reason || 'selection-abort')
+          } catch {
+            // ignore
+          }
+        },
+        { once: true }
+      )
+    }
+
     let cancelled = false
     ;(async () => {
       try {
-        // Peek a small sample from DLQ. Peek returns oldest-first, so [0] is the oldest.
+        // Peek a small sample from DLQ.
+        // Note: peek is non-destructive; it returns messages without consuming them.
+        // For DLQ sampling, portal parity matters more than completeness.
         const resp = await apiClient.peekMessages(
           sessionId,
           entityName,
           10,
           subscriptionName,
           true,
-          selectionAbortRef.current.signal
+          controller.signal
         )
-        if (cancelled) return
+        if (cancelled || controller.signal.aborted || snapshotEnabledRef.current) return
         setSampledDlqMessages(resp.messages)
         setOldestDlqEnqueuedTimeUtc(resp.messages.length > 0 ? resp.messages[0].enqueuedTimeUtc : null)
       } catch (e) {
@@ -194,14 +230,31 @@ export default function StreamPanel({
 
     return () => {
       cancelled = true
+      try {
+        controller.abort('cleanup')
+      } catch {
+        // ignore
+      }
     }
-  }, [status, isDLQ, dlqCountTotal, sessionId, entityName, subscriptionName])
+  }, [status, isDLQ, dlqCountTotal, sessionId, entityName, subscriptionName, snapshotEnabled])
 
   const enterSnapshot = useCallback((reason: 'user' | 'dlq') => {
     if (frozenMessagesRef.current == null) {
       // Freeze current view's messages; do NOT clear live messages.
       frozenMessagesRef.current = [...messages]
     }
+
+    // FIX(snapshot): cancel any in-flight work tied to this selection.
+    // Snapshot must be a point-in-time lock: no pending fetch should complete.
+    // Invariant: once Snapshot is entered, no async completion is allowed to mutate
+    // any view state (messages, sampled DLQ metadata, loading flags, etc.).
+    try {
+      selectionAbortRef.current.abort('snapshot-enabled')
+    } catch {
+      // ignore
+    }
+    selectionAbortRef.current = new AbortController()
+
     setSnapshotEnabled(true)
     snapshotEnabledRef.current = true
     setSnapshotReason(reason)
@@ -210,7 +263,7 @@ export default function StreamPanel({
     setLoading(false)
     setIsRefreshing(false)
     setStreaming(false)
-  }, [messages, snapshotCapturedAtUtc])
+  }, [messages, snapshotCapturedAtUtc, selectionAbortRef])
 
   const exitSnapshot = useCallback(() => {
     frozenMessagesRef.current = null
@@ -563,8 +616,10 @@ export default function StreamPanel({
     try {
       setLoading(true)
       
-      // Get last message sequence number (messages are sorted newest first, so last = oldest loaded)
-      // Find the message with the highest sequence number to use as fromSequenceNumber
+      // Continue peeking from the highest sequence number we've already loaded.
+      // Invariant: `fromSequenceNumber` must be monotonic per selection (entity + view).
+      // If it ever goes backwards or repeats, peek will re-return the same messages,
+      // causing duplicates or a perceived "stuck" paging experience.
       const lastSeqNum = Math.max(...messages.map(m => m.sequenceNumber))
       
       if (!lastSeqNum) {
@@ -575,16 +630,22 @@ export default function StreamPanel({
       const entityType = isDLQ ? 'dlq' : selectedTarget.entityType
       
       // Peek from next sequence number (lastSeqNum + 1)
+      // Note: backend implements this using Azure Service Bus PeekMessagesAsync(count, fromSequenceNumber).
       const response = await apiClient.peekMessages(
         sessionId,
         entityName,
         peekSize,
         subscriptionName,
         isDLQ,
-        signal
+        signal,
+        lastSeqNum + 1
       )
 
       if (selectionEpochRef.current !== selectionEpochAtStart) {
+        return
+      }
+
+      if (snapshotEnabledRef.current) {
         return
       }
 
@@ -604,15 +665,21 @@ export default function StreamPanel({
         }
 
         // Append new messages to current list
+        let addedCount = 0
         setMessages(prev => {
           // Combine and deduplicate
           const allMessages = [...prev, ...response.messages]
           const unique = Array.from(new Map(allMessages.map(m => [m.sequenceNumber, m])).values())
+          addedCount = Math.max(0, unique.length - prev.length)
           // Sort by sequence number (newest first)
           return unique.sort((a, b) => b.sequenceNumber - a.sequenceNumber)
         })
 
-        toastApi.success(`Loaded ${response.messages.length} more messages`)
+        if (addedCount > 0) {
+          toastApi.success(`Loaded ${addedCount} more messages`)
+        } else {
+          toastApi.info('No new messages to load')
+        }
 
         onAudit({
           timestamp: new Date().toISOString(),

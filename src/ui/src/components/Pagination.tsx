@@ -51,6 +51,11 @@ function renderInspectorMode(props: PaginationProps) {
   const { filteredCount = 0, loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, onLoadNextBatch, pageSizeOptions = [50, 100, 200], disabled = false } = props
   
   const showPeekSizeSelector = loadedCount >= peekSize
+  // Invariant: inspector mode intentionally does NOT use infinite scroll.
+  // Reason: Service Bus peek is explicit, sequential, and non-destructive; it returns the
+  // "next" messages only when we advance `fromSequenceNumber`.
+  // An explicit button makes paging deterministic, avoids accidental background loads,
+  // and prevents surprise network activity during Snapshot.
   // FIX(pagination): never show "Load next batch" when there is no data, total is 0,
   // or when the last peek returned fewer than peekSize (typical "end" signal for DLQ).
   // Also compute remaining based on loadedCount (not filteredCount) so filters don't create false "more".

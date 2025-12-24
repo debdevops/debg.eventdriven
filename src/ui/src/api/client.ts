@@ -423,6 +423,11 @@ class ApiClient {
   /**
    * Peek messages (non-destructive)
    * For subscriptions, pass topicName as entityName and subscriptionName separately
+   *
+   * Invariants:
+   * - Peek is NOT pagination: it does not consume messages and the queue can change while you look.
+   * - `fromSequenceNumber` (when provided) must be monotonic per selection (entity+view);
+   *   otherwise the server will re-return overlapping messages.
    */
   async peekMessages(
     sessionId: string,
@@ -430,15 +435,18 @@ class ApiClient {
     maxMessages = 10,
     subscriptionName?: string,
     isDLQ = false,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    fromSequenceNumber?: number
   ): Promise<PeekResponse> {
-    let url = subscriptionName 
-      ? `${API_ENDPOINTS.peek(sessionId, entityName)}?subscriptionName=${encodeURIComponent(subscriptionName)}`
-      : API_ENDPOINTS.peek(sessionId, entityName);
-    
-    if (isDLQ) {
-      url += (subscriptionName ? '&' : '?') + 'isDLQ=true';
+    const params = new URLSearchParams()
+    if (subscriptionName) params.set('subscriptionName', subscriptionName)
+    if (isDLQ) params.set('isDLQ', 'true')
+    if (fromSequenceNumber !== undefined && fromSequenceNumber !== null) {
+      params.set('fromSequenceNumber', String(fromSequenceNumber))
     }
+
+    const qs = params.toString()
+    const url = qs ? `${API_ENDPOINTS.peek(sessionId, entityName)}?${qs}` : API_ENDPOINTS.peek(sessionId, entityName)
     
     const doRequest = () =>
       this.request<PeekResponse>(
