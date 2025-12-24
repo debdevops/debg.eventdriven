@@ -72,6 +72,8 @@ export default function MessageTable({
   aiPatternFilter = null,
   dlqClassifications = null
 }: MessageTableProps) {
+  const snapshotLocked = frozenSnapshot
+
   const [sortField, setSortField] = useState<keyof MessageEnvelope>('sequenceNumber')
   const [sortAsc, setSortAsc] = useState(false) // Default: newest first
   const [searchTerm, setSearchTerm] = useState('')
@@ -137,6 +139,7 @@ export default function MessageTable({
    */
 
   const handleDownload = (message: MessageEnvelope) => {
+    if (snapshotLocked) return
     const blob = new Blob([JSON.stringify(message, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -147,6 +150,7 @@ export default function MessageTable({
   }
 
   const handleSort = (field: keyof MessageEnvelope) => {
+    if (snapshotLocked) return
     if (sortField === field) {
       setSortAsc(!sortAsc)
     } else {
@@ -156,6 +160,7 @@ export default function MessageTable({
   }
 
   const handleSelectAll = () => {
+    if (snapshotLocked) return
     if (selectedMessages.size === sortedMessages.length) {
       setSelectedMessages(new Set())
     } else {
@@ -164,6 +169,7 @@ export default function MessageTable({
   }
 
   const handleSelectMessage = (seqNum: number) => {
+    if (snapshotLocked) return
     const newSet = new Set(selectedMessages)
     if (newSet.has(seqNum)) {
       newSet.delete(seqNum)
@@ -174,6 +180,7 @@ export default function MessageTable({
   }
 
   const handleReplaySelected = async () => {
+    if (snapshotLocked) return
     if (selectedMessages.size === 0) return
     
     setReplayLoading(true)
@@ -204,6 +211,7 @@ export default function MessageTable({
   }
 
   const handleReplayAll = async () => {
+    if (snapshotLocked) return
     if (!confirm(`Replay ALL ${sortedMessages.length} DLQ messages?`)) return
     
     setReplayLoading(true)
@@ -233,6 +241,7 @@ export default function MessageTable({
   }
 
   const handleExportSelected = () => {
+    if (snapshotLocked) return
     const selected = messages.filter(m => selectedMessages.has(m.sequenceNumber))
     const blob = new Blob([JSON.stringify(selected, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -244,6 +253,7 @@ export default function MessageTable({
   }
 
   const handleExportAll = () => {
+    if (snapshotLocked) return
     const blob = new Blob([JSON.stringify(sortedMessages, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -260,6 +270,7 @@ export default function MessageTable({
   }
 
   const handleClearFilters = () => {
+    if (snapshotLocked) return
     setSearchTerm('')
     setCorrelationFilter('')
     setFilterDeliveryCount(null)
@@ -268,6 +279,7 @@ export default function MessageTable({
   }
 
   const handleAgeBucketClick = (bucket: keyof AgeDistribution) => {
+    if (snapshotLocked) return
     setAgeBucketFilter(ageBucketFilter === bucket ? null : bucket)
   }
 
@@ -700,15 +712,21 @@ export default function MessageTable({
         onAiInsights={onAiInsights}
         refreshing={false}
         loading={replayLoading}
-        disabled={disabled}
+        disabled={disabled || snapshotLocked}
         frozenSnapshot={frozenSnapshot}
         onToggleSnapshot={onToggleSnapshot}
         aiInsightsLoading={aiInsightsLoading}
         hasAiInsights={hasAiInsights}
         selectMode={selectMode}
-        onToggleSelectMode={() => setSelectMode(!selectMode)}
+        onToggleSelectMode={() => {
+          if (snapshotLocked) return
+          setSelectMode(!selectMode)
+        }}
         onSelectAll={handleSelectAll}
-        onClearSelection={() => setSelectedMessages(new Set())}
+        onClearSelection={() => {
+          if (snapshotLocked) return
+          setSelectedMessages(new Set())
+        }}
       />
 
       {/* Search and Filter Controls */}
@@ -718,14 +736,22 @@ export default function MessageTable({
             type="text"
             placeholder="Search messages (ID, body, subject, properties...)"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              if (snapshotLocked) return
+              setSearchTerm(e.target.value)
+            }}
             className="search-input"
+            disabled={snapshotLocked}
           />
           {searchTerm && (
             <button 
-              onClick={() => setSearchTerm('')} 
+              onClick={() => {
+                if (snapshotLocked) return
+                setSearchTerm('')
+              }}
               className="clear-search"
               title="Clear search"
+              disabled={snapshotLocked}
             >
               ✕
             </button>
@@ -736,14 +762,22 @@ export default function MessageTable({
             type="text"
             placeholder="Filter by Correlation ID..."
             value={correlationFilter}
-            onChange={(e) => setCorrelationFilter(e.target.value)}
+            onChange={(e) => {
+              if (snapshotLocked) return
+              setCorrelationFilter(e.target.value)
+            }}
             className="search-input"
+            disabled={snapshotLocked}
           />
           {correlationFilter && (
             <button 
-              onClick={() => setCorrelationFilter('')} 
+              onClick={() => {
+                if (snapshotLocked) return
+                setCorrelationFilter('')
+              }}
               className="clear-search"
               title="Clear correlation filter"
+              disabled={snapshotLocked}
             >
               ✕
             </button>
@@ -754,14 +788,22 @@ export default function MessageTable({
             type="text"
             placeholder="Filter by Event Type..."
             value={eventTypeFilter}
-            onChange={(e) => setEventTypeFilter(e.target.value)}
+            onChange={(e) => {
+              if (snapshotLocked) return
+              setEventTypeFilter(e.target.value)
+            }}
             className="search-input"
+            disabled={snapshotLocked}
           />
           {eventTypeFilter && (
             <button 
-              onClick={() => setEventTypeFilter('')} 
+              onClick={() => {
+                if (snapshotLocked) return
+                setEventTypeFilter('')
+              }}
               className="clear-search"
               title="Clear event type filter"
+              disabled={snapshotLocked}
             >
               ✕
             </button>
@@ -770,8 +812,12 @@ export default function MessageTable({
         <div className="filter-controls">
           <select
             value={filterDeliveryCount === null ? '' : filterDeliveryCount}
-            onChange={(e) => setFilterDeliveryCount(e.target.value === '' ? null : Number(e.target.value))}
+            onChange={(e) => {
+              if (snapshotLocked) return
+              setFilterDeliveryCount(e.target.value === '' ? null : Number(e.target.value))
+            }}
             className="filter-select"
+            disabled={snapshotLocked}
           >
             <option value="">All Deliveries</option>
             <option value="0">First Delivery</option>
@@ -927,6 +973,7 @@ export default function MessageTable({
                     <EventTypeChip 
                       message={message}
                       onClick={() => {
+                        if (snapshotLocked) return
                         const { eventType } = extractEventType(message)
                         if (eventType) setEventTypeFilter(eventType)
                       }}
@@ -949,6 +996,7 @@ export default function MessageTable({
                         onClick={() => handleDownload(message)}
                         className="btn-icon-only"
                         title="Download as JSON"
+                        disabled={snapshotLocked || disabled}
                       >
                         📄
                       </button>
@@ -968,7 +1016,7 @@ export default function MessageTable({
           peekSize={peekSize}
           onPeekSizeChange={onPeekSizeChange}
           onLoadNextBatch={onLoadNextBatch}
-          disabled={disabled}
+          disabled={disabled || snapshotLocked}
         />
       </>
       )}

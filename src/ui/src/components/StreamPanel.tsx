@@ -369,6 +369,9 @@ export default function StreamPanel({
   const streamURL = apiClient.getStreamURL(sessionId, entityName, mode, subscriptionName, isDLQ)
   
   const handleMessage = useCallback((message: MessageEnvelope) => {
+    // Snapshot must be a pure point-in-time render lock: never mutate while frozen.
+    if (snapshotEnabledRef.current) return
+
     // Save to local store
     const entityType = isDLQ ? 'dlq' : selectedTarget.entityType
     
@@ -444,6 +447,7 @@ export default function StreamPanel({
 
   // Apply AI Pattern Filter
   const handleApplyAiPattern = (patternId: string, label: string, messageIds: string[]) => {
+    if (snapshotEnabledRef.current) return
     setAiPatternFilter({ patternId, label, messageIds })
     setToast({
       message: `✅ Filtered to ${messageIds.length} messages in pattern "${label}"`,
@@ -459,6 +463,7 @@ export default function StreamPanel({
 
   // Clear AI Pattern Filter
   const handleClearAiPattern = () => {
+    if (snapshotEnabledRef.current) return
     if (aiPatternFilter) {
       const clearedPattern = aiPatternFilter.label
       setAiPatternFilter(null)
@@ -785,13 +790,13 @@ export default function StreamPanel({
         <div className="snapshot-banner" role="status" aria-live="polite">
           <div className="snapshot-banner-title">Snapshot (Frozen View)</div>
           <div className="snapshot-banner-body">
-            You are viewing a frozen snapshot of messages captured at{' '}
-            <strong>
-              {snapshotCapturedAtUtc
-                ? new Date(snapshotCapturedAtUtc).toLocaleString()
-                : '…'}
-            </strong>
-            . Live updates are paused.
+            Snapshot (Frozen View): Data is paused at a specific point in time.
+            {snapshotCapturedAtUtc && (
+              <>
+                {' '}Captured at{' '}
+                <strong>{new Date(snapshotCapturedAtUtc).toLocaleString()}</strong>.
+              </>
+            )}
           </div>
           {snapshotReason === 'dlq' && (
             <div className="snapshot-banner-footnote">
@@ -882,7 +887,10 @@ export default function StreamPanel({
             aiPatternFilter={aiPatternFilter}
             dlqClassifications={isDLQ ? dlqClassificationsMap : null}
             peekSize={peekSize}
-            onPeekSizeChange={setPeekSize}
+            onPeekSizeChange={(size) => {
+              if (controlsDisabled || snapshotEnabledRef.current) return
+              setPeekSize(size)
+            }}
           />
         </>
       )}
