@@ -7,7 +7,12 @@ import { useSSE } from '../hooks/useSSE'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import { apiClient } from '../api/client'
 import { messageStore } from '../services/messageStore'
-import MessageTable from './MessageTable'
+import { useFrozenGuard } from '../hooks/useFrozenGuard'
+import { useSelectionGuards } from '../features/shared/hooks/useSelectionGuards'
+import { MessageGrid } from '../features/messages/MessageGrid'
+import { DlqGrid } from '../features/dlq/DlqGrid'
+import { DlqBanner, type DlqBannerModel } from '../features/dlq/DlqBanner'
+import { SnapshotBanner } from '../features/snapshot/SnapshotBanner'
 import { MetricsPanel } from './MetricsPanel'
 import RulesPanel from './RulesPanel'
 import { MessageTableSkeleton } from './MessageTableSkeleton'
@@ -17,7 +22,7 @@ import { AiPatternFilterChip } from './AiPatternFilterChip'
 import { DlqReplayAdvisor } from './DlqReplayAdvisor'
 import { analyzeDlqMessages, getMessageIdsByClassification, type DlqClassification } from '../services/dlqReplayAdvisor'
 import type { MessageEnvelope, StreamMode, AuditEntry } from '../types'
-import type { SelectedTarget } from '../entities/selection'
+import { selectionKey, type SelectedTarget } from '../entities/selection'
 import { computeDlqHealth, formatAgeMinutes } from '../utils/dlqHealth'
 import './StreamPanel.css'
 
@@ -26,6 +31,12 @@ interface StreamPanelProps {
   selectedTarget: SelectedTarget
   onAudit: (entry: AuditEntry) => void
   isSessionExpired?: boolean
+  toastApi: {
+    success: (message: string) => void
+    error: (message: string) => void
+    info: (message: string) => void
+    warning: (message: string) => void
+  }
   onAiInsights?: () => void
   aiInsightsLoading?: boolean
   hasAiInsights?: boolean
@@ -37,13 +48,14 @@ export default function StreamPanel({
   selectedTarget,
   onAudit, 
   isSessionExpired = false,
+  toastApi,
   onAiInsights,
   aiInsightsLoading,
   hasAiInsights,
   aiInsights
 }: StreamPanelProps) {
   const mode: StreamMode = 'peek' // Read-only mode
-  const { status, canInteract, scheduleTimeout, scheduleInterval, clearTimer } = useSessionV2()
+  const { status, canInteract, scheduleInterval, clearTimer } = useSessionV2()
   const controlsDisabled = !canInteract || isSessionExpired
 
   // Snapshot (Frozen View)
@@ -55,7 +67,21 @@ export default function StreamPanel({
   const loadRequestIdRef = useRef(0)
   const autoDlqFreezeDoneRef = useRef(false)
 
+  // Selection guards (stability): prevent stale in-flight updates when switching entities/views.
+  const selectionId = useMemo(
+    () => selectionKey(selectedTarget),
+    [
+      selectedTarget.entityType,
+      selectedTarget.viewType,
+      selectedTarget.entity?.name,
+      selectedTarget.topicName,
+      selectedTarget.subscription?.name
+    ]
+  )
+  const { selectionIdRef, selectionAbortRef, selectionEpochRef } = useSelectionGuards(selectionId)
+
   const snapshotControlsDisabled = controlsDisabled || snapshotEnabled
+  const { frozenRef: frozenSnapshotRef } = useFrozenGuard(snapshotEnabled)
 
   // FIX(selection): DLQ mode derived ONLY from explicit viewType (no implicit auto-derivation).
   const isDLQ = selectedTarget.viewType === 'dlq'
@@ -69,7 +95,6 @@ export default function StreamPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const frozenSnapshot = snapshotEnabled
   const renderedMessages = snapshotEnabled
     ? (frozenMessagesRef.current || [])
@@ -147,11 +172,19 @@ export default function StreamPanel({
     ;(async () => {
       try {
         // Peek a small sample from DLQ. Peek returns oldest-first, so [0] is the oldest.
-        const resp = await apiClient.peekMessages(sessionId, entityName, 10, subscriptionName, true)
+        const resp = await apiClient.peekMessages(
+          sessionId,
+          entityName,
+          10,
+          subscriptionName,
+          true,
+          selectionAbortRef.current.signal
+        )
         if (cancelled) return
         setSampledDlqMessages(resp.messages)
         setOldestDlqEnqueuedTimeUtc(resp.messages.length > 0 ? resp.messages[0].enqueuedTimeUtc : null)
       } catch (e) {
+        if ((e as any)?.name === 'AbortError') return
         // Non-fatal: if sampling fails, severity falls back to ratio-only.
         if (cancelled) return
         setSampledDlqMessages(null)
@@ -163,15 +196,6 @@ export default function StreamPanel({
       cancelled = true
     }
   }, [status, isDLQ, dlqCountTotal, sessionId, entityName, subscriptionName])
-
-  // Toast auto-dismiss
-  useEffect(() => {
-    if (toast) {
-      const key = `stream-toast-${sessionId}`
-      scheduleTimeout(key, 5000, () => setToast(null))
-      return () => clearTimer(key)
-    }
-  }, [toast, scheduleTimeout, clearTimer, sessionId])
 
   const enterSnapshot = useCallback((reason: 'user' | 'dlq') => {
     if (frozenMessagesRef.current == null) {
@@ -216,6 +240,9 @@ export default function StreamPanel({
       return
     }
 
+    const selectionEpochAtStart = selectionEpochRef.current
+    const signal = selectionAbortRef.current.signal
+
     const requestId = ++loadRequestIdRef.current
     try {
       const entityType = isDLQ ? 'dlq' : selectedTarget.entityType
@@ -226,7 +253,19 @@ export default function StreamPanel({
       }
       
       // Fetch fresh from backend
-      const response = await apiClient.peekMessages(sessionId, entityName, peekSize, subscriptionName, isDLQ)
+      const response = await apiClient.peekMessages(
+        sessionId,
+        entityName,
+        peekSize,
+        subscriptionName,
+        isDLQ,
+        signal
+      )
+
+      // If selection changed mid-flight, ignore this result.
+      if (selectionEpochRef.current !== selectionEpochAtStart) {
+        return
+      }
 
       // If Snapshot was enabled mid-flight (or a newer request started), ignore this result.
       if (snapshotEnabledRef.current || requestId !== loadRequestIdRef.current) {
@@ -254,6 +293,9 @@ export default function StreamPanel({
       setLastUpdated(new Date())
       setError(null)
     } catch (err) {
+      if ((err as any)?.name === 'AbortError') {
+        return
+      }
       const errorMsg = err instanceof Error ? err.message : 'Failed to load messages'
       console.error('Load messages failed:', err)
       
@@ -288,7 +330,6 @@ export default function StreamPanel({
     setError(null)
     setSuccess(null)
     setStreaming(false)
-    setToast(null)
     setIsRefreshing(false)
 
     // FIX(state): clear persisted bucket for this entity+view to avoid stale carry-over.
@@ -369,6 +410,9 @@ export default function StreamPanel({
   const streamURL = apiClient.getStreamURL(sessionId, entityName, mode, subscriptionName, isDLQ)
   
   const handleMessage = useCallback((message: MessageEnvelope) => {
+    // Ignore late events from a previous selection/view.
+    if (selectionIdRef.current !== selectionId) return
+
     // Snapshot must be a pure point-in-time render lock: never mutate while frozen.
     if (snapshotEnabledRef.current) return
 
@@ -390,7 +434,7 @@ export default function StreamPanel({
       if (exists) return prev
       return [message, ...prev] // Newest first
     })
-  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.entityType])
+  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.entityType, selectionId])
 
   useSSE({
     url: streamURL,
@@ -449,10 +493,7 @@ export default function StreamPanel({
   const handleApplyAiPattern = (patternId: string, label: string, messageIds: string[]) => {
     if (snapshotEnabledRef.current) return
     setAiPatternFilter({ patternId, label, messageIds })
-    setToast({
-      message: `✅ Filtered to ${messageIds.length} messages in pattern "${label}"`,
-      type: 'success'
-    })
+    toastApi.success(`Filtered to ${messageIds.length} messages in pattern "${label}"`)
     onAudit({
       timestamp: new Date().toISOString(),
       sessionId,
@@ -467,10 +508,7 @@ export default function StreamPanel({
     if (aiPatternFilter) {
       const clearedPattern = aiPatternFilter.label
       setAiPatternFilter(null)
-      setToast({
-        message: `✅ Cleared filter for pattern "${clearedPattern}"`,
-        type: 'success'
-      })
+      toastApi.success(`Cleared filter for pattern "${clearedPattern}"`)
       onAudit({
         timestamp: new Date().toISOString(),
         sessionId,
@@ -482,6 +520,7 @@ export default function StreamPanel({
 
   // Filter by DLQ Classification Category
   const handleFilterByDlqCategory = (category: DlqClassification) => {
+    if (frozenSnapshotRef.current) return
     if (!dlqAdvisorAnalysis) return
 
     const messageIds = getMessageIdsByClassification(dlqAdvisorAnalysis, category)
@@ -499,10 +538,7 @@ export default function StreamPanel({
       messageIds
     })
 
-    setToast({
-      message: `✅ Filtered to ${messageIds.length} DLQ messages (${categoryLabel})`,
-      type: 'success'
-    })
+    toastApi.success(`Filtered to ${messageIds.length} DLQ messages (${categoryLabel})`)
 
     onAudit({
       timestamp: new Date().toISOString(),
@@ -520,6 +556,9 @@ export default function StreamPanel({
       console.log('[StreamPanel] No messages loaded, cannot load next batch')
       return
     }
+
+    const selectionEpochAtStart = selectionEpochRef.current
+    const signal = selectionAbortRef.current.signal
 
     try {
       setLoading(true)
@@ -541,8 +580,13 @@ export default function StreamPanel({
         entityName,
         peekSize,
         subscriptionName,
-        isDLQ
+        isDLQ,
+        signal
       )
+
+      if (selectionEpochRef.current !== selectionEpochAtStart) {
+        return
+      }
 
       if (response.messages && response.messages.length > 0) {
         // Save messages to local store
@@ -568,10 +612,7 @@ export default function StreamPanel({
           return unique.sort((a, b) => b.sequenceNumber - a.sequenceNumber)
         })
 
-        setToast({
-          message: `✅ Loaded ${response.messages.length} more messages`,
-          type: 'success'
-        })
+        toastApi.success(`Loaded ${response.messages.length} more messages`)
 
         onAudit({
           timestamp: new Date().toISOString(),
@@ -580,14 +621,14 @@ export default function StreamPanel({
           operation: 'Peek'
         })
       } else {
-        setToast({
-          message: 'ℹ️ No more messages to load',
-          type: 'success'
-        })
+        toastApi.info('No more messages to load')
       }
 
       setError(null)
     } catch (err) {
+      if ((err as any)?.name === 'AbortError') {
+        return
+      }
       const errorMsg = err instanceof Error ? err.message : 'Failed to load next batch'
       console.error('Load next batch failed:', err)
       setError(errorMsg)
@@ -600,7 +641,6 @@ export default function StreamPanel({
   /* const _handleStartStream = () => {
     setError(null)
     setSuccess(null)
-    setToast(null)
     setStreaming(true)
   } */
 
@@ -651,11 +691,14 @@ export default function StreamPanel({
         ? 'warning'
         : 'healthy'
 
-    return {
-      dlqHealth,
-      oldestAgeText,
-      severityBadgeClass
+    const model: DlqBannerModel = {
+      severityBadgeClass,
+      label: dlqHealth.label,
+      whyTooltip: dlqHealth.whyTooltip,
+      oldestAgeText
     }
+
+    return model
   }, [isDLQ, oldestDlqFromLoadedMessages, dlqCountTotal, activeCountTotal, messages])
 
   return (
@@ -754,56 +797,23 @@ export default function StreamPanel({
 
       {/* DLQ explanation banner - simplified one-liner */}
       {isDLQ && dlqBannerModel && (
-        <div className="dlq-banner">
-          <>
-            <div className="dlq-banner-title">
-              Dead-letter queue (DLQ)
-              {snapshotEnabled && (
-                <span className="dlq-frozen-badge" title="Frozen View">Frozen</span>
-              )}
-              <span
-                className={`dlq-severity-badge ${dlqBannerModel.severityBadgeClass}`}
-                title={dlqBannerModel.dlqHealth.whyTooltip}
-              >
-                {dlqBannerModel.dlqHealth.label}
-              </span>
-              <span className="dlq-why" title={dlqBannerModel.dlqHealth.whyTooltip}>Why is this happening?</span>
-            </div>
-            <div className="dlq-banner-subtitle">
-              {selectedEntityTypeLabel}: {subscriptionName
-                ? `${entityName} / ${subscriptionName}`
-                : entityName}
-              <span className="dlq-banner-sep"> • </span>
-              DLQ count: <strong>{dlqCountTotal}</strong>
-              <span className="dlq-banner-sep"> • </span>
-              Oldest DLQ age: <strong>{dlqBannerModel.oldestAgeText}</strong>
-            </div>
-            <div className="dlq-banner-footnote">
-              These messages failed delivery and require investigation.
-            </div>
-          </>
-        </div>
+        <DlqBanner
+          snapshotEnabled={snapshotEnabled}
+          selectedEntityTypeLabel={selectedEntityTypeLabel}
+          entityName={entityName}
+          subscriptionName={subscriptionName}
+          dlqCountTotal={dlqCountTotal}
+          model={dlqBannerModel}
+        />
       )}
 
       {/* Snapshot banner: persistent while Snapshot is active */}
       {snapshotEnabled && (
-        <div className="snapshot-banner" role="status" aria-live="polite">
-          <div className="snapshot-banner-title">Snapshot (Frozen View)</div>
-          <div className="snapshot-banner-body">
-            Snapshot (Frozen View): Data is paused at a specific point in time.
-            {snapshotCapturedAtUtc && (
-              <>
-                {' '}Captured at{' '}
-                <strong>{new Date(snapshotCapturedAtUtc).toLocaleString()}</strong>.
-              </>
-            )}
-          </div>
-          {snapshotReason === 'dlq' && (
-            <div className="snapshot-banner-footnote">
-              DLQ views open in Snapshot mode by default for investigation safety.
-            </div>
-          )}
-        </div>
+        <SnapshotBanner
+          snapshotCapturedAtUtc={snapshotCapturedAtUtc}
+          snapshotReason={snapshotReason}
+          onExit={exitSnapshot}
+        />
       )}
 
       {/* Only show error alerts for non-session-expired errors */}
@@ -819,12 +829,7 @@ export default function StreamPanel({
         </div>
       )}
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`toast-notification ${toast.type}`}>
-          {toast.type === 'success' ? '✓' : '✕'} {toast.message}
-        </div>
-      )}
+      {/* Stream-level notifications use global toast system */}
 
       {/* Metrics Panel */}
       {!isDLQ && (
@@ -858,40 +863,72 @@ export default function StreamPanel({
             />
           )}
 
-          <MessageTable
-            messages={renderedMessages}
-            // FIX(pagination): totalMessageCount is view-specific (messages vs DLQ).
-            totalMessageCount={totalCountForView}
-            activeCount={activeCountTotal}
-            sessionId={sessionId}
-            entityName={entityName}
-            subscriptionName={subscriptionName}
-            isDLQ={isDLQ}
-            dlqCount={dlqCountTotal}
-            oldestDlqEnqueuedTimeUtc={isDLQ ? oldestDlqFromLoadedMessages : oldestDlqEnqueuedTimeUtc}
-            sampledDlqMessages={isDLQ ? renderedMessages : sampledDlqMessages}
-            onRefresh={snapshotEnabled ? undefined : handlePeekNow}
-            onLoadNextBatch={snapshotEnabled ? undefined : handleLoadNextBatch}
-            disabled={controlsDisabled}
-            frozenSnapshot={frozenSnapshot}
-            onToggleSnapshot={snapshotEnabled ? exitSnapshot : undefined}
-            onAiInsights={() => {
-              setInspectorMode('ai-insights')
-              if (onAiInsights) onAiInsights()
-            }}
-            aiInsightsLoading={aiInsightsLoading}
-            hasAiInsights={hasAiInsights}
-            onMessageSelect={(message) => {
-              setSelectedMessage(message)
-            }}
-            aiPatternFilter={aiPatternFilter}
-            dlqClassifications={isDLQ ? dlqClassificationsMap : null}
-            peekSize={peekSize}
-            onPeekSizeChange={(size) => {
-              if (controlsDisabled || snapshotEnabledRef.current) return
-              setPeekSize(size)
-            }}
-          />
+          {isDLQ ? (
+            <DlqGrid
+              messages={renderedMessages}
+              // FIX(pagination): totalMessageCount is view-specific (messages vs DLQ).
+              totalMessageCount={totalCountForView}
+              activeCount={activeCountTotal}
+              sessionId={sessionId}
+              entityName={entityName}
+              subscriptionName={subscriptionName}
+              dlqCount={dlqCountTotal}
+              oldestDlqEnqueuedTimeUtc={oldestDlqFromLoadedMessages}
+              onRefresh={snapshotEnabled ? undefined : handlePeekNow}
+              onLoadNextBatch={snapshotEnabled ? undefined : handleLoadNextBatch}
+              disabled={controlsDisabled}
+              frozenSnapshot={frozenSnapshot}
+              onToggleSnapshot={snapshotEnabled ? exitSnapshot : undefined}
+              onAiInsights={() => {
+                setInspectorMode('ai-insights')
+                if (onAiInsights) onAiInsights()
+              }}
+              aiInsightsLoading={aiInsightsLoading}
+              hasAiInsights={hasAiInsights}
+              onMessageSelect={(message) => {
+                setSelectedMessage(message)
+              }}
+              aiPatternFilter={aiPatternFilter}
+              dlqClassifications={dlqClassificationsMap}
+              peekSize={peekSize}
+              onPeekSizeChange={(size) => {
+                if (controlsDisabled || snapshotEnabledRef.current) return
+                setPeekSize(size)
+              }}
+            />
+          ) : (
+            <MessageGrid
+              messages={renderedMessages}
+              totalMessageCount={totalCountForView}
+              activeCount={activeCountTotal}
+              sessionId={sessionId}
+              entityName={entityName}
+              subscriptionName={subscriptionName}
+              dlqCount={dlqCountTotal}
+              oldestDlqEnqueuedTimeUtc={oldestDlqEnqueuedTimeUtc}
+              sampledDlqMessages={sampledDlqMessages}
+              onRefresh={snapshotEnabled ? undefined : handlePeekNow}
+              onLoadNextBatch={snapshotEnabled ? undefined : handleLoadNextBatch}
+              disabled={controlsDisabled}
+              frozenSnapshot={frozenSnapshot}
+              onToggleSnapshot={snapshotEnabled ? exitSnapshot : undefined}
+              onAiInsights={() => {
+                setInspectorMode('ai-insights')
+                if (onAiInsights) onAiInsights()
+              }}
+              aiInsightsLoading={aiInsightsLoading}
+              hasAiInsights={hasAiInsights}
+              onMessageSelect={(message) => {
+                setSelectedMessage(message)
+              }}
+              aiPatternFilter={aiPatternFilter}
+              peekSize={peekSize}
+              onPeekSizeChange={(size) => {
+                if (controlsDisabled || snapshotEnabledRef.current) return
+                setPeekSize(size)
+              }}
+            />
+          )}
         </>
       )}
       

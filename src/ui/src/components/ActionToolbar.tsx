@@ -4,6 +4,7 @@
  */
 
 import './ActionToolbar.css'
+import { SnapshotControl } from './SnapshotControl'
 
 export interface ActionToolbarProps {
   // Entity info
@@ -118,16 +119,11 @@ export function ActionToolbar({
 
         {/* Snapshot control */}
         {onToggleSnapshot && (
-          <div className="toolbar-group">
-            <button
-              className={`toolbar-btn ${frozenSnapshot ? 'active' : ''}`}
-              onClick={onToggleSnapshot}
-              disabled={disabled}
-              title="Freeze/unfreeze snapshot"
-            >
-              {frozenSnapshot ? '❄️ Frozen' : '📷 Snapshot'}
-            </button>
-          </div>
+          <SnapshotControl
+            frozenSnapshot={frozenSnapshot}
+            onToggleSnapshot={onToggleSnapshot}
+            disabled={disabled}
+          />
         )}
 
         {/* Bulk actions - only show when messages selected */}

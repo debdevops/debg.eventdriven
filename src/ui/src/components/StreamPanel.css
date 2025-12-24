@@ -267,6 +267,12 @@
   color: var(--text-muted);
 }
 
+.snapshot-banner-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
 /* DLQ Frozen badge */
 .dlq-frozen-badge {
   margin-left: 8px;

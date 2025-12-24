@@ -204,6 +204,7 @@ export function NamespaceView({
             selectedTarget={selectedTarget}
             onAudit={onAudit}
             isSessionExpired={status === 'auth_required'}
+            toastApi={toast}
             onAiInsights={onAiInsights}
             aiInsightsLoading={aiInsightsLoading}
             hasAiInsights={hasAiInsights}

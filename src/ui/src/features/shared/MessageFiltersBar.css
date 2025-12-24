@@ -1,0 +1,41 @@
+.message-filters {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.message-filters-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.message-filters-field input {
+  min-width: 180px;
+  padding-right: 38px;
+}
+
+.message-filters select {
+  min-width: 160px;
+}
+
+.message-filters-clear {
+  position: absolute;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+}
+
+.message-filters-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  white-space: nowrap;
+}

@@ -429,7 +429,8 @@ class ApiClient {
     entityName: string,
     maxMessages = 10,
     subscriptionName?: string,
-    isDLQ = false
+    isDLQ = false,
+    signal?: AbortSignal
   ): Promise<PeekResponse> {
     let url = subscriptionName 
       ? `${API_ENDPOINTS.peek(sessionId, entityName)}?subscriptionName=${encodeURIComponent(subscriptionName)}`
@@ -444,7 +445,8 @@ class ApiClient {
         url,
         {
           method: 'POST',
-          body: JSON.stringify({ maxMessages })
+          body: JSON.stringify({ maxMessages }),
+          signal
         },
         // Avoid generic multi-retry behavior for peek; we do a single targeted retry below.
         { maxRetries: 0 }
