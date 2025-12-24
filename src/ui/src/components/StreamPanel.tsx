@@ -43,6 +43,8 @@ interface StreamPanelProps {
   aiInsights?: any
 }
 
+type FetchStatus = 'idle' | 'loading' | 'success' | 'error'
+
 export default function StreamPanel({ 
   sessionId, 
   selectedTarget,
@@ -93,6 +95,9 @@ export default function StreamPanel({
   const [streaming, setStreaming] = useState(false)
   const [peekSize, setPeekSize] = useState(50)
   const [loading, setLoading] = useState(false)
+  // Explicit fetch lifecycle for the current selection. Prevents false error flashes
+  // during selection changes and separates "in-flight" from "failed".
+  const [fetchStatus, setFetchStatus] = useState<FetchStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const frozenSnapshot = snapshotEnabled
@@ -305,6 +310,7 @@ export default function StreamPanel({
       
       // Don't show loading spinner for silent background refreshes
       if (!silent) {
+        setFetchStatus('loading')
         setLoading(true)
       }
       
@@ -347,7 +353,9 @@ export default function StreamPanel({
       setMessages(response.messages)
       
       setLastUpdated(new Date())
+      // Clear previous error ONLY after a successful fetch.
       setError(null)
+      setFetchStatus('success')
     } catch (err) {
       if ((err as any)?.name === 'AbortError') {
         return
@@ -359,9 +367,11 @@ export default function StreamPanel({
       if (errorMsg.includes('401') || errorMsg.toLowerCase().includes('unauthorized')) {
         // Session expiry is now handled by SessionExpiryModal - don't set error here
         console.log('[StreamPanel] Session expired detected - modal will handle this')
+        if (!silent) setFetchStatus('idle')
       } else if (!silent) {
         // Only show error for non-silent requests
         setError(errorMsg)
+        setFetchStatus('error')
       }
     } finally {
       if (!silent) {
@@ -376,14 +386,17 @@ export default function StreamPanel({
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   // Snapshot must never show skeleton/loading states.
-  const effectiveLoading = snapshotEnabled ? false : loading
+  const effectiveLoading = snapshotEnabled ? false : (fetchStatus === 'loading' || loading)
   const effectiveRefreshing = snapshotEnabled ? false : isRefreshing
 
   // Auto-load messages when entity changes
   useEffect(() => {
+    // Selection change starts a new explicit fetch lifecycle.
+    // IMPORTANT: do not clear the previous error here; we hide it via fetchStatus=loading
+    // and clear it only after a successful fetch.
+    setFetchStatus('loading')
     setActiveMessages([])
     setDlqMessages([])
-    setError(null)
     setSuccess(null)
     setStreaming(false)
     setIsRefreshing(false)
@@ -617,6 +630,7 @@ export default function StreamPanel({
     const signal = selectionAbortRef.current.signal
 
     try {
+      setFetchStatus('loading')
       setLoading(true)
       
       // Continue peeking from the highest sequence number we've already loaded.
@@ -695,6 +709,7 @@ export default function StreamPanel({
       }
 
       setError(null)
+      setFetchStatus('success')
     } catch (err) {
       if ((err as any)?.name === 'AbortError') {
         return
@@ -702,6 +717,7 @@ export default function StreamPanel({
       const errorMsg = err instanceof Error ? err.message : 'Failed to load next batch'
       console.error('Load next batch failed:', err)
       setError(errorMsg)
+      setFetchStatus('error')
     } finally {
       setLoading(false)
     }
@@ -791,10 +807,18 @@ export default function StreamPanel({
       {/* Session expired is now handled by SessionExpiryModal in NamespaceView */}
       
       {/* Full-width error banner for non-session-expired errors */}
-      {error && !error.includes('Session expired') && (
+      {fetchStatus === 'error' && error && !error.includes('Session expired') && (
         <div className="stream-panel-error">
           {error}
-          <button onClick={() => setError(null)} className="error-dismiss">×</button>
+          <button
+            onClick={() => {
+              setError(null)
+              setFetchStatus('idle')
+            }}
+            className="error-dismiss"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -901,12 +925,7 @@ export default function StreamPanel({
         />
       )}
 
-      {/* Only show error alerts for non-session-expired errors */}
-      {error && !isSessionExpired && (
-        <div className="alert alert-danger">
-          {error}
-        </div>
-      )}
+      {/* Error UI is intentionally controlled by fetchStatus above to prevent false flashes. */}
 
       {success && (
         <div className="alert alert-success">
@@ -935,7 +954,7 @@ export default function StreamPanel({
       )}
 
       {/* Show skeleton loader during initial load or reconnect */}
-      {(effectiveLoading && renderedMessages.length === 0) || status === 'connecting' ? (
+      {((!snapshotEnabled && fetchStatus === 'loading' && renderedMessages.length === 0) || status === 'connecting') ? (
         <MessageTableSkeleton />
       ) : (
         <>
