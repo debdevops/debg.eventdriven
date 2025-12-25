@@ -82,8 +82,8 @@ interface SessionProviderProps {
   }
 }
 
-const IDLE_WARNING_MS = 2 * 60 * 1000 // 2 minutes
-const IDLE_EXPIRE_MS = IDLE_WARNING_MS + 30 * 1000 // 2m30s
+const IDLE_EXPIRE_MS = 10 * 60 * 1000 // 10 minutes
+const IDLE_WARNING_MS = IDLE_EXPIRE_MS - 30 * 1000 // warn 30s before expiry
 
 export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   const [sessionState, setSessionState] = useState<SessionState>('idle')

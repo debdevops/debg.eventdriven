@@ -33,7 +33,7 @@ export function SessionExpiredModal({
 
         <div className="modal-body">
           <p>
-            You have been inactive for more than 2 minutes. Your session has expired.
+            You have been inactive for more than 10 minutes. Your session has expired.
             Please reconnect to continue.
           </p>
         </div>
