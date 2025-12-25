@@ -6,11 +6,16 @@
 
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api'
 import { ApiError, AuthError, NetworkError } from './errors'
+import { apiLogger } from '../utils/logger'
 import type {
   ConnectResponse,
   EntityListResponse,
   PeekResponse,
-  ReceiveResponse
+  ReceiveResponse,
+  Subscription,
+  AiInsightsResult,
+  GenerateMessagesResult,
+  PeekCompareResult
 } from '../types'
 
 interface RetryConfig {
@@ -49,7 +54,7 @@ class ApiClient {
    */
   setAuthErrorHandler(handler: () => void) {
     this.onAuthError = handler
-    console.log('[ApiClient] Auth error handler registered')
+    apiLogger.debug('Auth error handler registered')
   }
 
   /**
@@ -58,7 +63,7 @@ class ApiClient {
    */
   setSuccessHandler(handler: () => void) {
     this.onSuccess = handler
-    console.log('[ApiClient] Success handler registered')
+    apiLogger.debug('Success handler registered')
   }
 
   /**
@@ -69,7 +74,7 @@ class ApiClient {
   setCredentials(sessionId: string, connectionString: string) {
     this.currentSessionId = sessionId
     this.currentConnectionString = connectionString
-    console.log('[ApiClient] Credentials stored for session:', sessionId)
+    apiLogger.debug('Credentials stored for session', sessionId)
   }
 
   /**
@@ -89,7 +94,7 @@ class ApiClient {
    * Clear stored session info (e.g., on logout or 401)
    */
   clearCredentials() {
-    console.log('[ApiClient] Clearing credentials for session:', this.currentSessionId)
+    apiLogger.debug('Clearing credentials for session', this.currentSessionId)
     this.currentSessionId = null
     this.currentConnectionString = null
     this.refreshPromise = null
@@ -100,7 +105,7 @@ class ApiClient {
    * Clears all cached state and prepares for fresh connection
    */
   resetClient() {
-    console.log('[ApiClient] Resetting client state')
+    apiLogger.debug('Resetting client state')
     // Abort any in-flight requests first to prevent partial updates.
     this.abortAllRequests('client-reset')
     this.clearCredentials()
@@ -114,7 +119,7 @@ class ApiClient {
    */
   abortAllRequests(reason: string = 'abort-all') {
     if (this.inFlightControllers.size === 0) return
-    console.warn(`[ApiClient] Aborting ${this.inFlightControllers.size} in-flight request(s): ${reason}`)
+    apiLogger.warn(`Aborting ${this.inFlightControllers.size} in-flight request(s): ${reason}`)
     for (const controller of this.inFlightControllers) {
       try {
         controller.abort(reason)
@@ -138,7 +143,7 @@ class ApiClient {
    */
   recordMissedHeartbeat(): boolean {
     this.consecutiveMissedHeartbeats++
-    console.warn(`[ApiClient] Missed heartbeat ${this.consecutiveMissedHeartbeats}. Last was ${Math.round((Date.now() - this.lastHeartbeatTime) / 1000)}s ago`)
+    apiLogger.warn(`Missed heartbeat ${this.consecutiveMissedHeartbeats}. Last was ${Math.round((Date.now() - this.lastHeartbeatTime) / 1000)}s ago`)
     return this.consecutiveMissedHeartbeats >= 2
   }
 
@@ -150,24 +155,24 @@ class ApiClient {
    */
   private async singleFlightRefresh(): Promise<void> {
     if (this.refreshPromise) {
-      console.log('[ApiClient] Refresh already in progress, waiting...')
+      apiLogger.debug('Refresh already in progress, waiting...')
       await this.refreshPromise
       return
     }
 
     this.refreshPromise = (async () => {
       try {
-        console.log('[ApiClient] 🔄 401 detected - credentials are invalid')
+        apiLogger.info('🔄 401 detected - credentials are invalid')
         
         // Trigger reconnect if handler is registered
         if (this.onAuthError) {
-          console.log('[ApiClient] Triggering reconnect via registered handler')
+          apiLogger.debug('Triggering reconnect via registered handler')
           this.onAuthError()
         }
         
         // DON'T clear credentials here - let reconnect flow handle it
         // Reconnect needs access to the connection string
-        console.log('[ApiClient] Waiting for reconnect to complete...')
+        apiLogger.debug('Waiting for reconnect to complete...')
         
         // Throw AuthError to propagate to SessionContext
         throw new AuthError('Session credentials are invalid. Re-authentication required.', 'auth', 'unauthorized')
@@ -196,7 +201,7 @@ class ApiClient {
 
     while (attempt <= config.maxRetries) {
       try {
-        console.log(`[ApiClient] ${options.method || 'GET'} ${endpoint} (attempt ${attempt + 1}/${config.maxRetries + 1})`)
+        apiLogger.debug(`${options.method || 'GET'} ${endpoint} (attempt ${attempt + 1}/${config.maxRetries + 1})`)
         
         // Record heartbeat on successful request
         this.recordHeartbeat()
@@ -234,7 +239,7 @@ class ApiClient {
 
         // Handle 401 Unauthorized - trigger single-flight refresh (which throws AuthError)
         if (response.status === 401) {
-          console.error(`[ApiClient] ⚠️  401 Unauthorized on ${endpoint}`)
+          apiLogger.error(`⚠️  401 Unauthorized on ${endpoint}`)
           
           // Single-flight refresh will throw AuthError - don't retry
           try {
@@ -251,10 +256,9 @@ class ApiClient {
 
         // Handle other errors
         if (!response.ok) {
-          const contentType = response.headers.get('content-type') || ''
           const errorText = await response.text().catch(() => 'Unknown error')
 
-          const tryParseJson = (text: string): any | null => {
+          const tryParseJson = (text: string): unknown => {
             if (!text) return null
             try {
               return JSON.parse(text)
@@ -263,29 +267,35 @@ class ApiClient {
             }
           }
 
-          const parsed =
-            contentType.includes('application/json') || contentType.includes('application/problem+json')
-              ? tryParseJson(errorText)
-              : tryParseJson(errorText)
+          const parsed = tryParseJson(errorText)
 
-          const extractMessage = (payload: any, fallback: string): { message: string; errorCode?: string } => {
+          interface ErrorPayload {
+            error?: string
+            title?: string
+            detail?: string
+            extensions?: { errorCode?: string }
+          }
+
+          const extractMessage = (payload: unknown, fallback: string): { message: string; errorCode?: string } => {
             if (!payload || typeof payload !== 'object') {
               return { message: fallback }
             }
 
+            const p = payload as ErrorPayload
+
             // Backend "{ error: "..." }" shape
-            if (typeof payload.error === 'string' && payload.error.trim()) {
-              return { message: payload.error.trim() }
+            if (typeof p.error === 'string' && p.error.trim()) {
+              return { message: p.error.trim() }
             }
 
             // RFC7807 ProblemDetails shape
-            const title = typeof payload.title === 'string' ? payload.title.trim() : ''
-            const detail = typeof payload.detail === 'string' ? payload.detail.trim() : ''
+            const title = typeof p.title === 'string' ? p.title.trim() : ''
+            const detail = typeof p.detail === 'string' ? p.detail.trim() : ''
             const message = detail || title
 
             const errorCode =
-              payload.extensions && typeof payload.extensions.errorCode === 'string'
-                ? payload.extensions.errorCode
+              p.extensions && typeof p.extensions.errorCode === 'string'
+                ? p.extensions.errorCode
                 : undefined
 
             if (message) {
@@ -301,14 +311,14 @@ class ApiClient {
           // Retry on 5xx if configured
           if (response.status >= 500 && config.retryOn5xx && attempt < config.maxRetries) {
             const backoff = config.backoffMs * Math.pow(2, attempt)
-            console.warn(`[ApiClient] ⚠️  ${response.status} on ${endpoint}, retrying in ${backoff}ms...`)
+            apiLogger.warn(`⚠️  ${response.status} on ${endpoint}, retrying in ${backoff}ms...`)
             await new Promise(resolve => setTimeout(resolve, backoff))
             attempt++
-            lastError = new ApiError(friendlyMessage, response.status, endpoint, new Date(), errorCode, parsed ?? errorText)
+            lastError = new ApiError(friendlyMessage, response.status, endpoint, new Date(), errorCode, (parsed ?? errorText) as unknown)
             continue
           }
 
-          throw new ApiError(friendlyMessage, response.status, endpoint, new Date(), errorCode, parsed ?? errorText)
+          throw new ApiError(friendlyMessage, response.status, endpoint, new Date(), errorCode, (parsed ?? errorText) as unknown)
         }
 
         // Success! Call success handler to mark session healthy
@@ -333,14 +343,14 @@ class ApiClient {
           // Record missed heartbeat on network failure
           const isStale = this.recordMissedHeartbeat()
           if (isStale) {
-            console.error('[ApiClient] Connection appears stale (2+ missed heartbeats)')
+            apiLogger.error('Connection appears stale (2+ missed heartbeats)')
           }
           
           lastError = new NetworkError('Network request failed', error)
           
           if (attempt < config.maxRetries) {
             const backoff = config.backoffMs * Math.pow(2, attempt)
-            console.warn(`[ApiClient] ⚠️  Network error on ${endpoint}, retrying in ${backoff}ms...`)
+            apiLogger.warn(`⚠️  Network error on ${endpoint}, retrying in ${backoff}ms...`)
             await new Promise(resolve => setTimeout(resolve, backoff))
             attempt++
             continue
@@ -355,7 +365,7 @@ class ApiClient {
         
         if (attempt <= config.maxRetries) {
           const backoff = config.backoffMs * Math.pow(2, attempt - 1)
-          console.warn(`[ApiClient] ⚠️  Error on ${endpoint}, retrying in ${backoff}ms...`, error)
+          apiLogger.warn(`⚠️  Error on ${endpoint}, retrying in ${backoff}ms...`, error)
           await new Promise(resolve => setTimeout(resolve, backoff))
         }
       }
@@ -393,8 +403,8 @@ class ApiClient {
   /**
    * List subscriptions for a topic
    */
-  async listSubscriptions(sessionId: string, topicName: string) {
-    return this.request<{ subscriptions: any[] }>(
+  async listSubscriptions(sessionId: string, topicName: string): Promise<{ subscriptions: Subscription[] }> {
+    return this.request<{ subscriptions: Subscription[] }>(
       `/api/namespace/${sessionId}/topic/${encodeURIComponent(topicName)}/subscriptions`,
       { method: 'GET' }
     )
@@ -536,11 +546,7 @@ class ApiClient {
     sessionId: string,
     queueName: string,
     subscriptionName?: string
-  ): Promise<{
-    queue: string
-    mainQueue: { count: number; messages: any[] }
-    deadLetterQueue: { count: number; messages: any[] }
-  }> {
+  ): Promise<PeekCompareResult> {
     let url = `/api/debug/${sessionId}/peek-compare?queue=${encodeURIComponent(queueName)}`
     if (subscriptionName) {
       url += `&subscriptionName=${encodeURIComponent(subscriptionName)}`
@@ -559,18 +565,7 @@ class ApiClient {
     subscriptionName?: string,
     targetType: 'Queue' | 'Topic' | 'Both' = 'Queue',
     includeDlqTestCases = true
-  ): Promise<{
-    totalGenerated: number
-    anomalousCount: number
-    dlqCandidates: number
-    dlqDeadLettered: number
-    dlqDeadLetteredQueue: number
-    dlqDeadLetteredSubscriptions: number
-    dlqTopicName?: string
-    dlqSubscriptionName?: string
-    errors: string[]
-    success: boolean
-  }> {
+  ): Promise<GenerateMessagesResult> {
     return this.request(`/api/messages/generate?sessionId=${sessionId}`, {
       method: 'POST',
       body: JSON.stringify({
@@ -592,46 +587,7 @@ class ApiClient {
     queueName: string,
     maxSampleSize = 100,
     includeDlq = true
-  ): Promise<{
-    activeQueueAnalysis?: {
-      source: string
-      totalMessages: number
-      clusters: Array<{
-        eventType: string
-        size: number
-        sampleMessage: any
-        commonFields: string[]
-      }>
-      outliers: Array<{
-        messageId: string
-        eventType: string
-        anomalyType: string
-        description: string
-        source: string
-      }>
-      processingTimeMs: number
-    }
-    dlqAnalysis?: {
-      source: string
-      totalMessages: number
-      clusters: Array<{
-        eventType: string
-        size: number
-        sampleMessage: any
-        commonFields: string[]
-      }>
-      outliers: Array<{
-        messageId: string
-        eventType: string
-        anomalyType: string
-        description: string
-        source: string
-      }>
-      processingTimeMs: number
-    }
-    summary: string
-    analyzedAt: string
-  }> {
+  ): Promise<AiInsightsResult> {
     return this.request(`/api/messages/analyze?sessionId=${sessionId}`, {
       method: 'POST',
       body: JSON.stringify({

@@ -25,10 +25,12 @@ import { analyzeDlqMessages, getMessageIdsByClassification, type DlqClassificati
 import { recordAndDetectBaseline, type BaselineAnomaly } from '../services/baselineAnomaly'
 import { classifyFailure, type FailureClassification } from '../services/failureClassifier'
 import { DlqAdvisoryActions, getDlqAdvisoryActions } from '../features/dlq/DlqAdvisoryActions'
-import type { MessageEnvelope, StreamMode, AuditEntry } from '../types'
+import type { MessageEnvelope, StreamMode, AuditEntry, ToastApi, AiInsightsResult } from '../types'
+import type { DlqAdvisorAnalysis, DlqMessageClassification } from '../services/dlqReplayAdvisor'
 import { selectionKey, type SelectedTarget } from '../entities/selection'
 import { computeDlqHealth, formatAgeMinutes } from '../utils/dlqHealth'
 import { extractEventType } from '../utils/eventTypeExtractor'
+import { uiLogger } from '../utils/logger'
 import './StreamPanel.css'
 
 interface StreamPanelProps {
@@ -36,16 +38,11 @@ interface StreamPanelProps {
   selectedTarget: SelectedTarget
   onAudit: (entry: AuditEntry) => void
   isSessionExpired?: boolean
-  toastApi: {
-    success: (message: string) => void
-    error: (message: string) => void
-    info: (message: string) => void
-    warning: (message: string) => void
-  }
+  toastApi: ToastApi
   onAiInsights?: () => void
   aiInsightsLoading?: boolean
   hasAiInsights?: boolean
-  aiInsights?: any
+  aiInsights?: AiInsightsResult | null
 }
 
 type FetchStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -210,7 +207,7 @@ export default function StreamPanel({
   } | null>(null)
   
   // DLQ Replay Advisor state
-  const [dlqAdvisorAnalysis, setDlqAdvisorAnalysis] = useState<any>(null)
+  const [dlqAdvisorAnalysis, setDlqAdvisorAnalysis] = useState<DlqAdvisorAnalysis | null>(null)
 
   // DLQ health sampling (used for tiered severity when NOT viewing DLQ)
   const [sampledDlqMessages, setSampledDlqMessages] = useState<MessageEnvelope[] | null>(null)
@@ -545,12 +542,12 @@ export default function StreamPanel({
       }
 
       const errorMsg = err instanceof Error ? err.message : 'Failed to load messages'
-      console.error('Load messages failed:', err)
+      uiLogger.error('Load messages failed', err)
       
       // Handle 401 Unauthorized - session expired
       if (errorMsg.includes('401') || errorMsg.toLowerCase().includes('unauthorized')) {
         // Session expiry is now handled by SessionExpiryModal - don't set error here
-        console.log('[StreamPanel] Session expired detected - modal will handle this')
+        uiLogger.debug('Session expired detected - modal will handle this')
         if (!silent) setFetchStatus('idle')
       } else if (!silent) {
         // Only show error for non-silent requests
@@ -636,9 +633,9 @@ export default function StreamPanel({
 
   const dlqReplaySummary = useMemo(() => {
     if (!isDLQ || !dlqAdvisorAnalysis) return null
-    const safeCount = dlqAdvisorAnalysis.classifications.filter((c: any) => c.classification === 'SAFE_TO_REPLAY').length
-    const needsCount = dlqAdvisorAnalysis.classifications.filter((c: any) => c.classification === 'NEEDS_INVESTIGATION').length
-    const doNotCount = dlqAdvisorAnalysis.classifications.filter((c: any) => c.classification === 'DO_NOT_REPLAY').length
+    const safeCount = dlqAdvisorAnalysis.classifications.filter((c: DlqMessageClassification) => c.classification === 'SAFE_TO_REPLAY').length
+    const needsCount = dlqAdvisorAnalysis.classifications.filter((c: DlqMessageClassification) => c.classification === 'NEEDS_INVESTIGATION').length
+    const doNotCount = dlqAdvisorAnalysis.classifications.filter((c: DlqMessageClassification) => c.classification === 'DO_NOT_REPLAY').length
     const total = safeCount + needsCount + doNotCount
     if (total <= 0) return { text: 'Replay Advisor — 0', title: 'No classifications available' }
 
@@ -658,8 +655,8 @@ export default function StreamPanel({
   // Create a Map of messageId -> classification for efficient lookup in grid
   const dlqClassificationsMap = useMemo(() => {
     if (!dlqAdvisorAnalysis) return null
-    const map = new Map()
-    dlqAdvisorAnalysis.classifications.forEach((c: any) => {
+    const map = new Map<string, DlqMessageClassification>()
+    dlqAdvisorAnalysis.classifications.forEach((c: DlqMessageClassification) => {
       map.set(c.messageId, c)
     })
     return map
@@ -845,7 +842,7 @@ export default function StreamPanel({
     if (controlsDisabled) return
     if (snapshotEnabledRef.current) return
     if (messages.length === 0) {
-      console.log('[StreamPanel] No messages loaded, cannot load next batch')
+      uiLogger.debug('No messages loaded, cannot load next batch')
       return
     }
 

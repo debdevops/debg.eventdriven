@@ -21,8 +21,31 @@ import { ReauthModal } from './components/ReauthModal'
 import { useToast } from './hooks/useToast'
 import { SessionProviderV2, useSession } from './contexts/SessionContextV2'
 import { apiClient } from './api/client'
-import type { Namespace, AuditEntry } from './types'
+import { apiLogger } from './utils/logger'
+import type { Namespace, AuditEntry, ToastApi, AiInsightsResult, Entity } from './types'
+import type { ToastType } from './components/Toast'
 import './App.css'
+
+/**
+ * Props for AppContent component
+ */
+interface AppContentProps {
+  namespaces: Namespace[]
+  activeNamespaceId: string | null
+  setActiveNamespaceId: (id: string) => void
+  showConnectModal: boolean
+  setShowConnectModal: (show: boolean) => void
+  showShortcuts: boolean
+  setShowShortcuts: (show: boolean) => void
+  auditLog: AuditEntry[]
+  currentEntityName: string | null
+  setCurrentEntityName: (name: string | null) => void
+  toast: ToastApi & { toasts: Array<{ id: string; message: string; type: ToastType }>; removeToast: (id: string) => void }
+  addAuditEntry: (entry: AuditEntry) => void
+  handleCloseNamespace: (sessionId: string) => void
+  handleUpdateNamespace: (sessionId: string, updates: Partial<Namespace>) => void
+  handleAddNamespace: (namespace: Namespace) => void
+}
 
 /**
  * AppContent - Inner component that uses SessionContext
@@ -44,7 +67,7 @@ function AppContent({
   handleCloseNamespace,
   handleUpdateNamespace,
   handleAddNamespace
-}: any) {
+}: AppContentProps) {
   const {
     sessionState,
     status,
@@ -69,7 +92,7 @@ function AppContent({
   // AI Insights state
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [showMessageDrawer, setShowMessageDrawer] = useState(false)
-  const [aiInsights, setAiInsights] = useState<any>(null)
+  const [aiInsights, setAiInsights] = useState<AiInsightsResult | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiCacheTime, setAiCacheTime] = useState<number>(0)
 
@@ -78,11 +101,11 @@ function AppContent({
   // Handle reconnect from modal or auth banner
   const handleReconnectFromModal = useCallback(async () => {
     if (!activeNamespace) {
-      console.warn('[App] No active namespace for reconnect')
+      apiLogger.warn('No active namespace for reconnect')
       return
     }
 
-    console.log('[App] Reconnect triggered from modal/banner')
+    apiLogger.info('Reconnect triggered from modal/banner')
     
     try {
       await reconnect(async ({ sessionId, expiresAtUtc, entities, lastSelection }) => {
@@ -91,14 +114,14 @@ function AppContent({
           sessionId,
           expiresAtUtc,
           queues: entities.queues,
-          topics: entities.topics.map((t: any) => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
+          topics: entities.topics.map((t: Entity) => ({ ...t, type: 'Topic' as const, subscriptions: [] }))
         })
         setActiveNamespaceId(sessionId)
 
         // Restore selection if it still exists.
         const entityNames = new Set<string>([
-          ...entities.queues.map((q: any) => q.name),
-          ...entities.topics.map((t: any) => t.name)
+          ...entities.queues.map((q: Entity) => q.name),
+          ...entities.topics.map((t: Entity) => t.name)
         ])
         if (lastSelection && entityNames.has(lastSelection)) {
           setCurrentEntityName(lastSelection)
@@ -180,16 +203,18 @@ function AppContent({
         entityName: currentEntityName,
         operation: 'AI Analysis'
       })
-    } catch (err: any) {
-      console.error('AI analysis failed:', err)
-      toast.error(err.message || 'AI analysis failed')
+    } catch (err) {
+      apiLogger.error('AI analysis failed', err)
+      toast.error(err instanceof Error ? err.message : 'AI analysis failed')
     } finally {
       setAiLoading(false)
     }
   }, [activeNamespace, currentEntityName, aiInsights, aiCacheTime, toast, addAuditEntry])
 
-  // Handle successful message generation
-  const handleGenerateSuccess = useCallback((result: {
+  /**
+   * Local result type for UI-generated messages (matches GenerateMessagesModal)
+   */
+  interface LocalGenerateResult {
     totalGenerated: number
     anomalousCount: number
     dlqCandidates: number
@@ -198,7 +223,10 @@ function AppContent({
     dlqDeadLetteredSubscriptions: number
     dlqTopicName?: string
     dlqSubscriptionName?: string
-  }) => {
+  }
+
+  // Handle successful message generation
+  const handleGenerateSuccess = useCallback((result: LocalGenerateResult) => {
     const subLabel = result.dlqTopicName && result.dlqSubscriptionName
       ? `${result.dlqTopicName}/${result.dlqSubscriptionName}`
       : 'subs'
@@ -292,7 +320,7 @@ function AppContent({
         {activeNamespace ? (
           <NamespaceView
             namespace={activeNamespace}
-            onUpdateNamespace={(updates: any) =>
+            onUpdateNamespace={(updates: Partial<Namespace>) =>
               handleUpdateNamespace(activeNamespace.sessionId, updates)
             }
             onAudit={addAuditEntry}

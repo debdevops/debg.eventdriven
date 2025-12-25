@@ -106,6 +106,23 @@
 	color: #6b7280;
 }
 
+/* Anomaly metric styling */
+.metric.anomaly-metric {
+	padding: 4px 8px;
+	background: rgba(254, 202, 202, 0.3);
+	border-radius: 6px;
+	border: 1px solid #fca5a5;
+}
+
+.metric.anomaly-metric .metric-label {
+	color: #991b1b;
+}
+
+.anomaly-value {
+	color: #dc2626 !important;
+	font-weight: 700 !important;
+}
+
 @media (max-width: 768px) {
 	.queue-health-header {
 		flex-wrap: wrap;

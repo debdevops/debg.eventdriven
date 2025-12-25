@@ -8,26 +8,30 @@ import { apiClient } from '../api/client'
 import { API_BASE_URL } from '../config/api'
 import './GenerateMessagesModal.css'
 
+/**
+ * Local result type for UI-generated messages (subset of full GenerateMessagesResult)
+ */
+interface LocalGenerateResult {
+  totalGenerated: number
+  anomalousCount: number
+  dlqCandidates: number
+  dlqDeadLettered: number
+  dlqDeadLetteredQueue: number
+  dlqDeadLetteredSubscriptions: number
+  dlqTopicName?: string
+  dlqSubscriptionName?: string
+}
+
 interface GenerateMessagesModalProps {
   isOpen: boolean
   onClose: () => void
   sessionId: string | null
   entities: Array<{ name: string; type: string }>
   currentEntity?: string
-  onSuccess: (result: {
-    totalGenerated: number
-    anomalousCount: number
-    dlqCandidates: number
-    dlqDeadLettered: number
-    dlqDeadLetteredQueue: number
-    dlqDeadLetteredSubscriptions: number
-    dlqTopicName?: string
-    dlqSubscriptionName?: string
-  }) => void
+  onSuccess: (result: LocalGenerateResult) => void
 }
 
 const PRESET_COUNTS = [10, 20, 50, 100, 200, 300]
-
 type GeneratedKind = 'normal' | 'suspicious' | 'dlq'
 
 function safeJsonStringify(value: unknown): string {
@@ -70,7 +74,26 @@ function buildGeneratedMessage(kind: GeneratedKind, index: number, includeDlq: b
       ? pickOne(normalEventTypes, seed)
       : pickOne([...normalEventTypes, ...suspiciousEventTypes], seed)
 
-  const baseBody: any = {
+  interface GeneratedMessageBody {
+    eventType: string
+    occurredAt: string
+    correlationId: string
+    source: string
+    version: number
+    data: {
+      orderId: string
+      customerId: string
+      amount: number
+      currency: string
+      region: string
+    }
+    _meta?: {
+      anomalyType: string
+      description: string
+    }
+  }
+
+  const baseBody: GeneratedMessageBody = {
     eventType,
     occurredAt: now.toISOString(),
     correlationId: baseCorrelationId,
@@ -115,6 +138,17 @@ function buildGeneratedMessage(kind: GeneratedKind, index: number, includeDlq: b
     }
   }
 
+  // Create a mutable copy of the data for DLQ modifications
+  interface MutableData {
+    orderId?: string
+    customerId: string
+    amount: number
+    currency: string
+    region: string
+    missingRequired?: boolean
+  }
+  let mutableData: MutableData | string = { ...baseBody.data }
+
   if (kind === 'dlq' && includeDlq) {
     // DLQ-eligible variants (flag + invalid/missing fields)
     applicationProperties.ForceDlq = 'true'
@@ -123,19 +157,29 @@ function buildGeneratedMessage(kind: GeneratedKind, index: number, includeDlq: b
     const dlqVariant = Math.abs(seed) % 3
     if (dlqVariant === 0) {
       // Missing required fields
-      delete baseBody.data.orderId
-      baseBody.data.missingRequired = true
+      if (typeof mutableData === 'object') {
+        delete mutableData.orderId
+        mutableData.missingRequired = true
+      }
       applicationProperties.dlqReason = 'missing-required-fields'
     } else if (dlqVariant === 1) {
       // Invalid payload shape (data should be object)
-      baseBody.data = 'INVALID_SHAPE'
+      mutableData = 'INVALID_SHAPE'
       applicationProperties.dlqReason = 'invalid-payload-shape'
     } else {
       // Business rule violation
-      baseBody.data.amount = 9999999
-      baseBody.data.currency = 'XXX'
+      if (typeof mutableData === 'object') {
+        mutableData.amount = 9999999
+        mutableData.currency = 'XXX'
+      }
       applicationProperties.dlqReason = 'business-rule-violation'
     }
+  }
+
+  // Update baseBody.data with our modifications
+  const finalBody = {
+    ...baseBody,
+    data: mutableData
   }
 
   // Some DLQ candidates should be non-JSON to test parsers; keep it rare.
@@ -149,11 +193,10 @@ function buildGeneratedMessage(kind: GeneratedKind, index: number, includeDlq: b
 
   return {
     kind,
-    payload: safeJsonStringify(baseBody),
+    payload: safeJsonStringify(finalBody),
     applicationProperties
   }
 }
-
 async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<void>) {
   const limit = Math.max(1, Math.min(concurrency, 8))
   let cursor = 0
@@ -321,7 +364,7 @@ export default function GenerateMessagesModal({
         dlqDeadLetteredSubscriptions: 0
       })
       onClose()
-    } catch (err: any) {
+    } catch (err) {
       // Fallback: if send endpoint is unavailable, use existing backend generator.
       try {
         const result = await apiClient.generateMessages(
@@ -340,8 +383,10 @@ export default function GenerateMessagesModal({
         } else {
           setError(result.errors.join('; ') || 'Generation failed')
         }
-      } catch (fallbackErr: any) {
-        setError(fallbackErr?.message || err?.message || 'Failed to generate messages')
+      } catch (fallbackErr) {
+        const fallbackMessage = fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error'
+        const originalMessage = err instanceof Error ? err.message : 'Unknown error'
+        setError(fallbackMessage || originalMessage || 'Failed to generate messages')
       }
     } finally {
       setIsGenerating(false)

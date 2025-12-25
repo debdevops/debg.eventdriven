@@ -122,6 +122,21 @@ public record OutlierDetail
     /// "ActiveQueue" or "DeadLetterQueue".
     /// </summary>
     public string Source { get; init; } = "ActiveQueue";
+    
+    /// <summary>
+    /// Event type of the anomalous message.
+    /// </summary>
+    public string EventType { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// Human-readable description of the anomaly.
+    /// </summary>
+    public string Description { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// Sample of the message content for display.
+    /// </summary>
+    public object? SampleMessage { get; init; }
 }
 
 /// <summary>

@@ -65,7 +65,7 @@ export interface AuditEntry {
   timestamp: string
   sessionId: string
   entityName: string
-  operation: 'Connect' | 'Peek' | 'Receive'
+  operation: 'Connect' | 'Peek' | 'Receive' | 'AI Analysis'
   messageId?: string
   sequenceNumber?: number
 }
@@ -92,3 +92,78 @@ export interface ReceiveResponse {
 
 export type StreamMode = 'peek' | 'receive'
 export type SSEEventType = 'message' | 'heartbeat' | 'error'
+
+/**
+ * Toast API interface for displaying notifications
+ */
+export interface ToastApi {
+  success: (message: string) => void
+  error: (message: string) => void
+  info: (message: string) => void
+  warning: (message: string) => void
+}
+
+/**
+ * AI Analysis types for message clustering and anomaly detection
+ */
+export interface MessageCluster {
+  clusterId: string
+  clusterName: string
+  messageCount: number
+  eventTypes: string[]
+  patternDescription: string
+  commonFields?: Record<string, unknown>
+  correlationGroups?: string[][]
+  sampleMessageIds?: string[]
+  confidence: number
+}
+
+export interface MessageOutlier {
+  messageId: string
+  reason: string
+  anomalyScore: number
+  source: string
+  eventType: string
+  description: string
+  sampleMessage?: unknown
+}
+
+export interface QueueAnalysis {
+  source: string
+  totalMessages: number
+  clusters: MessageCluster[]
+  outliers: MessageOutlier[]
+  processingTimeMs: number
+}
+
+export interface AiInsightsResult {
+  activeQueueAnalysis?: QueueAnalysis
+  dlqAnalysis?: QueueAnalysis
+  summary: string
+  analyzedAt: string
+}
+
+/**
+ * Generate messages result type
+ */
+export interface GenerateMessagesResult {
+  totalGenerated: number
+  anomalousCount: number
+  dlqCandidates: number
+  dlqDeadLettered: number
+  dlqDeadLetteredQueue: number
+  dlqDeadLetteredSubscriptions: number
+  dlqTopicName?: string
+  dlqSubscriptionName?: string
+  errors: string[]
+  success: boolean
+}
+
+/**
+ * Peek compare result type
+ */
+export interface PeekCompareResult {
+  queue: string
+  mainQueue: { count: number; messages: MessageEnvelope[] }
+  deadLetterQueue: { count: number; messages: MessageEnvelope[] }
+}

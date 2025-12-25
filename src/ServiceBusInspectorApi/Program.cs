@@ -57,6 +57,7 @@ builder.Services.AddSingleton<AiInsightsService>();
 builder.Services.AddSingleton<ConcurrentDictionary<string, SessionInfo>>();
 
 // CORS for local development
+// PRODUCTION: Move origins to appsettings.json as "AllowedOrigins" array
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -2111,6 +2112,14 @@ app.MapPost("/api/messages/analyze", async (
                         if (!messageData.ContainsKey("payload"))
                             messageData["payload"] = new Dictionary<string, object>();
                         
+                        // Include applicationProperties for anomaly detection
+                        var appProps = new Dictionary<string, object>();
+                        foreach (var prop in msg.ApplicationProperties)
+                        {
+                            appProps[prop.Key] = prop.Value;
+                        }
+                        messageData["applicationProperties"] = appProps;
+                        
                         activeMessages.Add(messageData);
                     }
                 }
@@ -2158,6 +2167,14 @@ app.MapPost("/api/messages/analyze", async (
                                 messageData["timestamp"] = msg.EnqueuedTime.UtcDateTime.ToString("O");
                             if (!messageData.ContainsKey("payload"))
                                 messageData["payload"] = new Dictionary<string, object>();
+                            
+                            // Include applicationProperties for anomaly detection
+                            var appProps = new Dictionary<string, object>();
+                            foreach (var prop in msg.ApplicationProperties)
+                            {
+                                appProps[prop.Key] = prop.Value;
+                            }
+                            messageData["applicationProperties"] = appProps;
                             
                             dlqMessages.Add(messageData);
                         }

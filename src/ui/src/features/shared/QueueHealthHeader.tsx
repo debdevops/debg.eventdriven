@@ -2,13 +2,14 @@
  * Queue Health Header
  *
  * WHY: During incidents, engineers need instant queue health visibility.
- * Shows critical metrics without scrolling: status, active count, DLQ warnings, oldest message age.
+ * Shows critical metrics without scrolling: status, active count, DLQ warnings, oldest message age, anomaly count.
  * Zero grid impact - renders once, updates only on message refresh.
  */
 
 import { useMemo } from 'react'
 import type { MessageEnvelope } from '../../types'
 import { computeDlqHealth, formatAgeMinutes } from '../../utils/dlqHealth'
+import { getAnomalyInfo } from '../../components/AnomalyBadge'
 import './QueueHealthHeader.css'
 
 interface QueueHealthHeaderProps {
@@ -30,6 +31,7 @@ interface HealthMetrics {
   oldestDlqAgeMinutes: number | null
   statusReason: string
   whyTooltip: string
+  anomalyCount: number
 }
 
 export function QueueHealthHeader({ messages, dlqCount, activeCount, oldestDlqEnqueuedTimeUtc, sampledDlqMessages, isDLQ }: QueueHealthHeaderProps) {
@@ -40,6 +42,12 @@ export function QueueHealthHeader({ messages, dlqCount, activeCount, oldestDlqEn
       oldestDlqEnqueuedTimeUtc,
       sampledDlqMessages: sampledDlqMessages ?? (isDLQ ? messages : null)
     })
+
+    // Count messages with anomaly indicators
+    const anomalyCount = messages.filter(m => {
+      const info = getAnomalyInfo(m.applicationProperties)
+      return info?.isAnomaly
+    }).length
 
     const status: HealthStatus = dlqHealth.severity === 'HEALTHY'
       ? 'healthy'
@@ -55,7 +63,8 @@ export function QueueHealthHeader({ messages, dlqCount, activeCount, oldestDlqEn
       dlqCount,
       oldestDlqAgeMinutes: dlqHealth.oldestDlqAgeMinutes,
       statusReason,
-      whyTooltip: dlqHealth.whyTooltip
+      whyTooltip: dlqHealth.whyTooltip,
+      anomalyCount
     }
   }, [messages, dlqCount, activeCount, oldestDlqEnqueuedTimeUtc, sampledDlqMessages, isDLQ])
 
@@ -97,6 +106,14 @@ export function QueueHealthHeader({ messages, dlqCount, activeCount, oldestDlqEn
           <div className="metric">
             <span className="metric-label">Oldest DLQ</span>
             <span className="metric-value">{formatAgeMinutes(metrics.oldestDlqAgeMinutes)}</span>
+          </div>
+        )}
+
+        {/* Anomaly count indicator */}
+        {metrics.anomalyCount > 0 && (
+          <div className="metric anomaly-metric" title={`${metrics.anomalyCount} messages with anomaly indicators detected`}>
+            <span className="metric-label">⚠️ Anomalies</span>
+            <span className="metric-value anomaly-value">{metrics.anomalyCount}</span>
           </div>
         )}
       </div>

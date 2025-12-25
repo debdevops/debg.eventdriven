@@ -149,16 +149,17 @@ export default function EntityList({
     
     try {
       const response = await apiClient.listSubscriptions(sessionId, topicName)
-      const mapped: Subscription[] = response.subscriptions.map((raw: any) => {
+      const mapped: Subscription[] = response.subscriptions.map((raw: Subscription) => {
         // Be robust to backend serializer casing (camelCase vs PascalCase).
-        const name = String(raw?.name ?? raw?.Name ?? '')
-        const messageCount = Number(raw?.messageCount ?? raw?.MessageCount ?? 0)
+        const rawRecord = raw as unknown as Record<string, unknown>
+        const name = String(rawRecord?.name ?? rawRecord?.Name ?? '')
+        const messageCount = Number(rawRecord?.messageCount ?? rawRecord?.MessageCount ?? 0)
         const deadLetterMessageCount = Number(
-          raw?.deadLetterMessageCount ?? raw?.DeadLetterMessageCount ?? 0
+          rawRecord?.deadLetterMessageCount ?? rawRecord?.DeadLetterMessageCount ?? 0
         )
-        const maxDeliveryCount = raw?.maxDeliveryCount ?? raw?.MaxDeliveryCount
-        const lockDuration = raw?.lockDuration ?? raw?.LockDuration
-        const status = String(raw?.status ?? raw?.Status ?? '')
+        const maxDeliveryCount = rawRecord?.maxDeliveryCount ?? rawRecord?.MaxDeliveryCount
+        const lockDuration = rawRecord?.lockDuration ?? rawRecord?.LockDuration
+        const status = String(rawRecord?.status ?? rawRecord?.Status ?? '')
 
         return {
           ...raw,
@@ -166,8 +167,8 @@ export default function EntityList({
           topicName,
           messageCount,
           deadLetterMessageCount,
-          maxDeliveryCount,
-          lockDuration,
+          maxDeliveryCount: maxDeliveryCount as number | undefined,
+          lockDuration: lockDuration as string | undefined,
           status,
           entityId: subscriptionEntityId(topicName, name)
         } as Subscription
@@ -262,15 +263,23 @@ export default function EntityList({
           <h4 
             className={`entity-group-title collapsible ${queuesCollapsed ? 'collapsed' : ''}`}
             onClick={() => setQueuesCollapsed(!queuesCollapsed)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setQueuesCollapsed(!queuesCollapsed)
+              }
+            }}
             role="button"
             tabIndex={0}
+            aria-expanded={!queuesCollapsed}
+            aria-controls="queues-list"
           >
-            <span className="collapse-arrow">{queuesCollapsed ? '▶' : '▼'}</span>
+            <span className="collapse-arrow" aria-hidden="true">{queuesCollapsed ? '▶' : '▼'}</span>
             <span>Queues</span>
             <span className="entity-count">{queues.length}</span>
           </h4>
           {!queuesCollapsed && (
-            <div className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
+            <div id="queues-list" className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
               {queues.map(queue => (
                 <QueueItemExpandable
                   key={queue.entityId}
@@ -293,15 +302,23 @@ export default function EntityList({
           <h4 
             className={`entity-group-title collapsible ${topicsCollapsed ? 'collapsed' : ''}`}
             onClick={() => setTopicsCollapsed(!topicsCollapsed)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setTopicsCollapsed(!topicsCollapsed)
+              }
+            }}
             role="button"
             tabIndex={0}
+            aria-expanded={!topicsCollapsed}
+            aria-controls="topics-list"
           >
-            <span className="collapse-arrow">{topicsCollapsed ? '▶' : '▼'}</span>
+            <span className="collapse-arrow" aria-hidden="true">{topicsCollapsed ? '▶' : '▼'}</span>
             <span>Topics</span>
             <span className="entity-count">{topics.length}</span>
           </h4>
           {!topicsCollapsed && (
-            <div className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
+            <div id="topics-list" className={`entity-cards-grid ${status !== 'connected' ? 'disabled' : ''}`}>
               {topics.map(topic => (
                 <TopicItem
                   key={topic.entityId}

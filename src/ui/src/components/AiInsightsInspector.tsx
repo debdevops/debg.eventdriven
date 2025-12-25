@@ -6,13 +6,14 @@
 import { useState, useMemo } from 'react'
 import { Pagination } from './Pagination'
 import { apiClient } from '../api/client'
+import { uiLogger } from '../utils/logger'
 import type { MessageEnvelope } from '../types'
 import './AiInsightsInspector.css'
 
 interface MessageCluster {
   eventType: string
   size: number
-  sampleMessage: any
+  sampleMessage: unknown
   commonFields: string[]
 }
 
@@ -110,7 +111,14 @@ export function AiInsightsInspector({
     }
   }
 
-  const normalizeCluster = (cluster: any, source: string): (MessageCluster & { source: string }) => {
+  interface RawCluster {
+    eventType?: string
+    size?: number | string
+    sampleMessage?: unknown
+    commonFields?: string[] | string
+  }
+
+  const normalizeCluster = (cluster: RawCluster, source: string): (MessageCluster & { source: string }) => {
     return {
       eventType: cluster?.eventType || 'Unknown',
       size: typeof cluster?.size === 'number' ? cluster.size : Number(cluster?.size || 0),
@@ -125,11 +133,11 @@ export function AiInsightsInspector({
     const clusters: (MessageCluster & { source: string })[] = []
     
     if (aiInsights.activeQueueAnalysis?.clusters) {
-      clusters.push(...aiInsights.activeQueueAnalysis.clusters.map((c: any) => normalizeCluster(c, 'Active Queue')))
+      clusters.push(...aiInsights.activeQueueAnalysis.clusters.map((c) => normalizeCluster(c as RawCluster, 'Active Queue')))
     }
     
     if (aiInsights.dlqAnalysis?.clusters) {
-      clusters.push(...aiInsights.dlqAnalysis.clusters.map((c: any) => normalizeCluster(c, 'DLQ')))
+      clusters.push(...aiInsights.dlqAnalysis.clusters.map((c) => normalizeCluster(c as RawCluster, 'DLQ')))
     }
     
     return clusters.sort((a, b) => b.size - a.size)
@@ -212,14 +220,14 @@ export function AiInsightsInspector({
       )
       
       const messages = response.messages || []
-      const message = messages.find((m: any) => m.messageId === outlier.messageId)
+      const message = messages.find((m) => m.messageId === outlier.messageId)
       if (message) {
         onMessageSelect(message)
       } else {
         alert('Message not found in current peek window')
       }
     } catch (err) {
-      console.error('Failed to load message:', err)
+      uiLogger.error('Failed to load message', err)
       alert('Failed to load message details')
     } finally {
       setLoadingMessage(null)

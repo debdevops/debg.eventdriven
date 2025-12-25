@@ -7,7 +7,8 @@ import EntityList from './EntityList'
 import StreamPanel from '../views/StreamPanelView'
 import { apiClient } from '../api/client'
 import { useSessionV2 } from '../contexts/SessionContextV2'
-import type { Namespace, Entity, Subscription, AuditEntry } from '../types'
+import { uiLogger } from '../utils/logger'
+import type { Namespace, Entity, Subscription, AuditEntry, ToastApi, AiInsightsResult } from '../types'
 import { type SelectedTarget } from '../entities/selection'
 import { queueEntityId, topicEntityId } from '../utils/entityIdentity'
 import './NamespaceView.css'
@@ -17,11 +18,11 @@ interface NamespaceViewProps {
   onUpdateNamespace: (updates: Partial<Namespace>) => void
   onAudit: (entry: AuditEntry) => void
   onEntitySelect?: (entityName: string) => void
-  toast: any
+  toast: ToastApi
   onAiInsights?: () => void
   aiInsightsLoading?: boolean
   hasAiInsights?: boolean
-  aiInsights?: any
+  aiInsights?: AiInsightsResult | null
 }
 
 export function NamespaceView({
@@ -49,7 +50,7 @@ export function NamespaceView({
   const handleSelectEntity = (entity: Entity) => {
     // Guard: Prevent navigation if session is not ready
     if (!canInteract) {
-      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      uiLogger.debug('Navigation blocked: session not ready', { status })
       return
     }
     
@@ -60,7 +61,7 @@ export function NamespaceView({
   const handleSelectSubscription = (subscription: Subscription, topicName: string) => {
     // Guard: Prevent navigation if session is not ready
     if (!canInteract) {
-      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      uiLogger.debug('Navigation blocked: session not ready', { status })
       return
     }
     
@@ -71,7 +72,7 @@ export function NamespaceView({
   const handleSelectSubscriptionDLQ = (subscription: Subscription, topicName: string) => {
     // Guard: Prevent navigation if session is not ready
     if (!canInteract) {
-      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      uiLogger.debug('Navigation blocked: session not ready', { status })
       return
     }
     setSelectedTarget({ entityType: 'subscription', viewType: 'dlq', subscription, topicName })
@@ -81,7 +82,7 @@ export function NamespaceView({
   const handleSelectDLQ = (entity: Entity) => {
     // Guard: Prevent navigation if session is not ready
     if (!canInteract) {
-      console.log('[NamespaceView] Navigation blocked: session not ready (status=' + status + ')')
+      uiLogger.debug('Navigation blocked: session not ready', { status })
       return
     }
     
@@ -120,7 +121,7 @@ export function NamespaceView({
   const handleRefreshEntities = useCallback(async (triggeredByUser = false) => {
     // Guard: Prevent refresh if session is not ready
     if (!canInteract) {
-      console.log('[NamespaceView] Refresh blocked: session not ready (status=' + status + ')')
+      uiLogger.debug('Refresh blocked: session not ready', { status })
       return
     }
     

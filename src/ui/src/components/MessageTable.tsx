@@ -1,6 +1,6 @@
 /**
  * Message Table Component with selection, sorting, actions, DLQ replay, and export
- * Enhanced with: ActionToolbar, DeliveryBadge, Pagination, Select Mode
+ * Enhanced with: ActionToolbar, DeliveryBadge, Pagination, Select Mode, Anomaly Detection
  */
 
 import { useEffect, useState, useMemo } from 'react'
@@ -11,12 +11,14 @@ import { QueueHealthHeader } from './QueueHealthHeader'
 import { MessageAgeDistribution } from './MessageAgeDistribution'
 import { EventTypeChip } from './EventTypeChip'
 import { MessageFiltersBar } from '../features/shared/MessageFiltersBar'
+import { AnomalyBadge, getAnomalyInfo } from './AnomalyBadge'
 import { formatTimestamp, formatRelativeTime } from '../utils/formatters'
 import { extractEventType, type AgeDistribution } from '../utils/eventTypeExtractor'
 import { API_BASE_URL } from '../config/api'
 import type { MessageEnvelope } from '../types'
 import type { DlqMessageClassification } from '../services/dlqReplayAdvisor'
 import './MessageTable.css'
+import './AnomalyBadge.css'
 
 interface MessageTableProps {
   messages: MessageEnvelope[] // INSPECTOR MODE: loaded (peeked) messages, NOT total in queue
@@ -430,6 +432,7 @@ export default function MessageTable({
               <colgroup>
                 {selectMode && <col style={{ width: '32px' }} />}
                 {isDLQ && dlqClassifications && <col style={{ width: '110px' }} />}
+                <col style={{ width: '40px' }} /> {/* Anomaly indicator */}
                 <col style={{ width: '26px' }} />
                 <col style={{ width: '60px' }} />
                 <col style={{ width: '110px' }} />
@@ -459,6 +462,7 @@ export default function MessageTable({
                     AI Status
                   </th>
                 )}
+                <th className="anomaly-col" title="Anomaly indicators">⚠️</th>
                 <th className="chevron-col" aria-label="Row details"></th>
                 <th onClick={() => handleSort('sequenceNumber')} className="sortable seq-col">
                   Seq# {sortField === 'sequenceNumber' && (sortAsc ? '▲' : '▼')}
@@ -482,10 +486,18 @@ export default function MessageTable({
               </tr>
             </thead>
             <tbody>
-              {sortedMessages.map(message => (
+              {sortedMessages.map(message => {
+                const anomalyInfo = getAnomalyInfo(message.applicationProperties)
+                const rowClasses = [
+                  'message-row',
+                  correlationFilter && message.correlationId?.toLowerCase().includes(correlationFilter.toLowerCase()) ? 'correlation-highlight' : '',
+                  anomalyInfo?.isAnomaly ? `anomaly-row${anomalyInfo.severity === 'medium' || anomalyInfo.severity === 'MEDIUM' ? '-medium' : ''}` : ''
+                ].filter(Boolean).join(' ')
+                
+                return (
                 <tr 
                   key={message.sequenceNumber} 
-                  className={`message-row ${correlationFilter && message.correlationId?.toLowerCase().includes(correlationFilter.toLowerCase()) ? 'correlation-highlight' : ''}`}
+                  className={rowClasses}
                   onClick={() => handleRowClick(message)}
                   style={{ cursor: selectMode ? 'default' : 'pointer' }}
                 >
@@ -521,17 +533,25 @@ export default function MessageTable({
                               >
                                 {icon}
                               </span>
-                              {/* {classification.riskSignals && classification.riskSignals.length > 0 && (
-                                <div className="dlq-risk-signals">
-                                  <RiskSignalGroup signals={classification.riskSignals} maxDisplay={2} />
-                                </div>
-                              )} */}
                             </div>
                           )
                         })()}
                       </div>
                     </td>
                   )}
+                  {/* Anomaly indicator column */}
+                  <td className="anomaly-col">
+                    <div className="anomaly-indicator">
+                      {anomalyInfo?.isAnomaly && (
+                        <AnomalyBadge 
+                          anomalyType={anomalyInfo.anomalyType || 'unknown'}
+                          severity={anomalyInfo.severity}
+                          description={anomalyInfo.description}
+                          compact
+                        />
+                      )}
+                    </div>
+                  </td>
                   <td className={`chevron-col ${selectMode ? 'disabled' : ''}`} aria-hidden="true">
                     <span className="row-chevron">›</span>
                   </td>
@@ -594,7 +614,7 @@ export default function MessageTable({
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         )}

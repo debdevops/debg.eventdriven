@@ -12,6 +12,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../api/client'
 import { AuthError } from '../api/errors'
+import type { EntityListResponse } from '../types'
 
 export type SessionState = 'idle' | 'connected' | 'idle-warning' | 'expired' | 'reconnecting' | 'failed'
 export type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'expired' | 'auth_required'
@@ -30,7 +31,7 @@ export interface SessionError {
 export interface SessionReconnectData {
   sessionId: string
   expiresAtUtc: string
-  entities: any
+  entities: EntityListResponse
   lastSelection: string | null
 }
 
@@ -365,7 +366,6 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
         const entities = await apiClient.listEntities(connectResp.sessionId)
 
         setSessionMeta({ sessionId: connectResp.sessionId, expiresAtUtc: connectResp.expiresAtUtc })
-        resetIdle()
 
         await applyUpdates({
           sessionId: connectResp.sessionId,
@@ -376,8 +376,13 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
 
         // 12. Only then → connected.
         setConnectedAt(new Date())
+        sessionStateRef.current = 'connected'
         setSessionState('connected')
         setError(null)
+        
+        // 13. Re-establish idle timers now that we're connected.
+        resetIdle()
+        
         toast.success('✓ Reconnected successfully')
       } catch (err) {
         if (err instanceof AuthError) {

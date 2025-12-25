@@ -1,0 +1,115 @@
+/**
+ * Anomaly Badge Styles
+ */
+
+.anomaly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.anomaly-badge-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: help;
+}
+
+.anomaly-icon {
+  font-size: 12px;
+}
+
+.anomaly-label {
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Severity colors */
+.anomaly-low {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.anomaly-medium {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.anomaly-high {
+  background-color: #fed7aa;
+  color: #c2410c;
+  border: 1px solid #fb923c;
+}
+
+.anomaly-critical {
+  background-color: #fecaca;
+  color: #991b1b;
+  border: 1px solid #f87171;
+  animation: pulse-critical 2s infinite;
+}
+
+@keyframes pulse-critical {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+/* Compact badge severity colors */
+.anomaly-badge-compact.anomaly-low {
+  background-color: #dbeafe;
+}
+
+.anomaly-badge-compact.anomaly-medium {
+  background-color: #fef3c7;
+}
+
+.anomaly-badge-compact.anomaly-high {
+  background-color: #fed7aa;
+}
+
+.anomaly-badge-compact.anomaly-critical {
+  background-color: #fecaca;
+}
+
+/* Row highlighting for anomalous messages */
+.message-row.anomaly-row {
+  background-color: rgba(254, 202, 202, 0.15) !important;
+}
+
+.message-row.anomaly-row:hover {
+  background-color: rgba(254, 202, 202, 0.25) !important;
+}
+
+.message-row.anomaly-row-medium {
+  background-color: rgba(254, 243, 199, 0.15) !important;
+}
+
+.message-row.anomaly-row-medium:hover {
+  background-color: rgba(254, 243, 199, 0.25) !important;
+}
+
+/* Anomaly indicator column */
+.anomaly-col {
+  width: 40px;
+  text-align: center;
+}
+
+.anomaly-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
