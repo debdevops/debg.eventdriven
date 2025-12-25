@@ -48,6 +48,8 @@ export interface MessageEnvelope {
   enqueuedTimeUtc: string
   deliveryCount: number
   body: string
+  // UI-only precomputed one-line preview (computed once at load time)
+  previewText?: string
   applicationProperties: Record<string, any>
   contentType?: string
   correlationId?: string

@@ -415,19 +415,18 @@ export default function MessageTable({
         }}
       />
 
-      {sortedMessages.length === 0 ? (
-        <div className="empty-messages">
-          <p>{messages.length === 0 ? 'No messages to display' : 'No messages match your filters'}</p>
-          {messages.length > 0 && (
-            <button onClick={handleClearFilters} className="btn-outline">
-              Clear Filters
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="table-wrapper">
-            <table className="message-table">
+      <div className="table-wrapper">
+        {sortedMessages.length === 0 ? (
+          <div className="empty-messages">
+            <p>{messages.length === 0 ? 'No messages to display' : 'No messages match your filters'}</p>
+            {messages.length > 0 && (
+              <button onClick={handleClearFilters} className="btn-outline">
+                Clear Filters
+              </button>
+            )}
+          </div>
+        ) : (
+          <table className="message-table">
               <colgroup>
                 {selectMode && <col style={{ width: '32px' }} />}
                 {isDLQ && dlqClassifications && <col style={{ width: '110px' }} />}
@@ -438,8 +437,9 @@ export default function MessageTable({
                 {isDLQ && <col style={{ width: '160px' }} />}
                 {isDLQ && <col style={{ width: '240px' }} />}
                 <col style={{ width: '160px' }} />
-                {/* Message ID takes remaining width */}
+                {/* Preview takes remaining width */}
                 <col />
+                <col style={{ width: '220px' }} />
                 <col style={{ width: '72px' }} />
               </colgroup>
             <thead>
@@ -476,6 +476,7 @@ export default function MessageTable({
                   </>
                 )}
                 <th className="eventtype-col">Event Type</th>
+                <th className="preview-col">Message Preview</th>
                 <th className="id-col">Message ID</th>
                 <th className="actions-col">Actions</th>
               </tr>
@@ -567,6 +568,9 @@ export default function MessageTable({
                       }}
                     />
                   </td>
+                  <td className="preview-col" title={message.previewText || ''}>
+                    <span className="message-preview">{message.previewText || '—'}</span>
+                  </td>
                   <td className="id-col" title={message.messageId}>
                     <span className="message-id">{message.messageId}</span>
                   </td>
@@ -593,20 +597,19 @@ export default function MessageTable({
               ))}
             </tbody>
           </table>
-        </div>
+        )}
+      </div>
 
-        {/* INSPECTOR MODE Footer - informational only, no slicing */}
-        <Pagination
-          filteredCount={sortedMessages.length}
-          loadedCount={messages.length}
-          totalQueueCount={totalMessageCount}
-          peekSize={peekSize}
-          onPeekSizeChange={onPeekSizeChange}
-          onLoadNextBatch={onLoadNextBatch}
-          disabled={disabled || snapshotLocked}
-        />
-      </>
-      )}
+      {/* INSPECTOR MODE Footer - pinned to grid bottom (not overlay) */}
+      <Pagination
+        filteredCount={sortedMessages.length}
+        loadedCount={messages.length}
+        totalQueueCount={totalMessageCount}
+        peekSize={peekSize}
+        onPeekSizeChange={onPeekSizeChange}
+        onLoadNextBatch={onLoadNextBatch}
+        disabled={disabled || snapshotLocked}
+      />
 
     </div>
   )

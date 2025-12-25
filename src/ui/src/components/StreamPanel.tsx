@@ -28,6 +28,7 @@ import { DlqAdvisoryActions, getDlqAdvisoryActions } from '../features/dlq/DlqAd
 import type { MessageEnvelope, StreamMode, AuditEntry } from '../types'
 import { selectionKey, type SelectedTarget } from '../entities/selection'
 import { computeDlqHealth, formatAgeMinutes } from '../utils/dlqHealth'
+import { extractEventType } from '../utils/eventTypeExtractor'
 import './StreamPanel.css'
 
 interface StreamPanelProps {
@@ -63,6 +64,40 @@ export default function StreamPanel({
   const mode: StreamMode = 'peek' // Read-only mode
   const { status, canInteract, scheduleInterval, clearTimer } = useSessionV2()
   const controlsDisabled = !canInteract || isSessionExpired
+
+  const computePreviewText = useCallback((message: MessageEnvelope): string => {
+    const props = message.applicationProperties ?? {}
+
+    // Prefer non-body sources first (cheap); fall back to body extraction if needed.
+    const fastEventType =
+      props.eventType ??
+      props.EventType ??
+      props.event_type ??
+      props.type ??
+      props.Type ??
+      props['@type'] ??
+      props.$type
+
+    const eventType = fastEventType ? String(fastEventType) : (extractEventType(message).eventType ?? 'Unknown')
+    const keyIdentifier =
+      (message.correlationId && String(message.correlationId)) ||
+      (message.subject && String(message.subject)) ||
+      (props.correlationId && String(props.correlationId)) ||
+      (props.CorrelationId && String(props.CorrelationId)) ||
+      message.messageId
+
+    const dlqSuffix = message.deadLetterReason ? ` • ${String(message.deadLetterReason)}` : ''
+    const raw = `${eventType} • ${keyIdentifier}${dlqSuffix}`
+    const singleLine = raw.replace(/\s+/g, ' ').trim()
+
+    const maxLen = 80
+    return singleLine.length <= maxLen ? singleLine : `${singleLine.slice(0, maxLen - 1)}…`
+  }, [])
+
+  const withPreview = useCallback((message: MessageEnvelope): MessageEnvelope => {
+    if (message.previewText) return message
+    return { ...message, previewText: computePreviewText(message) }
+  }, [computePreviewText])
 
   // Snapshot (Frozen View)
   const [snapshotEnabled, setSnapshotEnabled] = useState(false)
@@ -487,7 +522,7 @@ export default function StreamPanel({
       }
 
       // Never merge active+DLQ. Replace only the current view's message set.
-      setMessages(response.messages)
+      setMessages(response.messages.map(withPreview))
       
       setLastUpdated(new Date())
       // Clear previous error ONLY after a successful fetch.
@@ -599,6 +634,27 @@ export default function StreamPanel({
     }
   }, [messages, isDLQ])
 
+  const dlqReplaySummary = useMemo(() => {
+    if (!isDLQ || !dlqAdvisorAnalysis) return null
+    const safeCount = dlqAdvisorAnalysis.classifications.filter((c: any) => c.classification === 'SAFE_TO_REPLAY').length
+    const needsCount = dlqAdvisorAnalysis.classifications.filter((c: any) => c.classification === 'NEEDS_INVESTIGATION').length
+    const doNotCount = dlqAdvisorAnalysis.classifications.filter((c: any) => c.classification === 'DO_NOT_REPLAY').length
+    const total = safeCount + needsCount + doNotCount
+    if (total <= 0) return { text: 'Replay Advisor — 0', title: 'No classifications available' }
+
+    const top = [
+      { key: 'SAFE_TO_REPLAY', label: 'Safe to Replay', count: safeCount },
+      { key: 'NEEDS_INVESTIGATION', label: 'Needs Investigation', count: needsCount },
+      { key: 'DO_NOT_REPLAY', label: 'Do Not Replay', count: doNotCount }
+    ].sort((a, b) => b.count - a.count)[0]
+
+    const pct = Math.round((top.count / total) * 100)
+    return {
+      text: `Replay Advisor — ${top.label} ${top.count} (${pct}%)`,
+      title: `Replay Advisor breakdown: Safe ${safeCount}, Needs ${needsCount}, Do Not ${doNotCount}. Click Expand to view details.`
+    }
+  }, [isDLQ, dlqAdvisorAnalysis])
+
   // Create a Map of messageId -> classification for efficient lookup in grid
   const dlqClassificationsMap = useMemo(() => {
     if (!dlqAdvisorAnalysis) return null
@@ -663,13 +719,14 @@ export default function StreamPanel({
       subscriptionName
     ).catch(err => console.error('Failed to save message:', err))
     
+    const hydrated = withPreview(message)
     setMessages(prev => {
       // Avoid duplicates
-      const exists = prev.find(m => m.sequenceNumber === message.sequenceNumber)
+      const exists = prev.find(m => m.sequenceNumber === hydrated.sequenceNumber)
       if (exists) return prev
-      return [message, ...prev] // Newest first
+      return [hydrated, ...prev] // Newest first
     })
-  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.entityType, selectionId])
+  }, [sessionId, entityName, subscriptionName, isDLQ, selectedTarget.entityType, selectionId, withPreview])
 
   useSSE({
     url: streamURL,
@@ -847,10 +904,11 @@ export default function StreamPanel({
       }
 
       if (response.messages && response.messages.length > 0) {
+        const nextBatch = response.messages.map(withPreview)
         // Save messages to local store
         try {
           await messageStore.saveMessages(
-            response.messages,
+            nextBatch,
             sessionId,
             entityName,
             entityType,
@@ -865,7 +923,7 @@ export default function StreamPanel({
         let addedCount = 0
         setMessages(prev => {
           // Combine and deduplicate
-          const allMessages = [...prev, ...response.messages]
+          const allMessages = [...prev, ...nextBatch]
           const unique = Array.from(new Map(allMessages.map(m => [m.sequenceNumber, m])).values())
           addedCount = Math.max(0, unique.length - prev.length)
           // Sort by sequence number (newest first)
@@ -1204,6 +1262,15 @@ export default function StreamPanel({
                   <span className="dlq-insights-count">({dlqAdvisoryActions.length})</span>
                 </span>
               </div>
+
+              {dlqReplaySummary && (
+                <div className="dlq-insights-item" title={dlqReplaySummary.title}>
+                  <span className="dlq-insights-icon" aria-hidden="true">🤖</span>
+                  <span className="dlq-insights-text">
+                    <strong>{dlqReplaySummary.text}</strong>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="dlq-insights-actions">
@@ -1249,6 +1316,15 @@ export default function StreamPanel({
                 actionsOverride={dlqAdvisoryActions}
                 variant="embedded"
               />
+
+              {/* DLQ Replay Advisor is shown only when expanded to keep the grid primary */}
+              {dlqAdvisorAnalysis && (
+                <DlqReplayAdvisor
+                  analysis={dlqAdvisorAnalysis}
+                  onFilterByCategory={handleFilterByDlqCategory}
+                  disabled={false}
+                />
+              )}
             </div>
           </div>
         </>
@@ -1270,15 +1346,6 @@ export default function StreamPanel({
           sessionId={sessionId}
           entityName={entityName}
           subscriptionName={subscriptionName}
-        />
-      )}
-
-      {/* DLQ Replay Advisor - only for DLQ view */}
-      {isDLQ && dlqAdvisorAnalysis && (
-        <DlqReplayAdvisor
-          analysis={dlqAdvisorAnalysis}
-          onFilterByCategory={handleFilterByDlqCategory}
-          disabled={false}
         />
       )}
 

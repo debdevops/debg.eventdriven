@@ -12,34 +12,18 @@
 }
 
 .pagination-container.inspector-footer {
-  padding: 8px 16px;
-  min-height: 32px;
-  flex-direction: column; /* Stack divider above footer content */
-  gap: 8px;
-}
-
-/* Visual divider between loaded and unloaded messages */
-.messages-end-divider {
-  display: flex;
-  align-items: center;
+  padding: 0 16px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  flex-direction: row;
   gap: 12px;
-  width: 100%;
-  margin: 4px 0;
 }
 
-.divider-line {
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--border-color), transparent);
-}
-
-.divider-text {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-style: italic;
-  padding: 0 8px;
-  background: var(--surface-2);
-  white-space: nowrap;
+.pagination-container.inspector-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
 }
 
 .pagination-info {
@@ -192,16 +176,9 @@
 .inspector-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Space out peek size and load button */
+  justify-content: flex-end;
   gap: 12px;
-  width: 100%;
-}
-
-.load-next-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  width: auto;
 }
 
 .btn-load-next-batch {

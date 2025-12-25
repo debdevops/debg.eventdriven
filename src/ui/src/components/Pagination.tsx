@@ -48,7 +48,7 @@ export function Pagination(props: PaginationProps) {
 }
 
 function renderInspectorMode(props: PaginationProps) {
-  const { filteredCount = 0, loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, onLoadNextBatch, pageSizeOptions = [50, 100, 200], disabled = false } = props
+  const { loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, onLoadNextBatch, pageSizeOptions = [50, 100, 200], disabled = false } = props
   
   const showPeekSizeSelector = loadedCount >= peekSize
   // Invariant: inspector mode intentionally does NOT use infinite scroll.
@@ -63,29 +63,13 @@ function renderInspectorMode(props: PaginationProps) {
   const hasMoreMessages = total !== undefined && total > 0 && loadedCount > 0 && loadedCount < total
   const showLoadNextBatch = Boolean(onLoadNextBatch) && hasMoreMessages && loadedCount >= peekSize
   const remaining = total !== undefined ? Math.max(0, total - loadedCount) : null
+  const totalLabel = totalQueueCount !== undefined ? String(totalQueueCount) : '?' 
 
   return (
     <div className="pagination-container inspector-footer">
-      {/* Visual divider when more messages are available */}
-      {showLoadNextBatch && (
-        <div className="messages-end-divider">
-          <div className="divider-line"></div>
-          <span className="divider-text">End of loaded messages</span>
-          <div className="divider-line"></div>
-        </div>
-      )}
-      
       <div className="pagination-info">
         <span className="inspector-footer-text">
-          Loaded{' '}
-          <span className="inspector-count-primary">{filteredCount}</span>
-          {totalQueueCount !== undefined && (
-            <>
-              {' '}of ~
-              <span className="inspector-count-total">{totalQueueCount}</span>
-            </>
-          )}
-          {' '}messages
+          Showing <span className="inspector-count-primary">{loadedCount}</span> of <span className="inspector-count-total">{totalLabel}</span> messages
           <span className="inspector-mode-badge" title="Peek mode - read-only, messages remain in queue">
             (read-only peek)
           </span>
@@ -93,24 +77,6 @@ function renderInspectorMode(props: PaginationProps) {
       </div>
 
       <div className="inspector-controls">
-        {/* Load next batch button - enhanced visibility */}
-        {showLoadNextBatch && (
-          <div className="load-next-section">
-            <button
-              onClick={onLoadNextBatch}
-              className="btn-load-next-batch primary"
-              title="Load next batch of messages using last sequence number"
-              disabled={disabled}
-            >
-              ⬇ Load next batch ({remaining === null ? '?' : remaining} more)
-            </button>
-            <div className="peek-hint">
-              Scrolling won't load more - use button above
-            </div>
-          </div>
-        )}
-
-        {/* Peek batch size preference selector - clearly labeled */}
         {showPeekSizeSelector && (
           <div className="inspector-peek-size">
             <label htmlFor="peek-size-select" className="peek-size-label">
@@ -121,16 +87,27 @@ function renderInspectorMode(props: PaginationProps) {
               value={peekSize}
               onChange={(e) => onPeekSizeChange?.(Number(e.target.value))}
               className="peek-size-select"
-              title="Number of messages to fetch in each peek operation. This is NOT pagination - Service Bus uses sequential message reading."
+              title="Number of messages to fetch in each peek operation."
               disabled={disabled}
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
-                  {size} messages
+                  {size}
                 </option>
               ))}
             </select>
           </div>
+        )}
+
+        {showLoadNextBatch && (
+          <button
+            onClick={onLoadNextBatch}
+            className="btn-load-next-batch primary"
+            title="Load next batch of messages"
+            disabled={disabled}
+          >
+            ⬇ Load next batch ({remaining === null ? '?' : remaining} more)
+          </button>
         )}
       </div>
     </div>
