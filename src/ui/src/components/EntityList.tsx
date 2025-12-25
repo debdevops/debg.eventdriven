@@ -93,7 +93,7 @@ export default function EntityList({
     if (status === 'connected') {
       // Clear local error and force a visible refresh to update counts
       setError(null)
-      onRefresh(true)
+      onRefresh(false)
       // Reload subscriptions for expanded topics to ensure they are fresh
       expandedTopics.forEach((t) => {
         loadSubscriptions(t)
@@ -358,12 +358,6 @@ function QueueItemExpandable({ entity, isExpanded, onToggle, isMessagesSelected,
     sampledDlqMessages: null
   })
 
-  const dlqRowClass = dlqHealth.severity === 'CRITICAL'
-    ? 'critical'
-    : dlqHealth.severity === 'WARNING'
-      ? 'warning'
-      : ''
-
   return (
     <div className="queue-card-container">
       <EntityCard
@@ -372,7 +366,7 @@ function QueueItemExpandable({ entity, isExpanded, onToggle, isMessagesSelected,
         messageCount={entity.messageCount}
         isSelected={isMessagesSelected || isDLQSelected}
         isDLQ={false}
-        hasWarning={dlqHealth.severity !== 'HEALTHY'}
+        hasWarning={false}
         onSelect={() => {
           if (status !== 'connected') return
           // FIX(selection): parent rows expand/collapse only; never trigger data fetch.
@@ -399,7 +393,7 @@ function QueueItemExpandable({ entity, isExpanded, onToggle, isMessagesSelected,
 
           {hasDLQ && (
             <button
-              className={`entity-child-row entity-dlq-row ${dlqRowClass} ${isDLQSelected ? 'selected' : ''}`}
+              className={`entity-child-row entity-dlq-row ${isDLQSelected ? 'selected' : ''}`}
               onClick={(e) => {
                 e.stopPropagation()
                 if (status !== 'connected') return
@@ -456,6 +450,7 @@ function TopicItem({
   const { status } = useSessionV2()
   const totalMessages = subscriptions.reduce((sum, sub) => sum + sub.messageCount, 0)
   const showExpandChevron = isLoading || subscriptions.length > 0
+  const isTopicSelected = Boolean(selectedSubscriptionName || selectedDlqSubscriptionName)
   
   return (
     <div className="topic-card-container">
@@ -463,7 +458,7 @@ function TopicItem({
         type="topic"
         name={topic.name}
         messageCount={totalMessages}
-        isSelected={false}
+        isSelected={isTopicSelected}
         isDLQ={false}
         subscriptionCount={subscriptions.length}
         onSelect={() => {

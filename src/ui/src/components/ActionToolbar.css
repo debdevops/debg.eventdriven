@@ -38,16 +38,6 @@
   letter-spacing: 0.5px;
 }
 
-.message-count {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.selected-count {
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .toolbar-right {
   display: flex;
   align-items: center;
@@ -141,32 +131,6 @@
   background: var(--danger);
 }
 
-/* AI Insights Button - Special styling */
-.toolbar-btn.ai-insights-btn {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-  color: var(--surface);
-  border: none;
-  font-weight: 600;
-  box-shadow: 0 2px 4px var(--focus-ring);
-  transition: all 0.3s ease;
-}
-
-.toolbar-btn.ai-insights-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent) 100%);
-  box-shadow: 0 4px 8px var(--focus-ring);
-  transform: translateY(-1px);
-}
-
-.toolbar-btn.ai-insights-btn.active {
-  background: linear-gradient(135deg, var(--success) 0%, var(--success) 100%);
-  box-shadow: var(--shadow);
-}
-
-.toolbar-btn.ai-insights-btn.active:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--success) 0%, var(--success) 100%);
-  box-shadow: var(--shadow-lg);
-}
-
 /* Mobile responsive */
 @media (max-width: 768px) {
   .action-toolbar {
@@ -196,9 +160,5 @@
 
   .toolbar-title {
     font-size: 14px;
-  }
-
-  .message-count {
-    font-size: 12px;
   }
 }

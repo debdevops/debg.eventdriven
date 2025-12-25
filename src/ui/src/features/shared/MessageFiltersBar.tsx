@@ -4,8 +4,6 @@ export function MessageFiltersBar({
   searchTerm,
   correlationFilter,
   eventTypeFilter,
-  filterDeliveryCount,
-  resultCount,
   disabled,
   onSearchTermChange,
   onClearSearchTerm,
@@ -13,13 +11,10 @@ export function MessageFiltersBar({
   onClearCorrelationFilter,
   onEventTypeFilterChange,
   onClearEventTypeFilter,
-  onFilterDeliveryCountChange
 }: {
   searchTerm: string
   correlationFilter: string
   eventTypeFilter: string
-  filterDeliveryCount: number | null
-  resultCount: number
   disabled: boolean
   onSearchTermChange: (value: string) => void
   onClearSearchTerm: () => void
@@ -27,7 +22,6 @@ export function MessageFiltersBar({
   onClearCorrelationFilter: () => void
   onEventTypeFilterChange: (value: string) => void
   onClearEventTypeFilter: () => void
-  onFilterDeliveryCountChange: (value: number | null) => void
 }) {
   return (
     <div className="message-filters">
@@ -92,22 +86,6 @@ export function MessageFiltersBar({
             ✕
           </button>
         )}
-      </div>
-
-      <select
-        value={filterDeliveryCount ?? ''}
-        onChange={(e) => onFilterDeliveryCountChange(e.target.value ? Number(e.target.value) : null)}
-        disabled={disabled}
-        title="Filter by delivery count"
-      >
-        <option value="">All deliveries</option>
-        <option value="1">Delivery = 1</option>
-        <option value="2">Delivery ≥ 2</option>
-        <option value="5">Delivery ≥ 5</option>
-      </select>
-
-      <div className="message-filters-count" title="Filtered message count">
-        {resultCount} results
       </div>
     </div>
   )

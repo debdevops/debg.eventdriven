@@ -18,6 +18,7 @@ export function ConnectModal({ onConnect, onClose }: ConnectModalProps) {
   const { setConnectionString: setSessionConnectionString, setSessionMeta, markConnected } = useSessionV2()
   const [connectionString, setConnectionString] = useState('')
   const [friendlyName, setFriendlyName] = useState('')
+  const FRIENDLY_NAME_MAX = 12
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -26,6 +27,11 @@ export function ConnectModal({ onConnect, onClose }: ConnectModalProps) {
     
     if (!connectionString.trim()) {
       setError('Connection string is required')
+      return
+    }
+
+    if (friendlyName.trim().length > FRIENDLY_NAME_MAX) {
+      setError(`Friendly name must be ${FRIENDLY_NAME_MAX} characters or fewer`)
       return
     }
 
@@ -98,13 +104,22 @@ export function ConnectModal({ onConnect, onClose }: ConnectModalProps) {
               id="friendlyName"
               type="text"
               value={friendlyName}
-              onChange={(e) => setFriendlyName(e.target.value)}
+              maxLength={FRIENDLY_NAME_MAX}
+              onChange={(e) => {
+                // Enforce max length client-side (defensive)
+                const v = e.target.value
+                setFriendlyName(v.length <= FRIENDLY_NAME_MAX ? v : v.slice(0, FRIENDLY_NAME_MAX))
+              }}
               placeholder="e.g., Production, Development"
               disabled={loading}
+              aria-describedby="friendlyNameHelp friendlyNameCount"
             />
-            <small className="form-help">
-              A display name for this namespace (optional)
-            </small>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <small id="friendlyNameHelp" className="form-help">A display name for this namespace (optional)</small>
+              <small id="friendlyNameCount" className="form-help" style={{ color: friendlyName.length > FRIENDLY_NAME_MAX ? 'var(--danger)' : 'var(--text-muted)' }}>
+                {friendlyName.length}/{FRIENDLY_NAME_MAX}
+              </small>
+            </div>
           </div>
 
           {error && (

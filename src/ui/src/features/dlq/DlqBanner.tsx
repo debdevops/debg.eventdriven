@@ -11,7 +11,8 @@ export function DlqBanner({
   entityName,
   subscriptionName,
   dlqCountTotal,
-  model
+  model,
+  topFailureSummary
 }: {
   snapshotEnabled: boolean
   selectedEntityTypeLabel: string
@@ -19,6 +20,7 @@ export function DlqBanner({
   subscriptionName?: string
   dlqCountTotal: number
   model: DlqBannerModel
+  topFailureSummary?: string | null
 }) {
   return (
     <div className="dlq-banner">
@@ -39,6 +41,12 @@ export function DlqBanner({
             : entityName}
           <span className="dlq-banner-sep"> • </span>
           DLQ count: <strong>{dlqCountTotal}</strong>
+          {topFailureSummary && (
+            <>
+              <span className="dlq-banner-sep"> • </span>
+              Top failure: <strong>{topFailureSummary}</strong>
+            </>
+          )}
           <span className="dlq-banner-sep"> • </span>
           Oldest DLQ age: <strong>{model.oldestAgeText}</strong>
         </div>

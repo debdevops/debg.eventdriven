@@ -1,0 +1,91 @@
+.dlq-advisory {
+  margin: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.dlq-advisory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-2);
+}
+
+.dlq-advisory-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.dlq-advisory-content {
+  padding: 8px 10px;
+}
+
+/* Embedded variant: StreamPanel owns outer chrome and collapse */
+.dlq-advisory-embedded {
+  margin: 0;
+}
+
+.dlq-advisory-subtitle {
+  margin-top: 2px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dlq-advisory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+  padding: 0;
+}
+
+.dlq-advisory-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+
+.dlq-advisory-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dlq-advisory-action {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.dlq-advisory-confidence {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dlq-advisory-reasoning {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.dlq-advisory-preconditions {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
+.dlq-advisory-preconditions-label {
+  font-weight: 700;
+  color: var(--text-secondary);
+}

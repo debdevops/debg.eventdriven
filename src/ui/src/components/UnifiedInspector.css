@@ -1,59 +1,34 @@
-/* Unified Inspector Panel - Bottom Panel Style */
+/* Unified Inspector Panel - Right Drawer (non-blocking) */
 
 .unified-inspector {
   position: fixed;
-  bottom: 0;
-  left: 0;
+  top: 0;
   right: 0;
+  bottom: 0;
+  width: min(520px, 42vw);
   background: var(--surface);
-  border-top: 2px solid var(--accent);
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+  border-left: 2px solid var(--accent);
+  box-shadow: -8px 0 20px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
-  z-index: 1000;
-  animation: slideUp 0.2s ease-out;
+  z-index: 1200;
+  animation: slideInRight 0.16s ease-out;
 }
 
-@keyframes slideUp {
+@keyframes slideInRight {
   from {
-    transform: translateY(100%);
+    transform: translateX(100%);
   }
   to {
-    transform: translateY(0);
+    transform: translateX(0);
   }
-}
-
-.inspector-resize-handle {
-  height: 8px;
-  cursor: ns-resize;
-  background: var(--surface-3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-  user-select: none;
-}
-
-.inspector-resize-handle:hover {
-  background: var(--surface-2);
-}
-
-.inspector-resize-handle:active {
-  background: var(--border-color);
-}
-
-.resize-indicator {
-  width: 40px;
-  height: 3px;
-  background: var(--text-muted);
-  border-radius: 2px;
 }
 
 .inspector-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
+  padding: 10px 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--border-color);
 }
@@ -85,7 +60,7 @@
 
 .inspector-content {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
 }
 

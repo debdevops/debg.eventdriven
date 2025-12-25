@@ -8,7 +8,7 @@ import StreamPanel from '../views/StreamPanelView'
 import { apiClient } from '../api/client'
 import { useSessionV2 } from '../contexts/SessionContextV2'
 import type { Namespace, Entity, Subscription, AuditEntry } from '../types'
-import { selectionKey, type SelectedTarget } from '../entities/selection'
+import { type SelectedTarget } from '../entities/selection'
 import { queueEntityId, topicEntityId } from '../utils/entityIdentity'
 import './NamespaceView.css'
 
@@ -198,8 +198,6 @@ export function NamespaceView({
       <section className="right-pane">
         {selectedTarget ? (
           <StreamPanel
-            // FIX(ux): keyed remount clears grid immediately on view switch.
-            key={selectionKey(selectedTarget)}
             sessionId={namespace.sessionId}
             selectedTarget={selectedTarget}
             onAudit={onAudit}

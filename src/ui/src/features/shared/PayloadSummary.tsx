@@ -173,11 +173,10 @@ export function buildPayloadSummaryAndTooltip(message: MessageEnvelope, maxChars
     return pairs
   }
 
+  // Summary rule (operator UX): keep the grid summary business-focused.
+  // Show eventType plus 2–3 relevant business fields; keep correlationId/timestamp in tooltip only.
   const pairs: Array<[string, string]> = []
-
   if (eventType) pairs.push(['eventType', String(eventType)])
-  if (correlationId) pairs.push(['correlationId', String(correlationId)])
-  if (payloadTimestamp) pairs.push(['timestamp', String(payloadTimestamp)])
 
   for (const [k, v] of collectFromObject(data)) {
     if (!pairs.some(([ek]) => ek === k)) pairs.push([k, v])
@@ -202,6 +201,7 @@ export function buildPayloadSummaryAndTooltip(message: MessageEnvelope, maxChars
     }
   }
 
+  // eventType + up to 3 other fields.
   const selectedPairs = pairs.slice(0, 4)
   const baseSummary =
     selectedPairs.length > 0
@@ -216,6 +216,8 @@ export function buildPayloadSummaryAndTooltip(message: MessageEnvelope, maxChars
 
   const importantLines: string[] = []
   if (eventType) importantLines.push(`★ eventType: ${eventType}`)
+  if (correlationId) importantLines.push(`★ correlationId: ${correlationId}`)
+  if (payloadTimestamp) importantLines.push(`★ timestamp: ${payloadTimestamp}`)
   const findPair = (key: string) => selectedPairs.find(([k]) => k === key)?.[1] || null
   const orderId = findPair('orderId')
   const reason = findPair('reason') || findPair('failureReason')
@@ -282,35 +284,15 @@ export const PayloadTooltipPortal = forwardRef<
 export function PayloadSummaryCell({
   message,
   isDLQ,
-  snapshotLocked,
-  onToggleTooltip,
-  onClearTooltip
 }: {
   message: MessageEnvelope
   isDLQ: boolean
-  snapshotLocked: boolean
-  onToggleTooltip: (anchorKey: number, tooltip: string, anchorEl: HTMLElement) => void
-  onClearTooltip?: () => void
 }) {
-  const { summary, tooltip } = buildPayloadSummaryAndTooltip(message, 120)
-  const dlqPrefix = isDLQ ? '⚠️ ' : ''
+  const { summary } = buildPayloadSummaryAndTooltip(message, 120)
 
   return (
-    <td
-      className="body-col"
-      data-payload-cell="1"
-      onClick={(e) => {
-        e.stopPropagation()
-        if (snapshotLocked) return
-        if (!tooltip) {
-          onClearTooltip?.()
-          return
-        }
-        onToggleTooltip(message.sequenceNumber, tooltip, e.currentTarget as HTMLElement)
-      }}
-      title={snapshotLocked ? undefined : 'Click to view payload'}
-    >
-      <span className={`message-body-preview ${isDLQ ? 'dlq' : ''}`}>{dlqPrefix}{summary}</span>
+    <td className="body-col">
+      <span className={`message-body-preview ${isDLQ ? 'dlq' : ''}`}>{summary}</span>
     </td>
   )
 }

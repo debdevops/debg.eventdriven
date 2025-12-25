@@ -24,7 +24,6 @@ export interface ActionToolbarProps {
   onExportSelected?: () => void
   onExportAll?: () => void
   onClearFilters?: () => void
-  onAiInsights?: () => void
   
   // State
   refreshing?: boolean
@@ -32,8 +31,6 @@ export interface ActionToolbarProps {
   disabled?: boolean
   frozenSnapshot?: boolean
   onToggleSnapshot?: () => void
-  aiInsightsLoading?: boolean
-  hasAiInsights?: boolean
   
   // Select mode
   selectMode?: boolean
@@ -55,14 +52,11 @@ export function ActionToolbar({
   onExportSelected,
   onExportAll,
   onClearFilters,
-  onAiInsights,
   refreshing: _refreshing = false,
   loading = false,
   disabled = false,
   frozenSnapshot = false,
   onToggleSnapshot,
-  aiInsightsLoading = false,
-  hasAiInsights = false,
   selectMode = false,
   onToggleSelectMode,
   onSelectAll,
@@ -76,10 +70,6 @@ export function ActionToolbar({
         <h3 className="toolbar-title">
           {entityName} {isDLQ && <span className="dlq-badge">DLQ</span>}
         </h3>
-        <span className="message-count">
-          {totalMessages} message{totalMessages !== 1 ? 's' : ''}
-          {selectedCount > 0 && <span className="selected-count"> ({selectedCount} selected)</span>}
-        </span>
       </div>
 
       <div className="toolbar-right">
@@ -207,24 +197,6 @@ export function ActionToolbar({
               title="Clear all filters"
             >
               ✕ Clear Filters
-            </button>
-          )}
-          
-          {/* AI Insights Button */}
-          {onAiInsights && totalMessages > 0 && (
-            <button
-              className={`toolbar-btn ai-insights-btn ${hasAiInsights ? 'active' : ''}`}
-              onClick={onAiInsights}
-              disabled={disabled || aiInsightsLoading}
-              title="Run AI analysis to detect anomalies and patterns"
-            >
-              {aiInsightsLoading ? (
-                <>⏳ Analyzing...</>
-              ) : hasAiInsights ? (
-                <>🤖 AI Insights ✓</>
-              ) : (
-                <>🤖 AI Insights</>
-              )}
             </button>
           )}
         </div>

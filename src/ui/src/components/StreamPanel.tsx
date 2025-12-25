@@ -12,6 +12,7 @@ import { useSelectionGuards } from '../features/shared/hooks/useSelectionGuards'
 import { MessageGrid } from '../features/messages/MessageGrid'
 import { DlqGrid } from '../features/dlq/DlqGrid'
 import { DlqBanner, type DlqBannerModel } from '../features/dlq/DlqBanner'
+import { BreadcrumbBar } from './BreadcrumbBar'
 import { SnapshotBanner } from '../features/snapshot/SnapshotBanner'
 import { MetricsPanel } from './MetricsPanel'
 import RulesPanel from './RulesPanel'
@@ -21,6 +22,9 @@ import { MessageDetailPanel } from './MessageDetailPanel'
 import { AiPatternFilterChip } from './AiPatternFilterChip'
 import { DlqReplayAdvisor } from './DlqReplayAdvisor'
 import { analyzeDlqMessages, getMessageIdsByClassification, type DlqClassification } from '../services/dlqReplayAdvisor'
+import { recordAndDetectBaseline, type BaselineAnomaly } from '../services/baselineAnomaly'
+import { classifyFailure, type FailureClassification } from '../services/failureClassifier'
+import { DlqAdvisoryActions, getDlqAdvisoryActions } from '../features/dlq/DlqAdvisoryActions'
 import type { MessageEnvelope, StreamMode, AuditEntry } from '../types'
 import { selectionKey, type SelectedTarget } from '../entities/selection'
 import { computeDlqHealth, formatAgeMinutes } from '../utils/dlqHealth'
@@ -82,6 +86,56 @@ export default function StreamPanel({
   )
   const { selectionIdRef, selectionAbortRef, selectionEpochRef } = useSelectionGuards(selectionId)
 
+  // UI state (collapsed panels) must persist per selection and must not remount the grid.
+  // UX rule: DLQ Snapshot details + AI Insights are collapsed by default to keep the message grid primary.
+  type PanelCollapseState = { dlqInsightsCollapsed: boolean }
+  const panelCollapseRef = useRef(new Map<string, PanelCollapseState>())
+  const loadPanelCollapse = useCallback((key: string): PanelCollapseState => {
+    const inMemory = panelCollapseRef.current.get(key)
+    if (inMemory) return inMemory
+    try {
+      const raw = typeof window !== 'undefined' ? window.sessionStorage.getItem(`sbi.panelCollapse:${key}`) : null
+      if (raw) {
+        const parsed = JSON.parse(raw) as any
+
+        // Back-compat: previous versions persisted separate snapshot/advisory collapse.
+        // New UX has one shared expand/collapse.
+        const legacySnapshotCollapsed = parsed?.snapshotCollapsed
+        const legacyAdvisoryCollapsed = parsed?.advisoryCollapsed
+        const legacyCombinedCollapsed =
+          (typeof legacySnapshotCollapsed === 'boolean' ? legacySnapshotCollapsed : true)
+          && (typeof legacyAdvisoryCollapsed === 'boolean' ? legacyAdvisoryCollapsed : true)
+
+        return {
+          dlqInsightsCollapsed:
+            typeof parsed?.dlqInsightsCollapsed === 'boolean'
+              ? parsed.dlqInsightsCollapsed
+              : legacyCombinedCollapsed
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return { dlqInsightsCollapsed: true }
+  }, [])
+  const savePanelCollapse = useCallback((key: string, state: PanelCollapseState) => {
+    panelCollapseRef.current.set(key, state)
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(`sbi.panelCollapse:${key}`, JSON.stringify(state))
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const [dlqInsightsCollapsed, setDlqInsightsCollapsed] = useState(true)
+
+  useEffect(() => {
+    const state = loadPanelCollapse(selectionId)
+    setDlqInsightsCollapsed(state.dlqInsightsCollapsed)
+  }, [selectionId, loadPanelCollapse])
+
   const snapshotControlsDisabled = controlsDisabled || snapshotEnabled
   const { frozenRef: frozenSnapshotRef } = useFrozenGuard(snapshotEnabled)
 
@@ -95,15 +149,22 @@ export default function StreamPanel({
   const [streaming, setStreaming] = useState(false)
   const [peekSize, setPeekSize] = useState(50)
   const [loading, setLoading] = useState(false)
+  // Track last refresh time
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   // Explicit fetch lifecycle for the current selection. Prevents false error flashes
   // during selection changes and separates "in-flight" from "failed".
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const frozenSnapshot = snapshotEnabled
-  const renderedMessages = snapshotEnabled
-    ? (frozenMessagesRef.current || [])
-    : messages
+
+  // Snapshot (Frozen View) rule:
+  // Freeze *updates* (no peeks, no mutations) but never freeze *rendering*.
+  // The grid must continue to render the existing messages while Snapshot is active.
+  const snapshotMessages = snapshotEnabled ? frozenMessagesRef.current : null
+  const liveMessages = messages
+  const displayMessages = snapshotMessages ?? liveMessages
   const [showRules, setShowRules] = useState(false)
   
   // AI Pattern filter state
@@ -119,6 +180,10 @@ export default function StreamPanel({
   // DLQ health sampling (used for tiered severity when NOT viewing DLQ)
   const [sampledDlqMessages, setSampledDlqMessages] = useState<MessageEnvelope[] | null>(null)
   const [oldestDlqEnqueuedTimeUtc, setOldestDlqEnqueuedTimeUtc] = useState<string | null>(null)
+
+  // Baseline anomaly + deterministic DLQ advisory (client-side; advisory-only)
+  const [baselineAnomalies, setBaselineAnomalies] = useState<BaselineAnomaly[]>([])
+  const [dlqFailureSummary, setDlqFailureSummary] = useState<FailureClassification | null>(null)
   
   // Unified Inspector state
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('closed')
@@ -159,6 +224,78 @@ export default function StreamPanel({
       return t < minT ? m : min
     }, messages[0])
     return oldest.enqueuedTimeUtc
+  }, [isDLQ, messages])
+
+  const breadcrumbs = useMemo(() => {
+    const viewLabel = selectedTarget.viewType === 'dlq' ? 'DLQ' : 'Messages'
+
+    if (selectedTarget.entityType === 'subscription') {
+      const topic = selectedTarget.topicName || 'Topic'
+      const sub = selectedTarget.subscription?.name || 'Subscription'
+      return [{ label: 'Topics' }, { label: topic }, { label: sub }, { label: viewLabel }]
+    }
+
+    const queue = selectedTarget.entity?.name || 'Queue'
+    return [{ label: 'Queues' }, { label: queue }, { label: viewLabel }]
+  }, [selectedTarget])
+
+  // Record baseline + detect anomalies on each successful refresh/load.
+  useEffect(() => {
+    if (snapshotEnabledRef.current || snapshotEnabled) return
+    if (status !== 'connected') {
+      setBaselineAnomalies([])
+      return
+    }
+    if (!lastUpdated) return
+
+    const now = Date.now()
+    const oldestDlqTime = isDLQ ? oldestDlqFromLoadedMessages : oldestDlqEnqueuedTimeUtc
+    const oldestAgeMinutes = oldestDlqTime ? Math.max(0, Math.floor((now - new Date(oldestDlqTime).getTime()) / 60000)) : null
+
+    const entityKey = `${sessionId}:${selectionId}`
+    const result = recordAndDetectBaseline(entityKey, {
+      t: now,
+      active: activeCountTotal,
+      dlq: dlqCountTotal,
+      oldestAgeMinutes
+    })
+
+    setBaselineAnomalies(result.anomalies)
+  }, [status, lastUpdated, snapshotEnabled, sessionId, selectionId, activeCountTotal, dlqCountTotal, isDLQ, oldestDlqFromLoadedMessages, oldestDlqEnqueuedTimeUtc])
+
+  // Deterministic failure classification summary for the currently loaded DLQ sample.
+  useEffect(() => {
+    if (!isDLQ || messages.length === 0) {
+      setDlqFailureSummary(null)
+      return
+    }
+
+    try {
+      const byType = new Map<string, { count: number; best: FailureClassification }>()
+
+      for (const m of messages) {
+        const c = classifyFailure(m)
+        const existing = byType.get(c.type)
+        if (!existing) {
+          byType.set(c.type, { count: 1, best: c })
+        } else {
+          existing.count += 1
+          if (c.confidence > existing.best.confidence) existing.best = c
+        }
+      }
+
+      let best: { type: string; count: number; best: FailureClassification } | null = null
+      for (const entry of byType.entries()) {
+        const v = { type: entry[0], ...entry[1] }
+        if (!best || v.count > best.count || (v.count === best.count && v.best.confidence > best.best.confidence)) {
+          best = v
+        }
+      }
+
+      setDlqFailureSummary(best ? best.best : null)
+    } catch {
+      setDlqFailureSummary(null)
+    }
   }, [isDLQ, messages])
 
   // Sample DLQ details (oldest age + reasons) when viewing active messages.
@@ -394,12 +531,6 @@ export default function StreamPanel({
       }
     }
   }, [status, sessionId, entityName, peekSize, subscriptionName, isDLQ, selectedTarget.entityType])
-
-
-  // Track last refresh time
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-
   // Snapshot must never show skeleton/loading states.
   const effectiveLoading = snapshotEnabled ? false : (fetchStatus === 'loading' || loading)
   const effectiveRefreshing = snapshotEnabled ? false : isRefreshing
@@ -410,11 +541,31 @@ export default function StreamPanel({
     // IMPORTANT: do not clear the previous error here; we hide it via fetchStatus=loading
     // and clear it only after a successful fetch.
     setFetchStatus('loading')
+
+    // FIX(view-scope): Snapshot is per selection (entity + view). Never carry it across view switches.
+    frozenMessagesRef.current = null
+    snapshotEnabledRef.current = false
+    setSnapshotEnabled(false)
+    setSnapshotCapturedAtUtc(null)
+    setSnapshotReason(null)
+    autoDlqFreezeDoneRef.current = false
+
+    // Reset view-scoped UI state on every selection change.
     setActiveMessages([])
     setDlqMessages([])
+    setAiPatternFilter(null)
+    setInspectorMode('closed')
+    setSelectedMessage(null)
+    setSelectedMessageLoading(false)
+    setSelectedMessageError(null)
+    selectedMessageRequestIdRef.current += 1
+    setDlqAdvisorAnalysis(null)
+    setBaselineAnomalies([])
+    setDlqFailureSummary(null)
     setSuccess(null)
     setStreaming(false)
     setIsRefreshing(false)
+    setLastUpdated(null)
 
     // FIX(state): clear persisted bucket for this entity+view to avoid stale carry-over.
     void messageStore.clearView(sessionId, isDLQ ? 'dlq' : selectedTarget.entityType, entityName, subscriptionName)
@@ -835,12 +986,60 @@ export default function StreamPanel({
     const model: DlqBannerModel = {
       severityBadgeClass,
       label: dlqHealth.label,
-      whyTooltip: dlqHealth.whyTooltip,
+      whyTooltip: [
+        dlqHealth.whyTooltip,
+        dlqFailureSummary ? `Top failure type: ${dlqFailureSummary.type} (${Math.round(dlqFailureSummary.confidence * 100)}%)` : null,
+        baselineAnomalies.length > 0 ? baselineAnomalies.map((a) => a.explanation).join(' ') : null
+      ]
+        .filter(Boolean)
+        .join(' • '),
       oldestAgeText
     }
 
     return model
-  }, [isDLQ, oldestDlqFromLoadedMessages, dlqCountTotal, activeCountTotal, messages])
+  }, [isDLQ, oldestDlqFromLoadedMessages, dlqCountTotal, activeCountTotal, messages, dlqFailureSummary, baselineAnomalies])
+
+  const topFailureSummaryText = useMemo(() => {
+    if (!dlqFailureSummary) return null
+    return `${dlqFailureSummary.type} (${Math.round(dlqFailureSummary.confidence * 100)}%)`
+  }, [dlqFailureSummary])
+
+  const dlqAdvisoryActions = useMemo(
+    () => getDlqAdvisoryActions(dlqFailureSummary, baselineAnomalies),
+    [dlqFailureSummary, baselineAnomalies]
+  )
+
+  const aiInsightsCount = useMemo(() => {
+    const analysis = isDLQ ? aiInsights?.dlqAnalysis : aiInsights?.activeQueueAnalysis
+    const clusters = analysis?.clusters?.length ?? 0
+    const outliers = analysis?.outliers?.length ?? 0
+    return clusters + outliers
+  }, [aiInsights, isDLQ])
+
+  const topDlqAdvisory = useMemo(() => {
+    if (!dlqAdvisoryActions || dlqAdvisoryActions.length === 0) return null
+    const top = [...dlqAdvisoryActions].sort((a, b) => b.confidence - a.confidence)[0]
+    const pct = `${Math.round(Math.max(0, Math.min(1, top.confidence)) * 100)}%`
+    return { action: top.action, pct }
+  }, [dlqAdvisoryActions])
+
+  const snapshotCapturedAtLocalText = useMemo(() => {
+    if (!snapshotCapturedAtUtc) return null
+    try {
+      const dt = new Date(snapshotCapturedAtUtc)
+      return new Intl.DateTimeFormat('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).format(dt)
+    } catch {
+      return snapshotCapturedAtUtc
+    }
+  }, [snapshotCapturedAtUtc])
 
   return (
     <div className="stream-panel">
@@ -871,7 +1070,7 @@ export default function StreamPanel({
           <span className="entity-type-badge" title={displayType}>{displayType}</span>
           {displayContext && <span className="entity-context" title={displayContext.substring(2, displayContext.length - 1)}>{displayContext}</span>}
           <span className="message-count-badge" title="Total messages in grid">
-            {renderedMessages.length}
+            {displayMessages.length}
           </span>
           <span className="read-mode-badge" title="Read-only peek mode - messages are not removed from queue">
             📖 Peek Mode
@@ -905,28 +1104,43 @@ export default function StreamPanel({
           >
             🔄 Refresh
           </button>
+
+          <button
+            onClick={() => {
+              setInspectorMode('ai-insights')
+              if (onAiInsights) onAiInsights()
+            }}
+            className="btn-compact btn-outline"
+            disabled={controlsDisabled || !!aiInsightsLoading}
+            title={aiInsightsLoading ? 'AI analysis in progress…' : hasAiInsights ? 'Open AI Insights (results available)' : 'Open AI Insights'}
+          >
+            {aiInsightsLoading ? '⏳ AI' : hasAiInsights ? '🤖 AI ✓' : '🤖 AI'}
+            <span className="btn-badge" aria-label={`AI insights count: ${aiInsightsCount}`}>{aiInsightsCount}</span>
+          </button>
           
-          {/* Snapshot controls */}
-          {!snapshotEnabled ? (
-            <button
-              onClick={() => {
-                void handleToggleSnapshot()
-              }}
-              className="btn-compact btn-outline"
-              title="Freezes the message list for safe investigation. Does not lock or stop messages in Service Bus."
-              disabled={controlsDisabled}
-            >
-              Snapshot (Frozen View)
-            </button>
-          ) : (
-            <button
-              onClick={handleToggleSnapshot}
-              className="btn-compact btn-success"
-              title="Exit Snapshot and resume live updates"
-              disabled={controlsDisabled}
-            >
-              Exit Snapshot
-            </button>
+          {/* Snapshot controls (DLQ view uses the compact row under the DLQ banner) */}
+          {!isDLQ && (
+            !snapshotEnabled ? (
+              <button
+                onClick={() => {
+                  void handleToggleSnapshot()
+                }}
+                className="btn-compact btn-outline"
+                title="Freezes the message list for safe investigation. Does not lock or stop messages in Service Bus."
+                disabled={controlsDisabled}
+              >
+                Snapshot (Frozen View)
+              </button>
+            ) : (
+              <button
+                onClick={handleToggleSnapshot}
+                className="btn-compact btn-success"
+                title="Exit Snapshot and resume live updates"
+                disabled={controlsDisabled}
+              >
+                Exit Snapshot
+              </button>
+            )
           )}
           
           {/* Rules button for subscriptions */}
@@ -942,6 +1156,8 @@ export default function StreamPanel({
         </div>
       </div>
 
+      <BreadcrumbBar items={breadcrumbs} />
+
       {/* Read-only badge removed intentionally; auto-refresh/pause logic remains intact */}
 
       {/* DLQ explanation banner - simplified one-liner */}
@@ -953,16 +1169,89 @@ export default function StreamPanel({
           subscriptionName={subscriptionName}
           dlqCountTotal={dlqCountTotal}
           model={dlqBannerModel}
+          topFailureSummary={topFailureSummaryText}
         />
       )}
 
-      {/* Snapshot banner: persistent while Snapshot is active */}
-      {snapshotEnabled && (
-        <SnapshotBanner
-          snapshotCapturedAtUtc={snapshotCapturedAtUtc}
-          snapshotReason={snapshotReason}
-          onExit={exitSnapshot}
-        />
+      {/* DLQ compact row: Snapshot + AI Insights with ONE shared Expand/Collapse */}
+      {isDLQ && (
+        <>
+          <div className="dlq-insights-row" role="region" aria-label="DLQ Snapshot and AI Insights">
+            <div className="dlq-insights-left">
+              <div className="dlq-insights-item" title={snapshotEnabled && snapshotCapturedAtLocalText ? `Snapshot captured at ${snapshotCapturedAtLocalText}` : 'Snapshot (Frozen View)'}>
+                <span className="dlq-insights-icon" aria-hidden="true">⏸</span>
+                <span className="dlq-insights-text">
+                  {snapshotEnabled
+                    ? (
+                      <>
+                        <strong>Snapshot</strong>
+                        {snapshotCapturedAtLocalText ? ` — Captured ${snapshotCapturedAtLocalText}` : ''}
+                      </>
+                    )
+                    : (
+                      <strong>Snapshot</strong>
+                    )}
+                </span>
+              </div>
+
+              <div className="dlq-insights-item" title="Deterministic advisory suggestions (read-only)">
+                <span className="dlq-insights-icon" aria-hidden="true">🤖</span>
+                <span className="dlq-insights-text">
+                  <strong>AI Insights</strong>
+                  {topDlqAdvisory && (
+                    <span className="dlq-insights-top"> — {topDlqAdvisory.action} {topDlqAdvisory.pct}</span>
+                  )}
+                  <span className="dlq-insights-count">({dlqAdvisoryActions.length})</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="dlq-insights-actions">
+              <button
+                type="button"
+                className="btn-compact btn-outline"
+                onClick={handleToggleSnapshot}
+                title={snapshotEnabled ? 'Exit Snapshot and resume live updates' : 'Enter Snapshot (Frozen View)'}
+                disabled={controlsDisabled}
+              >
+                {snapshotEnabled ? 'Exit Snapshot' : 'Snapshot'}
+              </button>
+
+              <button
+                type="button"
+                className="btn-compact btn-outline"
+                onClick={() => {
+                  const next = !dlqInsightsCollapsed
+                  setDlqInsightsCollapsed(next)
+                  savePanelCollapse(selectionId, { dlqInsightsCollapsed: next })
+                }}
+                aria-expanded={!dlqInsightsCollapsed}
+                title={dlqInsightsCollapsed ? 'Expand Snapshot + AI Insights' : 'Collapse Snapshot + AI Insights'}
+              >
+                {dlqInsightsCollapsed ? 'Expand' : 'Collapse'}
+              </button>
+            </div>
+          </div>
+
+          {/* Content is always mounted; collapse is via CSS to prevent flicker */}
+          <div className={`dlq-insights-expandable ${dlqInsightsCollapsed ? 'is-collapsed' : 'is-expanded'}`}>
+            <div className="dlq-insights-expandable-inner">
+              {snapshotEnabled && (
+                <SnapshotBanner
+                  snapshotCapturedAtUtc={snapshotCapturedAtUtc}
+                  snapshotReason={snapshotReason}
+                />
+              )}
+
+              <DlqAdvisoryActions
+                failure={dlqFailureSummary}
+                anomalies={baselineAnomalies}
+                actionsOverride={dlqAdvisoryActions}
+                variant="embedded"
+              />
+            </div>
+          </div>
+        </>
       )}
 
       {/* Error UI is intentionally controlled by fetchStatus above to prevent false flashes. */}
@@ -993,8 +1282,10 @@ export default function StreamPanel({
         />
       )}
 
+      {/* Advisory cards are rendered inside the DLQ compact row's expandable content. */}
+
       {/* Show skeleton loader during initial load or reconnect */}
-      {((!snapshotEnabled && fetchStatus === 'loading' && renderedMessages.length === 0) || status === 'connecting') ? (
+      {((!snapshotEnabled && fetchStatus === 'loading' && displayMessages.length === 0) || status === 'connecting') ? (
         <MessageTableSkeleton />
       ) : (
         <>
@@ -1009,7 +1300,7 @@ export default function StreamPanel({
 
           {isDLQ ? (
             <DlqGrid
-              messages={renderedMessages}
+              messages={displayMessages}
               // FIX(pagination): totalMessageCount is view-specific (messages vs DLQ).
               totalMessageCount={totalCountForView}
               activeCount={activeCountTotal}
@@ -1023,12 +1314,6 @@ export default function StreamPanel({
               disabled={controlsDisabled}
               frozenSnapshot={frozenSnapshot}
               onToggleSnapshot={snapshotEnabled ? exitSnapshot : undefined}
-              onAiInsights={() => {
-                setInspectorMode('ai-insights')
-                if (onAiInsights) onAiInsights()
-              }}
-              aiInsightsLoading={aiInsightsLoading}
-              hasAiInsights={hasAiInsights}
               onMessageSelect={(message) => {
                 void openMessageDetails(message)
               }}
@@ -1042,7 +1327,7 @@ export default function StreamPanel({
             />
           ) : (
             <MessageGrid
-              messages={renderedMessages}
+              messages={displayMessages}
               totalMessageCount={totalCountForView}
               activeCount={activeCountTotal}
               sessionId={sessionId}
@@ -1056,12 +1341,6 @@ export default function StreamPanel({
               disabled={controlsDisabled}
               frozenSnapshot={frozenSnapshot}
               onToggleSnapshot={snapshotEnabled ? exitSnapshot : undefined}
-              onAiInsights={() => {
-                setInspectorMode('ai-insights')
-                if (onAiInsights) onAiInsights()
-              }}
-              aiInsightsLoading={aiInsightsLoading}
-              hasAiInsights={hasAiInsights}
               onMessageSelect={(message) => {
                 void openMessageDetails(message)
               }}
@@ -1171,7 +1450,7 @@ export default function StreamPanel({
         ) : (
         <MessageDetailPanel
           message={selectedMessage}
-          messages={renderedMessages}
+          messages={displayMessages}
           dlqClassification={
             isDLQ && dlqClassificationsMap
               ? dlqClassificationsMap.get(selectedMessage.messageId) || null
@@ -1184,20 +1463,20 @@ export default function StreamPanel({
             setSelectedMessageError(null)
           }}
           onPrevious={() => {
-            const currentIndex = renderedMessages.findIndex((m) =>
+            const currentIndex = displayMessages.findIndex((m) =>
               (m.messageId && selectedMessage.messageId && m.messageId === selectedMessage.messageId) ||
               (m.sequenceNumber !== undefined && m.sequenceNumber === selectedMessage.sequenceNumber)
             )
             const safeIndex = currentIndex >= 0 ? currentIndex : 0
-            if (safeIndex > 0) void openMessageDetails(renderedMessages[safeIndex - 1])
+            if (safeIndex > 0) void openMessageDetails(displayMessages[safeIndex - 1])
           }}
           onNext={() => {
-            const currentIndex = renderedMessages.findIndex((m) =>
+            const currentIndex = displayMessages.findIndex((m) =>
               (m.messageId && selectedMessage.messageId && m.messageId === selectedMessage.messageId) ||
               (m.sequenceNumber !== undefined && m.sequenceNumber === selectedMessage.sequenceNumber)
             )
             const safeIndex = currentIndex >= 0 ? currentIndex : 0
-            if (safeIndex < renderedMessages.length - 1) void openMessageDetails(renderedMessages[safeIndex + 1])
+            if (safeIndex < displayMessages.length - 1) void openMessageDetails(displayMessages[safeIndex + 1])
           }}
         />
         )

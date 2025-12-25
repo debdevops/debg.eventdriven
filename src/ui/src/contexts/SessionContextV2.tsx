@@ -15,6 +15,9 @@ import { AuthError } from '../api/errors'
 
 export type SessionState = 'idle' | 'connected' | 'idle-warning' | 'expired' | 'reconnecting' | 'failed'
 export type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'expired' | 'auth_required'
+// Injected by Vite at build/dev time via `define` in vite.config.ts.
+// Avoids `import.meta.env` so Jest/Node can parse this file.
+declare const __VITE_TEST_MODE__: string | undefined
 
 export interface SessionError {
   message: string
@@ -395,7 +398,11 @@ export function SessionProviderV2({ children, toast }: SessionProviderProps) {
   // Timers start only after markConnected() is called.
 
   useEffect(() => {
-    if (import.meta.env.VITE_TEST_MODE !== 'true') return
+    const testMode =
+      (typeof __VITE_TEST_MODE__ !== 'undefined' && __VITE_TEST_MODE__) ||
+      (typeof process !== 'undefined' && (process as any).env?.VITE_TEST_MODE) ||
+      'false'
+    if (testMode !== 'true') return
     const handler = () => markExpired({ message: 'Forced expiry (test)', reason: 'test' })
     window.addEventListener('sb-expire-session', handler)
     return () => window.removeEventListener('sb-expire-session', handler)

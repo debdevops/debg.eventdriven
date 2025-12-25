@@ -7,6 +7,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  min-height: 0;
 }
 
 /* Search and Filter Bar - Compact Azure Portal Style */
@@ -125,6 +126,27 @@
   height: 14px;
   cursor: pointer;
   accent-color: var(--accent);
+}
+
+/* Row affordance column (always visible; no hover flicker) */
+.chevron-col {
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  text-align: center;
+  padding: 0 4px !important;
+}
+
+.row-chevron {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.chevron-col.disabled .row-chevron {
+  opacity: 0.4;
 }
 
 /* Compact, content-driven columns (avoid large empty vertical columns) */
@@ -324,6 +346,8 @@
   min-height: 0;
   width: 100%;
   box-sizing: border-box;
+  padding-bottom: 18px;
+  overscroll-behavior: contain;
 }
 
 .message-table {
@@ -331,7 +355,7 @@
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: 12px;
   table-layout: fixed;
   margin: 0;
 }
@@ -395,7 +419,7 @@
 }
 
 .message-table td {
-  padding: 2px 6px;
+  padding: 1px 6px;
   background: var(--surface);
   border-bottom: 1px solid var(--border-color);
   line-height: 1.15;
@@ -645,6 +669,15 @@
 /* Clickable row cursor */
 .message-row {
   cursor: pointer;
+}
+
+/* Subtle, stable hover (no layout shift). */
+.message-row:hover td {
+  background: var(--surface-2);
+}
+
+.message-row.selected:hover td {
+  background: var(--info-bg) !important;
 }
 
 /* Horizontal scrolling support */

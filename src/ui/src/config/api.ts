@@ -2,8 +2,12 @@
  * API Configuration
  */
 
+// Injected by Vite at build/dev time via `define` in vite.config.ts.
+// Intentionally avoids `import.meta.env` so Jest/Node (CJS) can parse this file.
+declare const __API_BASE_URL__: string | undefined
+
 const envBaseUrl =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) ||
+  (typeof __API_BASE_URL__ !== 'undefined' && __API_BASE_URL__) ||
   (typeof process !== 'undefined' && (process as any).env?.VITE_API_BASE_URL) ||
   'http://localhost:5002'
 

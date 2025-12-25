@@ -11,6 +11,132 @@
   min-height: 0;
 }
 
+/* DLQ compact row: Snapshot + AI Insights + shared Expand/Collapse */
+.dlq-insights-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  min-height: 40px;
+  max-height: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.dlq-insights-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dlq-insights-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.dlq-insights-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.dlq-insights-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dlq-insights-count {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.dlq-insights-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* Shared expandable container (always mounted; collapse via max-height) */
+.dlq-insights-expandable {
+  margin: 0 12px;
+  border: 1px solid var(--border-color);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--surface);
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 180ms ease;
+}
+
+.dlq-insights-expandable.is-expanded {
+  max-height: 240px;
+}
+
+.dlq-insights-expandable-inner {
+  padding: 10px;
+  overflow: auto;
+  max-height: 240px;
+}
+
+.dlq-insights-top {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Compact badge in top action bar */
+.btn-badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  height: 18px;
+  line-height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Snapshot details (now content-only; composed inside the DLQ expandable area) */
+.snapshot-details {
+  margin: 0 0 10px 0;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.snapshot-details-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.snapshot-details-body {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.snapshot-details-footnote {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* Thin session-expired banner at top */
 .session-expired-banner {
   display: flex;
@@ -240,12 +366,65 @@
 
 /* Snapshot (Frozen View) banner */
 .snapshot-banner {
-  margin: 8px 16px;
-  padding: 10px 12px;
-  border-radius: 6px;
+  margin: 8px 12px;
+  border-radius: 8px;
   background: var(--surface);
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* Collapsible header row: always visible, one-line summary */
+.snapshot-banner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.snapshot-banner-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.snapshot-banner-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.snapshot-banner-summary-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.snapshot-banner-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* Collapsible content: do not unmount; cap height so grid stays primary */
+.snapshot-banner-content {
+  padding: 8px 10px;
+  max-height: min(140px, 10vh);
+  overflow: auto;
+  transition: max-height 180ms ease, padding 180ms ease;
+}
+
+.snapshot-banner-content.is-collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
 .snapshot-banner-title {
@@ -267,11 +446,7 @@
   color: var(--text-muted);
 }
 
-.snapshot-banner-actions {
-  margin-top: 8px;
-  display: flex;
-  gap: 8px;
-}
+
 
 /* DLQ Frozen badge */
 .dlq-frozen-badge {

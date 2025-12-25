@@ -3,7 +3,7 @@
  * Azure Portal style resizable inspector
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useMemo } from 'react'
 import { AiInsightsInspector } from './AiInsightsInspector'
 import './UnifiedInspector.css'
 
@@ -49,62 +49,19 @@ export function UnifiedInspector({
   onAiRefresh,
   onApplyAiPattern
 }: UnifiedInspectorProps) {
-  const [height, setHeight] = useState(400)
-  const [isResizing, setIsResizing] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (mode === 'closed') return
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return
-      
-      const newHeight = window.innerHeight - e.clientY
-      
-      // Clamp between 200px and 80% of viewport
-      const minHeight = 200
-      const maxHeight = window.innerHeight * 0.8
-      setHeight(Math.min(Math.max(newHeight, minHeight), maxHeight))
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-    }
-
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = 'ns-resize'
-      document.body.style.userSelect = 'none'
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isResizing, mode])
+  const title = useMemo(() => {
+    if (mode === 'ai-insights') return '🤖 AI Insights'
+    return 'Inspector'
+  }, [mode])
 
   if (mode === 'closed') {
     return null
   }
 
   return (
-    <div 
-      ref={containerRef}
-      className="unified-inspector"
-      style={{ height: `${height}px` }}
-    >
-      <div 
-        className="inspector-resize-handle"
-        onMouseDown={() => setIsResizing(true)}
-      >
-        <div className="resize-indicator" />
-      </div>
-
+    <div className="unified-inspector" role="complementary" aria-label={title}>
       <div className="inspector-header">
-        <div className="inspector-title">🤖 AI Insights</div>
+        <div className="inspector-title">{title}</div>
         <button onClick={onClose} className="inspector-close-btn" title="Close inspector">
           ✕
         </button>

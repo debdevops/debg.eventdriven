@@ -28,7 +28,7 @@ export default function EntityCard({
   subscriptionCount,
   isExpanded,
   isTemp,
-  hasWarning
+  hasWarning: _hasWarning
 }: EntityCardProps) {
   const getGradientClass = (): string => {
     if (isDLQ) return 'entity-card-dlq'
@@ -92,11 +92,6 @@ export default function EntityCard({
         {isTemp && (
           <span className="entity-card-temp-badge" title="Temporary (auto-deletes in 15min)">
             ⏱️
-          </span>
-        )}
-        {hasWarning && (
-          <span className="entity-card-warning-badge" title="Has DLQ messages">
-            ⚠️
           </span>
         )}
         {isExpanded !== undefined && (

@@ -3,15 +3,13 @@
  * Enhanced with: ActionToolbar, DeliveryBadge, Pagination, Select Mode
  */
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { ActionToolbar } from './ActionToolbar'
 import { DeliveryBadge } from './DeliveryBadge'
 import { Pagination } from './Pagination'
 import { QueueHealthHeader } from './QueueHealthHeader'
 import { MessageAgeDistribution } from './MessageAgeDistribution'
 import { EventTypeChip } from './EventTypeChip'
-import { RiskSignalGroup } from './RiskSignalBadge'
-import { PayloadSummaryCell, PayloadTooltipPortal, type PayloadTooltipState } from './PayloadSummary'
 import { MessageFiltersBar } from '../features/shared/MessageFiltersBar'
 import { formatTimestamp, formatRelativeTime } from '../utils/formatters'
 import { extractEventType, type AgeDistribution } from '../utils/eventTypeExtractor'
@@ -36,9 +34,6 @@ interface MessageTableProps {
   disabled?: boolean
   frozenSnapshot?: boolean
   onToggleSnapshot?: () => void
-  onAiInsights?: () => void
-  aiInsightsLoading?: boolean
-  hasAiInsights?: boolean
   onMessageSelect?: (message: MessageEnvelope) => void
   peekSize?: number
   onPeekSizeChange?: (size: number) => void
@@ -64,9 +59,6 @@ export default function MessageTable({
   disabled = false,
   frozenSnapshot = false,
   onToggleSnapshot,
-  onAiInsights,
-  aiInsightsLoading = false,
-  hasAiInsights = false,
   onMessageSelect,
   peekSize = 50,
   onPeekSizeChange,
@@ -78,52 +70,28 @@ export default function MessageTable({
   const [sortField, setSortField] = useState<keyof MessageEnvelope>('sequenceNumber')
   const [sortAsc, setSortAsc] = useState(false) // Default: newest first
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterDeliveryCount, setFilterDeliveryCount] = useState<number | null>(null)
   const [selectedMessages, setSelectedMessages] = useState<Set<number>>(new Set())
   const [correlationFilter, setCorrelationFilter] = useState<string>('')
   const [replayLoading, setReplayLoading] = useState(false)
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('')
   const [ageBucketFilter, setAgeBucketFilter] = useState<keyof AgeDistribution | null>(null)
-
-  // FIX(tooltip): stable payload tooltip rendered via Portal (not inside table DOM).
-  // Stability requirement: click-based (no hover flicker). Snapshot must freeze tooltip state.
-  const [payloadTooltip, setPayloadTooltip] = useState<PayloadTooltipState | null>(null)
-  const tooltipRef = useRef<HTMLDivElement | null>(null)
-
-  // Snapshot contract: entering frozen view clears transient tooltip UI.
-  useEffect(() => {
-    if (snapshotLocked) {
-      setPayloadTooltip(null)
-    }
-  }, [snapshotLocked])
-
-  // Close tooltip on outside click (disabled during Snapshot).
-  useEffect(() => {
-    if (!payloadTooltip) return
-    if (snapshotLocked) return
-
-    const onDocClick = (e: MouseEvent) => {
-      const target = e.target
-      if (!(target instanceof Element)) {
-        setPayloadTooltip(null)
-        return
-      }
-
-      // Don't close when clicking the tooltip itself.
-      if (tooltipRef.current && tooltipRef.current.contains(target)) return
-
-      // Don't close when clicking a payload cell (it will toggle itself).
-      if (target.closest('[data-payload-cell="1"]')) return
-
-      setPayloadTooltip(null)
-    }
-
-    document.addEventListener('click', onDocClick)
-    return () => document.removeEventListener('click', onDocClick)
-  }, [payloadTooltip, snapshotLocked])
   
   // Select mode
   const [selectMode, setSelectMode] = useState(false)
+
+  // Reset view-local UI state on selection changes (entity/subscription/view).
+  // Keeps behavior deterministic when switching between entities without remounting.
+  useEffect(() => {
+    setSortField('sequenceNumber')
+    setSortAsc(false)
+    setSearchTerm('')
+    setSelectedMessages(new Set())
+    setCorrelationFilter('')
+    setEventTypeFilter('')
+    setAgeBucketFilter(null)
+    setSelectMode(false)
+    setReplayLoading(false)
+  }, [entityName, subscriptionName, isDLQ])
   
   /**
    * INSPECTOR MODE ARCHITECTURE:
@@ -267,7 +235,6 @@ export default function MessageTable({
     if (snapshotLocked) return
     setSearchTerm('')
     setCorrelationFilter('')
-    setFilterDeliveryCount(null)
     setEventTypeFilter('')
     setAgeBucketFilter(null)
   }
@@ -276,10 +243,6 @@ export default function MessageTable({
     if (snapshotLocked) return
     setAgeBucketFilter(ageBucketFilter === bucket ? null : bucket)
   }
-  const renderPayloadTooltipPortal = () => {
-    return <PayloadTooltipPortal tooltip={payloadTooltip} ref={tooltipRef} />
-  }
-
   /**
    * IMMUTABLE DATA PIPELINE - prevents pagination bugs
    * 
@@ -294,7 +257,7 @@ export default function MessageTable({
    * Pagination is applied LAST to ensure page size is authoritative.
    */
 
-  // STEP 1: Base filters (search, correlation, delivery, eventType)
+  // STEP 1: Base filters (search, correlation, eventType)
   const baseFilteredMessages = useMemo(() => {
     let filtered = messages
 
@@ -315,10 +278,6 @@ export default function MessageTable({
       )
     }
 
-    if (filterDeliveryCount !== null) {
-      filtered = filtered.filter(msg => msg.deliveryCount === filterDeliveryCount)
-    }
-
     if (eventTypeFilter) {
       filtered = filtered.filter(msg => {
         const { eventType } = extractEventType(msg)
@@ -327,7 +286,7 @@ export default function MessageTable({
     }
 
     return filtered
-  }, [messages, searchTerm, correlationFilter, filterDeliveryCount, eventTypeFilter])
+  }, [messages, searchTerm, correlationFilter, eventTypeFilter])
 
   // STEP 2: Age buckets computed from base-filtered data (not age-filtered)
   // This ensures bucket counts are accurate when age filter is active
@@ -408,14 +367,11 @@ export default function MessageTable({
         onExportSelected={handleExportSelected}
         onExportAll={handleExportAll}
         onClearFilters={handleClearFilters}
-        onAiInsights={onAiInsights}
         refreshing={false}
         loading={replayLoading}
         disabled={disabled || snapshotLocked}
         frozenSnapshot={frozenSnapshot}
         onToggleSnapshot={onToggleSnapshot}
-        aiInsightsLoading={aiInsightsLoading}
-        hasAiInsights={hasAiInsights}
         selectMode={selectMode}
         onToggleSelectMode={() => {
           if (snapshotLocked) return
@@ -432,8 +388,6 @@ export default function MessageTable({
         searchTerm={searchTerm}
         correlationFilter={correlationFilter}
         eventTypeFilter={eventTypeFilter}
-        filterDeliveryCount={filterDeliveryCount}
-        resultCount={sortedMessages.length}
         disabled={snapshotLocked}
         onSearchTermChange={(v) => {
           if (snapshotLocked) return
@@ -459,10 +413,6 @@ export default function MessageTable({
           if (snapshotLocked) return
           setEventTypeFilter('')
         }}
-        onFilterDeliveryCountChange={(v) => {
-          if (snapshotLocked) return
-          setFilterDeliveryCount(v)
-        }}
       />
 
       {sortedMessages.length === 0 ? (
@@ -481,13 +431,13 @@ export default function MessageTable({
               <colgroup>
                 {selectMode && <col style={{ width: '32px' }} />}
                 {isDLQ && dlqClassifications && <col style={{ width: '110px' }} />}
+                <col style={{ width: '26px' }} />
                 <col style={{ width: '60px' }} />
                 <col style={{ width: '110px' }} />
                 <col style={{ width: '90px' }} />
                 {isDLQ && <col style={{ width: '160px' }} />}
                 {isDLQ && <col style={{ width: '240px' }} />}
                 <col style={{ width: '160px' }} />
-                <col style={{ width: '260px' }} />
                 {/* Message ID takes remaining width */}
                 <col />
                 <col style={{ width: '72px' }} />
@@ -509,6 +459,7 @@ export default function MessageTable({
                     AI Status
                   </th>
                 )}
+                <th className="chevron-col" aria-label="Row details"></th>
                 <th onClick={() => handleSort('sequenceNumber')} className="sortable seq-col">
                   Seq# {sortField === 'sequenceNumber' && (sortAsc ? '▲' : '▼')}
                 </th>
@@ -525,7 +476,6 @@ export default function MessageTable({
                   </>
                 )}
                 <th className="eventtype-col">Event Type</th>
-                <th className="body-col">Payload Summary</th>
                 <th className="id-col">Message ID</th>
                 <th className="actions-col">Actions</th>
               </tr>
@@ -570,17 +520,20 @@ export default function MessageTable({
                               >
                                 {icon}
                               </span>
-                              {classification.riskSignals && classification.riskSignals.length > 0 && (
+                              {/* {classification.riskSignals && classification.riskSignals.length > 0 && (
                                 <div className="dlq-risk-signals">
                                   <RiskSignalGroup signals={classification.riskSignals} maxDisplay={2} />
                                 </div>
-                              )}
+                              )} */}
                             </div>
                           )
                         })()}
                       </div>
                     </td>
                   )}
+                  <td className={`chevron-col ${selectMode ? 'disabled' : ''}`} aria-hidden="true">
+                    <span className="row-chevron">›</span>
+                  </td>
                   <td className="seq-col">{message.sequenceNumber}</td>
                   <td className="time-col" title={formatTimestamp(message.enqueuedTimeUtc)}>
                     {formatRelativeTime(message.enqueuedTimeUtc)}
@@ -614,18 +567,6 @@ export default function MessageTable({
                       }}
                     />
                   </td>
-                  <PayloadSummaryCell
-                    message={message}
-                    isDLQ={isDLQ}
-                    snapshotLocked={snapshotLocked}
-                    onClearTooltip={() => setPayloadTooltip(null)}
-                    onToggleTooltip={(anchorKey, tooltip, anchorEl) => {
-                      setPayloadTooltip((prev) => {
-                        if (prev && prev.anchorKey === anchorKey) return null
-                        return { content: tooltip, anchorRect: anchorEl.getBoundingClientRect(), anchorKey }
-                      })
-                    }}
-                  />
                   <td className="id-col" title={message.messageId}>
                     <span className="message-id">{message.messageId}</span>
                   </td>
@@ -667,7 +608,6 @@ export default function MessageTable({
       </>
       )}
 
-      {renderPayloadTooltipPortal()}
     </div>
   )
 }
