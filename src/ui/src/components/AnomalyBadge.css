@@ -85,6 +85,105 @@
   background-color: #fecaca;
 }
 
+/* Professional styled tooltip - White background, dark text */
+.anomaly-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #ffffff;
+  color: #1f2937;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 260px;
+  white-space: normal;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+  z-index: 1000;
+  pointer-events: none;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.anomaly-tooltip-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.anomaly-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #1f2937;
+}
+
+.anomaly-tooltip-section {
+  margin-bottom: 4px;
+}
+
+.anomaly-tooltip-section:last-child {
+  margin-bottom: 0;
+}
+
+.anomaly-tooltip-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.anomaly-tooltip-value {
+  color: #374151;
+  font-size: 11px;
+  word-wrap: break-word;
+}
+
+.anomaly-tooltip-value.severity-low {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.anomaly-tooltip-value.severity-medium {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.anomaly-tooltip-value.severity-high {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.anomaly-tooltip-value.severity-critical {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+/* Tooltip arrow */
+.anomaly-tooltip-arrow {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #ffffff;
+}
+
 /* Row highlighting for anomalous messages */
 .message-row.anomaly-row {
   background-color: rgba(254, 202, 202, 0.15) !important;

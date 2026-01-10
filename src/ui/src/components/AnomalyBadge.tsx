@@ -5,6 +5,7 @@
  * Used in MessageTable to highlight test-generated anomalies.
  */
 
+import { useState, useRef } from 'react'
 import './AnomalyBadge.css'
 
 /**
@@ -110,6 +111,10 @@ export function AnomalyBadge({
   description,
   compact = false 
 }: AnomalyBadgeProps) {
+  const [showTooltip, setShowTooltip] = useState(false)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  const badgeRef = useRef<HTMLSpanElement>(null)
+
   const config = ANOMALY_CONFIG[anomalyType] ?? {
     icon: '⚠️',
     label: anomalyType,
@@ -124,13 +129,57 @@ export function AnomalyBadge({
   
   const title = description || `${config.label}: ${anomalyType}`
   
+  // Map severity to tooltip severity level
+  const tooltipSeverity = severity?.toLowerCase() || config.severity?.toLowerCase() || 'medium'
+  
+  // Build tooltip content
+  const tooltipReason = description || config.label
+  const tooltipSeverityLabel = severity 
+    ? severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase()
+    : config.severity?.charAt(0).toUpperCase() + config.severity?.slice(1).toLowerCase()
+
+  const handleMouseEnter = () => setShowTooltip(true)
+  const handleMouseLeave = () => setShowTooltip(false)
+  const handleFocus = () => setShowTooltip(true)
+  const handleBlur = () => setShowTooltip(false)
+
   if (compact) {
     return (
       <span 
+        ref={badgeRef}
         className={`anomaly-badge-compact ${colorClass}`}
         title={title}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        tabIndex={0}
+        role="button"
+        aria-label={title}
+        aria-describedby={showTooltip ? 'anomaly-tooltip' : undefined}
       >
         {config.icon}
+        {showTooltip && (
+          <div 
+            ref={tooltipRef}
+            className="anomaly-tooltip"
+            id="anomaly-tooltip"
+            role="tooltip"
+          >
+            <div className="anomaly-tooltip-content">
+              <div className="anomaly-tooltip-title">Anomaly detected</div>
+              <div className="anomaly-tooltip-section">
+                <div className="anomaly-tooltip-label">Reason:</div>
+                <div className="anomaly-tooltip-value">{tooltipReason}</div>
+              </div>
+              <div className="anomaly-tooltip-section">
+                <div className="anomaly-tooltip-label">Severity:</div>
+                <div className={`anomaly-tooltip-value severity-${tooltipSeverity}`}>{tooltipSeverityLabel}</div>
+              </div>
+            </div>
+            <div className="anomaly-tooltip-arrow"></div>
+          </div>
+        )}
       </span>
     )
   }

@@ -424,13 +424,13 @@ export function AiInsightsInspector({
               <table className="inspector-grid">
                 <thead>
                   <tr>
+                    <th>Root Cause</th>
+                    <th>Impact</th>
                     <th>Message ID</th>
                     <th>Source</th>
                     <th>Event Type</th>
                     <th>Why Flagged</th>
-                    <th>Impact</th>
                     <th>Confidence</th>
-                    <th>Root Cause</th>
                     <th>Expected vs Actual</th>
                   </tr>
                 </thead>
@@ -442,6 +442,12 @@ export function AiInsightsInspector({
                       className={`anomaly-row ${loadingMessage === outlier.messageId ? 'loading' : ''}`}
                       title="Click to inspect message"
                     >
+                      <td className="reason-cell">{outlier.reason || outlier.description}</td>
+                      <td>
+                        <span className={`severity-badge ${getSeverityClass(outlier.severity || 'Medium')}`}>
+                          {outlier.severity || 'Medium'}
+                        </span>
+                      </td>
                       <td>
                         <code className="message-id">
                           {(outlier.messageId || 'N/A').substring(0, 20)}...
@@ -455,16 +461,10 @@ export function AiInsightsInspector({
                         </span>
                       </td>
                       <td>
-                        <span className={`severity-badge ${getSeverityClass(outlier.severity || 'Medium')}`}>
-                          {outlier.severity || 'Medium'}
-                        </span>
-                      </td>
-                      <td>
                         <span className="confidence-badge" title={`AI is ${outlier.confidence || 100}% confident this is anomalous`}>
                           {outlier.confidence || 100}%
                         </span>
                       </td>
-                      <td className="reason-cell">{outlier.reason || outlier.description}</td>
                       <td className="comparison-cell">
                         {outlier.expected || outlier.actual ? (
                           <div className="comparison">
