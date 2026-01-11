@@ -243,6 +243,23 @@
   pointer-events: none;
 }
 
+.anomaly-row.selected {
+  background: rgba(102, 126, 234, 0.1) !important;
+  border-left: 3px solid #667eea;
+}
+
+.anomaly-row.selected:hover {
+  background: rgba(102, 126, 234, 0.15) !important;
+}
+
+/* Checkbox styling */
+.inspector-grid input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: #667eea;
+}
+
 /* Badges and Tags */
 .event-type-badge {
   background: var(--info-bg);

@@ -597,6 +597,153 @@ class ApiClient {
       })
     })
   }
+
+  // ============================================================================
+  // H3: Anomaly Remediation API Methods
+  // ============================================================================
+
+  /**
+   * Execute remediation action on specific messages
+   */
+  async executeRemediation(
+    sessionId: string,
+    queueName: string,
+    messageIds: string[],
+    anomalyType: string,
+    actionType: string,
+    parameters?: Record<string, unknown>
+  ): Promise<{ success: boolean; affectedMessageIds: string[]; summary: string }> {
+    return this.request(`/api/remediation/execute?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        queueName,
+        messageIds,
+        anomalyType,
+        actionType,
+        parameters
+      })
+    })
+  }
+
+  /**
+   * Execute bulk remediation on multiple anomalies
+   */
+  async executeBulkRemediation(
+    sessionId: string,
+    queueName: string,
+    anomalyIds: string[],
+    anomalyType: string | null,
+    actionType: string,
+    parameters?: Record<string, unknown>
+  ): Promise<{ success: boolean; affectedMessageIds: string[]; summary: string }> {
+    return this.request(`/api/remediation/bulk?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        queueName,
+        anomalyIds,
+        anomalyType,
+        actionType,
+        parameters
+      })
+    })
+  }
+
+  /**
+   * Submit ML feedback for anomaly detection
+   */
+  async submitFeedback(
+    sessionId: string,
+    messageId: string,
+    anomalyType: string,
+    feedbackType: string,
+    queueName?: string,
+    comment?: string
+  ): Promise<{ success: boolean; feedbackId: string }> {
+    return this.request(`/api/ai/feedback?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        messageId,
+        anomalyType,
+        feedbackType,
+        queueName,
+        comment,
+        timestamp: new Date().toISOString()
+      })
+    })
+  }
+
+  /**
+   * Generate AI-powered remediation suggestions
+   */
+  async generateSuggestions(
+    sessionId: string,
+    queueName: string,
+    maxSuggestions = 5
+  ): Promise<{ suggestions: Array<{
+    id: string
+    priority: 'high' | 'medium' | 'low'
+    title: string
+    description: string
+    impact: string
+    actionType: string
+    affectedMessages: string[]
+    confidence: number
+  }> }> {
+    return this.request(`/api/ai/suggestions?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        queueName,
+        maxSuggestions
+      })
+    })
+  }
+
+  /**
+   * Export anomaly report in various formats
+   */
+  async exportReport(
+    sessionId: string,
+    queueName: string,
+    anomalyIds: string[],
+    format: 'CSV' | 'JSON' | 'PDF'
+  ): Promise<{ success: boolean; downloadUrl: string; filename: string; expiresAt: string }> {
+    return this.request(`/api/reports/export?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        queueName,
+        anomalyIds,
+        format
+      })
+    })
+  }
+
+  /**
+   * Create validation rule based on anomaly pattern
+   */
+  async createRule(
+    sessionId: string,
+    queueName: string,
+    anomalyType: string,
+    ruleName: string,
+    ruleDefinition: Record<string, unknown>
+  ): Promise<{ success: boolean; ruleId: string; ruleName: string; message: string }> {
+    return this.request(`/api/rules/create?sessionId=${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        queueName,
+        anomalyType,
+        ruleName,
+        ruleDefinition
+      })
+    })
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL)
+

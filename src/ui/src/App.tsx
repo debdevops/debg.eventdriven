@@ -4,6 +4,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { TopBar } from './components/TopBar'
 import { NamespaceTabs } from './components/NamespaceTabs'
 import { NamespaceView } from './components/NamespaceView'
@@ -22,6 +24,7 @@ import { useToast } from './hooks/useToast'
 import { SessionProviderV2, useSession } from './contexts/SessionContextV2'
 import { apiClient } from './api/client'
 import { apiLogger } from './utils/logger'
+import { queryClient } from './config/queryClient'
 import type { Namespace, AuditEntry, ToastApi, AiInsightsResult, Entity } from './types'
 import type { ToastType } from './components/Toast'
 import './App.css'
@@ -451,25 +454,34 @@ function App() {
   }
 
   return (
-    <SessionProviderV2 toast={toast}>
-      <AppContent
-        namespaces={namespaces}
-        activeNamespaceId={activeNamespaceId}
-        setActiveNamespaceId={setActiveNamespaceId}
-        showConnectModal={showConnectModal}
-        setShowConnectModal={setShowConnectModal}
-        showShortcuts={showShortcuts}
-        setShowShortcuts={setShowShortcuts}
-        auditLog={auditLog}
-        currentEntityName={currentEntityName}
-        setCurrentEntityName={setCurrentEntityName}
-        toast={toast}
-        addAuditEntry={addAuditEntry}
-        handleCloseNamespace={handleCloseNamespace}
-        handleUpdateNamespace={handleUpdateNamespace}
-        handleAddNamespace={handleAddNamespace}
-      />
-    </SessionProviderV2>
+    <QueryClientProvider client={queryClient}>
+      <SessionProviderV2 toast={toast}>
+        <AppContent
+          namespaces={namespaces}
+          activeNamespaceId={activeNamespaceId}
+          setActiveNamespaceId={setActiveNamespaceId}
+          showConnectModal={showConnectModal}
+          setShowConnectModal={setShowConnectModal}
+          showShortcuts={showShortcuts}
+          setShowShortcuts={setShowShortcuts}
+          auditLog={auditLog}
+          currentEntityName={currentEntityName}
+          setCurrentEntityName={setCurrentEntityName}
+          toast={toast}
+          addAuditEntry={addAuditEntry}
+          handleCloseNamespace={handleCloseNamespace}
+          handleUpdateNamespace={handleUpdateNamespace}
+          handleAddNamespace={handleAddNamespace}
+        />
+      </SessionProviderV2>
+      {/* React Query DevTools - only in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <ReactQueryDevtools 
+          initialIsOpen={false} 
+          position="right"
+        />
+      )}
+    </QueryClientProvider>
   )
 }
 

@@ -283,3 +283,94 @@ tr:hover {
 }
 
 /* Force light theme (no dark-mode branch) */
+
+/* =================================================================
+   TanStack React Query DevTools - Theme-Aware Styling
+   ================================================================= */
+
+/* DevTools container - let it inherit theme naturally */
+[data-tanstack-query-devtools-root] {
+  /* DevTools will use its own theme based on initialIsOpen prop */
+}
+
+/* Fix for dark backgrounds in the app - ensure DevTools is readable */
+.dark-mode [data-tanstack-query-devtools-root] {
+  --tsqd-bg-color: #1f2937 !important;
+  --tsqd-text-color: #f9fafb !important;
+  --tsqd-border-color: #374151 !important;
+}
+
+/* Explicit light theme support */
+.light-mode [data-tanstack-query-devtools-root],
+[data-theme="light"] [data-tanstack-query-devtools-root] {
+  --tsqd-bg-color: #ffffff !important;
+  --tsqd-text-color: #111827 !important;
+  --tsqd-border-color: #e5e7eb !important;
+}
+
+/* Panel background and text colors */
+[data-tanstack-query-devtools-root] .tsqd-parent-container {
+  background: var(--tsqd-bg-color, #ffffff) !important;
+  color: var(--tsqd-text-color, #111827) !important;
+}
+
+/* Query rows and items */
+[data-tanstack-query-devtools-root] .tsqd-query-row,
+[data-tanstack-query-devtools-root] .tsqd-query-observer-count,
+[data-tanstack-query-devtools-root] .tsqd-query-key,
+[data-tanstack-query-devtools-root] span,
+[data-tanstack-query-devtools-root] label,
+[data-tanstack-query-devtools-root] p,
+[data-tanstack-query-devtools-root] div {
+  color: var(--tsqd-text-color, #111827) !important;
+}
+
+/* Buttons */
+[data-tanstack-query-devtools-root] button {
+  background-color: var(--tsqd-bg-color, #ffffff) !important;
+  color: var(--tsqd-text-color, #111827) !important;
+  border: 1px solid var(--tsqd-border-color, #e5e7eb) !important;
+}
+
+[data-tanstack-query-devtools-root] button:hover {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Input fields */
+[data-tanstack-query-devtools-root] input,
+[data-tanstack-query-devtools-root] select {
+  background-color: var(--tsqd-bg-color, #ffffff) !important;
+  color: var(--tsqd-text-color, #111827) !important;
+  border: 1px solid var(--tsqd-border-color, #e5e7eb) !important;
+}
+
+[data-tanstack-query-devtools-root] input::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Code blocks */
+[data-tanstack-query-devtools-root] code,
+[data-tanstack-query-devtools-root] pre {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+  color: var(--tsqd-text-color, #111827) !important;
+  border: 1px solid var(--tsqd-border-color, #e5e7eb) !important;
+}
+
+/* Dark mode code blocks */
+.dark-mode [data-tanstack-query-devtools-root] code,
+.dark-mode [data-tanstack-query-devtools-root] pre {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Toggle button (bottom-right corner) */
+[data-tanstack-query-devtools-toggle-button] {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-tanstack-query-devtools-toggle-button]:hover {
+  transform: scale(1.05) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+}
