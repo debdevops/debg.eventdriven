@@ -1,0 +1,230 @@
+/**
+ * Pagination Component - DUAL MODE
+ * 
+ * INSPECTOR MODE (MessageTable):
+ * - Grid renders ALL loaded messages, NO slicing
+ * - Footer shows: "Showing X of Y messages (peeked)"
+ * - peekSize is preference for NEXT peek cycle
+ * 
+ * LEGACY MODE (AiInsightsInspector):
+ * - Traditional pagination with slicing
+ * - Full page navigation controls
+ */
+
+import './Pagination.css'
+
+type PaginationMode = 'inspector' | 'legacy'
+
+interface PaginationProps {
+  // Inspector mode
+  filteredCount?: number
+  loadedCount?: number
+  totalQueueCount?: number
+  peekSize?: number
+  onPeekSizeChange?: (size: number) => void
+  onLoadNextBatch?: () => void
+  disabled?: boolean
+  
+  // Legacy mode
+  currentPage?: number
+  totalItems?: number
+  pageSize?: number
+  onPageChange?: (page: number) => void
+  onPageSizeChange?: (size: number) => void
+  
+  pageSizeOptions?: number[]
+  mode?: PaginationMode
+}
+
+export function Pagination(props: PaginationProps) {
+  // Auto-detect mode based on props
+  const mode: PaginationMode = props.filteredCount !== undefined ? 'inspector' : 'legacy'
+  
+  if (mode === 'inspector') {
+    return renderInspectorMode(props)
+  } else {
+    return renderLegacyMode(props)
+  }
+}
+
+function renderInspectorMode(props: PaginationProps) {
+  const { loadedCount = 0, totalQueueCount, peekSize = 50, onPeekSizeChange, onLoadNextBatch, pageSizeOptions = [50, 100, 200], disabled = false } = props
+  
+  const showPeekSizeSelector = loadedCount >= peekSize
+  // Invariant: inspector mode intentionally does NOT use infinite scroll.
+  // Reason: Service Bus peek is explicit, sequential, and non-destructive; it returns the
+  // "next" messages only when we advance `fromSequenceNumber`.
+  // An explicit button makes paging deterministic, avoids accidental background loads,
+  // and prevents surprise network activity during Snapshot.
+  // FIX(pagination): never show "Load next batch" when there is no data, total is 0,
+  // or when the last peek returned fewer than peekSize (typical "end" signal for DLQ).
+  // Also compute remaining based on loadedCount (not filteredCount) so filters don't create false "more".
+  const total = typeof totalQueueCount === 'number' ? totalQueueCount : undefined
+  const hasMoreMessages = total !== undefined && total > 0 && loadedCount > 0 && loadedCount < total
+  const showLoadNextBatch = Boolean(onLoadNextBatch) && hasMoreMessages && loadedCount >= peekSize
+  const remaining = total !== undefined ? Math.max(0, total - loadedCount) : null
+  const totalLabel = totalQueueCount !== undefined ? String(totalQueueCount) : '?' 
+
+  return (
+    <div className="pagination-container inspector-footer">
+      <div className="pagination-info">
+        <span className="inspector-footer-text">
+          Showing <span className="inspector-count-primary">{loadedCount}</span> of <span className="inspector-count-total">{totalLabel}</span> messages
+          <span className="inspector-mode-badge" title="Peek mode - read-only, messages remain in queue">
+            (read-only peek)
+          </span>
+        </span>
+      </div>
+
+      <div className="inspector-controls">
+        {showPeekSizeSelector && (
+          <div className="inspector-peek-size">
+            <label htmlFor="peek-size-select" className="peek-size-label">
+              Peek batch size:
+            </label>
+            <select
+              id="peek-size-select"
+              value={peekSize}
+              onChange={(e) => onPeekSizeChange?.(Number(e.target.value))}
+              className="peek-size-select"
+              title="Number of messages to fetch in each peek operation."
+              disabled={disabled}
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {showLoadNextBatch && (
+          <button
+            onClick={onLoadNextBatch}
+            className="btn-load-next-batch primary"
+            title="Load next batch of messages"
+            disabled={disabled}
+          >
+            ⬇ Load next batch ({remaining === null ? '?' : remaining} more)
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function renderLegacyMode(props: PaginationProps) {
+  const { currentPage = 1, totalItems = 0, pageSize = 50, onPageChange, onPageSizeChange, pageSizeOptions = [50, 100, 200] } = props
+  
+  const totalPages = Math.ceil(totalItems / pageSize)
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const endItem = Math.min(currentPage * pageSize, totalItems)
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = []
+    const showPages = 5
+
+    if (totalPages <= showPages + 2) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i)
+      }
+    } else {
+      pages.push(1)
+
+      let start = Math.max(2, currentPage - 1)
+      let end = Math.min(totalPages - 1, currentPage + 1)
+
+      if (currentPage <= 3) {
+        end = showPages
+      } else if (currentPage >= totalPages - 2) {
+        start = totalPages - showPages + 1
+      }
+
+      if (start > 2) pages.push('...')
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i)
+      }
+
+      if (end < totalPages - 1) pages.push('...')
+
+      pages.push(totalPages)
+    }
+
+    return pages
+  }
+
+  return (
+    <div className="pagination-container">
+      <div className="pagination-info">
+        <span className="pagination-range">
+          {startItem}–{endItem} of {totalItems}
+        </span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
+          className="page-size-select"
+        >
+          {pageSizeOptions.map(size => (
+            <option key={size} value={size}>
+              {size} per page
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="pagination-controls">
+        <button
+          onClick={() => onPageChange?.(1)}
+          disabled={currentPage === 1}
+          className="pagination-btn"
+          title="First page"
+        >
+          ⟪
+        </button>
+        <button
+          onClick={() => onPageChange?.(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="pagination-btn"
+          title="Previous page"
+        >
+          ‹
+        </button>
+
+        {getPageNumbers().map((page, idx) =>
+          typeof page === 'number' ? (
+            <button
+              key={idx}
+              onClick={() => onPageChange?.(page)}
+              className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
+            >
+              {page}
+            </button>
+          ) : (
+            <span key={idx} className="pagination-ellipsis">
+              {page}
+            </span>
+          )
+        )}
+
+        <button
+          onClick={() => onPageChange?.(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="pagination-btn"
+          title="Next page"
+        >
+          ›
+        </button>
+        <button
+          onClick={() => onPageChange?.(totalPages)}
+          disabled={currentPage === totalPages}
+          className="pagination-btn"
+          title="Last page"
+        >
+          ⟫
+        </button>
+      </div>
+    </div>
+  )
+}

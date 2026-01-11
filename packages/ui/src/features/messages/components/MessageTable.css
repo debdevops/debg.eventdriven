@@ -1,0 +1,806 @@
+.message-table-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
+
+/* Search and Filter Bar - Compact Azure Portal Style */
+.search-filter-bar {
+  display: flex;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+  min-height: 34px;
+  max-height: 34px;
+}
+
+.search-box {
+  flex: 1;
+  position: relative;
+  max-width: 500px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0 28px 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  font-size: 11px;
+  transition: all 0.2s ease;
+  background: var(--surface);
+  height: 26px;
+  line-height: 26px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.clear-search {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.clear-search:hover {
+  background: var(--surface-inset);
+}
+
+.filter-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.filter-select {
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  font-size: 11px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 110px;
+  height: 26px;
+  line-height: 26px;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.result-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+/* Compact button group for exports and actions */
+.filter-controls .btn-sm {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 32px;
+}
+
+/* Column width definitions - optimized for full width usage */
+
+/* Checkbox Column - Fixed minimal width */
+.checkbox-col {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  text-align: center;
+  padding: 3px 4px !important;
+}
+
+.checkbox-col input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* Row affordance column (always visible; no hover flicker) */
+.chevron-col {
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  text-align: center;
+  padding: 0 4px !important;
+}
+
+.row-chevron {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.chevron-col.disabled .row-chevron {
+  opacity: 0.4;
+}
+
+/* Compact, content-driven columns (avoid large empty vertical columns) */
+.seq-col {
+  width: 6ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+.time-col {
+  width: 11ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+.delivery-col {
+  width: 9ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+.dlq-delivery-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.dlq-reason-col {
+  width: 20ch;
+  max-width: 24ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dlq-error-col {
+  width: 32ch;
+  max-width: 40ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.dlq-text-ellipsis {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Event Type should shrink to chip content, not force a wide column */
+.eventtype-col {
+  width: 18ch;
+  max-width: 28ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Message Body: compact monospace preview with ellipsis */
+.body-col {
+  width: 40ch;
+  max-width: 48ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message-body-preview {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message-body-preview.dlq {
+  color: var(--text-muted);
+}
+
+/* Fixed payload tooltip (pretty JSON) */
+.payload-tooltip {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: min(560px, calc(100vw - 24px));
+  max-height: 50vh;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  overflow: hidden;
+}
+
+.payload-tooltip-title {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-2);
+}
+
+.payload-tooltip-pre {
+  margin: 0;
+  padding: 10px;
+  max-height: calc(50vh - 38px);
+  overflow: auto;
+  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  white-space: pre;
+}
+
+/* Message ID: compact monospace with ellipsis */
+.id-col {
+  width: 24ch;
+  max-width: 34ch;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Table Actions */
+.table-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px var(--spacing);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  gap: 12px;
+}
+
+.selection-info {
+  display: flex;
+  align-items: center;
+}
+
+.selection-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.selection-count {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.empty-messages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex: 1;
+  color: var(--secondary);
+  padding: 40px;
+}
+
+.table-wrapper {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--surface-2);
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 0;
+  overscroll-behavior: contain;
+}
+
+.message-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  table-layout: fixed;
+  margin: 0;
+}
+
+/* Fixed-layout: widths are controlled by <colgroup> in MessageTable.tsx */
+.seq-col,
+.time-col,
+.delivery-col,
+.eventtype-col,
+.actions-col,
+.checkbox-col,
+.dlq-status-col {
+  white-space: nowrap;
+}
+
+.eventtype-col,
+.id-col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.id-col {
+  white-space: nowrap;
+}
+
+.actions-col {
+  text-align: right;
+}
+
+.message-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.message-table th {
+  padding: 4px 6px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: linear-gradient(to bottom, var(--surface), var(--surface-2));
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+.message-table th.actions-col {
+  text-align: right;
+  padding-right: 4px;
+}
+
+.message-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.message-table th.sortable:hover {
+  background: linear-gradient(to bottom, var(--surface-2), var(--surface-3));
+}
+
+.message-table td {
+  padding: 1px 6px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  line-height: 1.15;
+  max-height: 22px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.message-table td.actions-col {
+  padding: 2px 4px;
+  text-align: right;
+}
+
+/* Zebra striping for readability */
+.message-table tbody tr:nth-child(even) td {
+  background: var(--surface-2);
+}
+
+.message-table tbody tr {
+  transition: all 0.15s ease;
+  height: 22px;
+}
+
+/* Compact actions column */
+.action-buttons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+
+.actions-col .btn-icon-only {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.actions-col .btn-icon-only:hover {
+  transform: none;
+}
+
+.message-table tbody tr:hover {
+  background: var(--accent-soft-bg) !important;
+  box-shadow: var(--shadow);
+}
+
+.message-table tbody tr:hover td {
+  background: var(--accent-soft-bg) !important;
+  border-top: 1px solid var(--accent-soft-border);
+  border-bottom: 1px solid var(--accent-soft-border);
+}
+
+.message-id {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-size {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.message-preview {
+  max-width: 350px;
+  width: 350px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.preview-col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Delivery Count Badges */
+.delivery-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  min-width: 28px;
+  line-height: 1.2;
+}
+
+.delivery-badge-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
+}
+
+.delivery-badge-warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+}
+
+.delivery-badge-danger {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+  justify-content: flex-end;
+}
+
+.btn-sm {
+  padding: 0 10px;
+  font-size: 13px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  height: 32px;
+  line-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  gap: 4px;
+}
+
+.btn-icon-only {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-only:hover {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+.btn-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Correlation Highlighting */
+.correlation-highlight {
+  background-color: var(--warning-bg) !important;
+  border-left: 3px solid var(--warning) !important;
+}
+
+.correlation-highlight:hover {
+  background-color: var(--warning-bg) !important;
+}
+
+/* Enhanced table layout with optimized columns - FULL WIDTH USAGE */
+.message-table.enhanced .seq-col {
+  width: 80px;
+  min-width: 80px;
+}
+
+.message-table.enhanced .time-col {
+  width: 140px;
+  min-width: 140px;
+}
+
+.message-table.enhanced .delivery-col {
+  width: 90px;
+  min-width: 90px;
+}
+
+.message-table.enhanced .preview-col {
+  width: auto; /* Take remaining space after fixed columns */
+  min-width: 300px;
+  max-width: none; /* Allow expansion */
+}
+
+.message-table.enhanced .actions-col {
+  width: 120px; /* Fixed width for actions */
+  min-width: 120px;
+  max-width: 120px;
+  text-align: right;
+  padding-right: 16px; /* Align to container edge */
+}
+
+/* Ensure Actions column sticks to the right edge */
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+/* Preview column styling */
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.preview-id {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-body {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+/* Row selection state */
+.message-row.selected {
+  background: var(--info-bg) !important;
+  border-left: 3px solid var(--accent) !important;
+}
+
+.message-row.selected td {
+  background: var(--info-bg) !important;
+}
+
+/* Clickable row cursor */
+.message-row {
+  cursor: pointer;
+}
+
+/* Subtle, stable hover (no layout shift). */
+.message-row:hover td {
+  background: var(--surface-2);
+}
+
+.message-row.selected:hover td {
+  background: var(--info-bg) !important;
+}
+
+/* Horizontal scrolling support */
+.table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.message-table {
+  min-width: 720px;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .message-table.enhanced .preview-col {
+    width: 50%;
+    min-width: 200px;
+  }
+  
+  .preview-id {
+    font-size: 10px;
+  }
+  
+  .preview-body {
+    font-size: 11px;
+  }
+}
+
+/* INSPECTOR MODE Grid Layout Fixes */
+
+.message-table-container {
+  min-height: 0; /* Allow flex layout to collapse grid to content */
+}
+
+.table-wrapper {
+  /* Grid height collapses to rows, no fixed/min-height pushing down */
+  flex-shrink: 1;
+}
+
+/* Action column - properly sized for buttons */
+.actions-col {
+  width: 120px; /* Fixed width for consistency */
+  min-width: 120px;
+  padding: 8px 16px 8px 4px; /* Extra right padding to reach container edge */
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.btn-icon-only {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.btn-icon-only:hover {
+  background: var(--surface-3);
+}
+
+.btn-icon-only:active {
+  background: var(--surface-inset);
+}
+/* DLQ Status Column - AI Classification Badge */
+.dlq-status-col {
+  width: auto;
+  min-width: 200px;
+  text-align: left;
+  padding: 6px 8px !important;
+  font-size: 14px;
+}
+
+.dlq-status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dlq-status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: help;
+  transition: transform 0.2s;
+}
+
+.dlq-status-badge:hover {
+  transform: scale(1.15);
+}
+
+.dlq-status-badge.safe-to-replay {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.dlq-status-badge.needs-investigation {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.dlq-status-badge.do-not-replay {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.dlq-risk-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+}

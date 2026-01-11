@@ -1,0 +1,145 @@
+/* Multi-Action FAB Styles */
+
+.fab-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay-backdrop);
+  z-index: 999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.multi-fab {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.fab-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fab-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 28px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.fab-action-btn:hover {
+  background: var(--modal-footer-bg);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.action-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.action-label {
+  font-size: 0.875rem;
+}
+
+.fab-main-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  color: var(--surface);
+  font-size: 1.75rem;
+  cursor: pointer;
+  box-shadow: 0 8px 20px var(--focus-ring);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fab-main-btn:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 12px 28px var(--focus-ring);
+  transform: scale(1.05);
+}
+
+.fab-main-btn:active {
+  transform: scale(0.95);
+}
+
+.fab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.fab-icon.rotate {
+  transform: rotate(180deg);
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .multi-fab {
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .fab-main-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 1.5rem;
+  }
+
+  .fab-action-btn {
+    padding: 10px 16px;
+    font-size: 0.875rem;
+  }
+
+  .action-icon {
+    font-size: 1.125rem;
+  }
+
+  .action-label {
+    font-size: 0.8125rem;
+  }
+}
+
+

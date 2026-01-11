@@ -1,0 +1,152 @@
+/* COMPACT HEALTH INDICATOR - Fixed height, visually subordinate to message grid */
+.message-age-distribution {
+  background: var(--surface);
+  height: 28px;
+  max-height: 28px;
+  min-height: 28px;
+  overflow: hidden;
+  padding: 2px 16px;
+  border-bottom: 1px solid var(--border-color);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.message-age-distribution.collapsed {
+  height: 0px; /* Completely hidden when collapsed */
+  max-height: 0px;
+  min-height: 0px;
+  padding: 0;
+  border: none;
+}
+
+.distribution-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1px; /* Minimal spacing */
+  height: 12px; /* Reduced from 16px */
+}
+
+.distribution-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.distribution-collapse-btn {
+  background: transparent; /* No background for minimal design */
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.distribution-collapse-btn:hover {
+  border-color: var(--border-color);
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.distribution-title {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.distribution-total {
+  font-size: 7px; /* Reduced from 8px */
+  color: var(--text-muted);
+}
+
+/* ULTRA-COMPACT bars - 16px height total */
+.distribution-bars {
+  display: flex;
+  gap: 4px;
+  height: 16px;
+}
+
+/* Subtle, scannable buckets - no heavy visual weight */
+.age-bucket {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-radius: 4px;
+  padding: 3px;
+}
+
+.age-bucket:hover:not(.empty) {
+  background: var(--surface-3);
+  transform: translateY(-1px);
+}
+
+.age-bucket.active {
+  background: var(--surface-3);
+  box-shadow: 0 0 0 2px var(--border-strong);
+}
+
+.age-bucket.empty {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.bucket-bar-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 18px;
+}
+
+.bucket-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: all 0.2s ease;
+}
+
+.age-bucket:hover:not(.empty) .bucket-bar {
+  opacity: 0.85;
+}
+
+/* ULTRA-COMPACT labels - minimal text, maximum scanability */
+.bucket-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0px; /* No gap for ultra-compact */
+  margin-top: 2px; /* Reduced from 4px */
+}
+
+.bucket-label-text {
+  font-size: 8px; /* Reduced from 9px */
+  color: var(--text-muted);
+  font-weight: 400; /* Reduced visual weight */
+  line-height: 1;
+}
+
+.bucket-count {
+  font-size: 11px; /* Reduced from 12px */
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.age-bucket.empty .bucket-count {
+  color: var(--border-strong);
+}
+
+.bucket-bar.tone-0 { background: var(--age-0); }
+.bucket-bar.tone-1 { background: var(--age-1); }
+.bucket-bar.tone-2 { background: var(--age-2); }
+.bucket-bar.tone-3 { background: var(--age-3); }

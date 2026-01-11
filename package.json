@@ -1,0 +1,66 @@
+{
+  "name": "servicebus-inspector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-Powered Autopilot for Azure Service Bus - Enterprise monitoring and automatic remediation platform",
+  "keywords": [
+    "azure",
+    "service-bus",
+    "monitoring",
+    "ai",
+    "anomaly-detection",
+    "devops",
+    "enterprise"
+  ],
+  "author": "ServiceBus Inspector Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/debdevops/debg.eventdriven"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "dev:ui": "pnpm --filter @servicebus-inspector/ui dev",
+    "dev:api": "pnpm --filter @servicebus-inspector/api dev",
+    "dev:ai": "pnpm --filter @servicebus-inspector/ai dev",
+    "test": "turbo run test",
+    "test:ui": "pnpm --filter @servicebus-inspector/ui test",
+    "test:api": "pnpm --filter @servicebus-inspector/api test",
+    "test:ai": "pnpm --filter @servicebus-inspector/ai test",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "type-check": "turbo run type-check",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "clean:all": "pnpm clean && rm -rf .turbo packages/**/node_modules packages/**/.turbo",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:build": "docker-compose build",
+    "setup": "pnpm install && pnpm build",
+    "prepare": "husky install || true"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.5",
+    "turbo": "^2.3.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,css}": [
+      "prettier --write"
+    ]
+  }
+}

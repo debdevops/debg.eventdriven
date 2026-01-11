@@ -1,0 +1,67 @@
+.event-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.15s ease;
+}
+
+.event-type-chip.tone-0 {
+  background: var(--chip-0-bg);
+  color: var(--chip-0-text);
+  border-color: var(--chip-0-border);
+}
+
+.event-type-chip.tone-1 {
+  background: var(--chip-1-bg);
+  color: var(--chip-1-text);
+  border-color: var(--chip-1-border);
+}
+
+.event-type-chip.tone-2 {
+  background: var(--chip-2-bg);
+  color: var(--chip-2-text);
+  border-color: var(--chip-2-border);
+}
+
+.event-type-chip.tone-3 {
+  background: var(--chip-3-bg);
+  color: var(--chip-3-text);
+  border-color: var(--chip-3-border);
+}
+
+.event-type-chip.tone-4 {
+  background: var(--chip-4-bg);
+  color: var(--chip-4-text);
+  border-color: var(--chip-4-border);
+}
+
+.event-type-chip.tone-5 {
+  background: var(--chip-5-bg);
+  color: var(--chip-5-text);
+  border-color: var(--chip-5-border);
+}
+
+.event-type-chip.clickable {
+  cursor: pointer;
+}
+
+.event-type-chip.clickable:hover {
+  opacity: 0.8;
+  transform: none;
+}
+
+.event-type-chip.unknown {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+  font-style: italic;
+}

@@ -1,0 +1,214 @@
+/**
+ * Anomaly Badge Styles
+ */
+
+.anomaly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.anomaly-badge-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: help;
+}
+
+.anomaly-icon {
+  font-size: 12px;
+}
+
+.anomaly-label {
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Severity colors */
+.anomaly-low {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.anomaly-medium {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.anomaly-high {
+  background-color: #fed7aa;
+  color: #c2410c;
+  border: 1px solid #fb923c;
+}
+
+.anomaly-critical {
+  background-color: #fecaca;
+  color: #991b1b;
+  border: 1px solid #f87171;
+  animation: pulse-critical 2s infinite;
+}
+
+@keyframes pulse-critical {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+/* Compact badge severity colors */
+.anomaly-badge-compact.anomaly-low {
+  background-color: #dbeafe;
+}
+
+.anomaly-badge-compact.anomaly-medium {
+  background-color: #fef3c7;
+}
+
+.anomaly-badge-compact.anomaly-high {
+  background-color: #fed7aa;
+}
+
+.anomaly-badge-compact.anomaly-critical {
+  background-color: #fecaca;
+}
+
+/* Professional styled tooltip - White background, dark text */
+.anomaly-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #ffffff;
+  color: #1f2937;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 260px;
+  white-space: normal;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+  z-index: 1000;
+  pointer-events: none;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.anomaly-tooltip-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.anomaly-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #1f2937;
+}
+
+.anomaly-tooltip-section {
+  margin-bottom: 4px;
+}
+
+.anomaly-tooltip-section:last-child {
+  margin-bottom: 0;
+}
+
+.anomaly-tooltip-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.anomaly-tooltip-value {
+  color: #374151;
+  font-size: 11px;
+  word-wrap: break-word;
+}
+
+.anomaly-tooltip-value.severity-low {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.anomaly-tooltip-value.severity-medium {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.anomaly-tooltip-value.severity-high {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.anomaly-tooltip-value.severity-critical {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+/* Tooltip arrow */
+.anomaly-tooltip-arrow {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #ffffff;
+}
+
+/* Row highlighting for anomalous messages */
+.message-row.anomaly-row {
+  background-color: rgba(254, 202, 202, 0.15) !important;
+}
+
+.message-row.anomaly-row:hover {
+  background-color: rgba(254, 202, 202, 0.25) !important;
+}
+
+.message-row.anomaly-row-medium {
+  background-color: rgba(254, 243, 199, 0.15) !important;
+}
+
+.message-row.anomaly-row-medium:hover {
+  background-color: rgba(254, 243, 199, 0.25) !important;
+}
+
+/* Anomaly indicator column */
+.anomaly-col {
+  width: 40px;
+  text-align: center;
+}
+
+.anomaly-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

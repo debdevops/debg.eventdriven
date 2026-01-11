@@ -1,0 +1,188 @@
+/**
+ * Bottom Message Drawer Styles - Enterprise overlay
+ * Floating Action Button triggers full-screen drawer overlay
+ * Two-state UI: 
+ * 1. Collapsed: FAB button (floating action button) at bottom-right
+ * 2. Expanded: backdrop (z:99) + drawer panel (z:100) as true overlay
+ */
+
+/* ===== FLOATING ACTION BUTTON (FAB) ===== */
+.drawer-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #5558e3 100%);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  z-index: 150;
+  transition: all 0.2s ease;
+  font-size: 24px;
+  padding: 0;
+  margin: 0;
+}
+
+.drawer-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.6);
+}
+
+.drawer-fab:active {
+  transform: scale(0.95);
+}
+
+.fab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+/* ===== EXPANDED STATE: Backdrop ===== */
+.drawer-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(3px);
+  z-index: 990;
+  cursor: pointer;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ===== EXPANDED STATE: Drawer Panel ===== */
+.bottom-drawer-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 70vh;
+  max-height: 85vh;
+  background: var(--surface);
+  z-index: 1000;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  animation: slideUpDrawer 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+
+@keyframes slideUpDrawer {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Media query for small screens */
+@media (max-height: 600px) {
+  .bottom-drawer-panel {
+    height: 80vh;
+    max-height: 90vh;
+  }
+}
+
+/* ===== Drawer Header ===== */
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 45%, #8b5cf6 100%);
+  border-bottom: 0;
+  flex-shrink: 0;
+  height: 60px;
+}
+
+.drawer-title {
+  margin: 0;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  flex: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.drawer-close-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: #fff;
+  transition: all 0.15s ease;
+  padding: 0;
+  margin: 0 -4px;
+  border-radius: 4px;
+}
+
+.drawer-close-button:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.drawer-close-button:active {
+  background-color: rgba(255, 255, 255, 0.24);
+}
+
+/* ===== Drawer Content Area ===== */
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  background: white;
+}
+
+/* Scrollbar styling for overflow content */
+.drawer-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.drawer-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.drawer-content::-webkit-scrollbar-thumb {
+  background: #d0d0d0;
+  border-radius: 4px;
+}
+
+.drawer-content::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Ensure MessageSender fills the drawer content area */
+.drawer-content > * {
+  width: 100%;
+}

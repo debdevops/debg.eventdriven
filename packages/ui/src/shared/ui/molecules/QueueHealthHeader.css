@@ -1,0 +1,119 @@
+/* Light theme sticky header - status color on left border for scan speed */
+.queue-health-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  border-left: 3px solid transparent;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.queue-health-header.healthy {
+  border-left-color: #4ade80;
+}
+
+.queue-health-header.warning {
+  border-left-color: #fbbf24;
+}
+
+.queue-health-header.critical {
+  border-left-color: #f87171;
+}
+
+.health-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 100px;
+}
+
+.queue-health-header.healthy .health-status-badge {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.queue-health-header.warning .health-status-badge {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.queue-health-header.critical .health-status-badge {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.status-icon {
+  font-size: 16px;
+}
+
+.health-metrics {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric.critical .metric-value {
+  color: #f87171;
+  font-weight: 700;
+}
+
+.metric.warning .metric-value {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.metric-label {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+}
+
+.health-reason {
+  margin-left: auto;
+  padding: 6px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.reason-text {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+@media (max-width: 768px) {
+  .queue-health-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .health-metrics {
+    order: 3;
+    width: 100%;
+  }
+}

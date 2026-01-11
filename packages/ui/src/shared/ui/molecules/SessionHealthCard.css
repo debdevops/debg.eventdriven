@@ -1,0 +1,161 @@
+/**
+ * Session Health Card Styles
+ */
+
+.session-health-card {
+  padding: 12px;
+  background-color: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.session-health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.session-health-namespace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.session-health-dot-green {
+  background-color: var(--success);
+}
+
+.session-health-dot-yellow {
+  background-color: var(--warning);
+}
+
+.session-health-dot-orange {
+  background-color: var(--warning);
+}
+
+.session-health-dot-red {
+  background-color: var(--danger);
+}
+
+.session-health-namespace-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.session-health-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.session-health-badge-green {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+}
+
+.session-health-badge-yellow {
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.session-health-badge-orange {
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.session-health-badge-red {
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.session-health-timer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.session-health-timer-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.session-health-timer-value {
+  font-size: 13px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.session-health-timer-normal {
+  color: var(--text-primary);
+}
+
+.session-health-timer-warning {
+  color: var(--warning);
+}
+
+.session-health-timer-critical {
+  color: var(--danger);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.session-health-extend-btn {
+  width: 100%;
+  background-color: var(--accent);
+  color: var(--surface);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.session-health-extend-btn:hover {
+  background-color: var(--accent-hover);
+}
+
+.session-health-extend-btn:active {
+  background-color: var(--accent-hover);
+}
+
+.session-health-extend-btn:disabled {
+  background-color: var(--surface-3);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.session-health-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

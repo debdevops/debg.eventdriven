@@ -1,0 +1,880 @@
+/* Modern Professional UI for Stream Panel */
+.stream-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%; /* Ensure full width usage */
+  /* overflow: hidden; */ /* Removed to allow MessageDetailPanel to display properly */
+  background: var(--surface-2);
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
+
+/* DLQ compact row: Snapshot + AI Insights + shared Expand/Collapse */
+.dlq-insights-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  min-height: 40px;
+  max-height: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.dlq-insights-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dlq-insights-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.dlq-insights-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.dlq-insights-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dlq-insights-count {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.dlq-insights-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* Shared expandable container (always mounted; collapse via max-height) */
+.dlq-insights-expandable {
+  margin: 0 12px;
+  border: 1px solid var(--border-color);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--surface);
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 180ms ease;
+}
+
+.dlq-insights-expandable.is-expanded {
+  max-height: 240px;
+}
+
+.dlq-insights-expandable-inner {
+  padding: 10px;
+  overflow: auto;
+  max-height: 240px;
+}
+
+.dlq-insights-top {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Compact badge in top action bar */
+.btn-badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  height: 18px;
+  line-height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Snapshot details (now content-only; composed inside the DLQ expandable area) */
+.snapshot-details {
+  margin: 0 0 10px 0;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.snapshot-details-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.snapshot-details-body {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.snapshot-details-footnote {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Thin session-expired banner at top */
+.session-expired-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px; /* Reduced from 8px 16px */
+  background: linear-gradient(135deg, var(--danger-bg) 0%, var(--surface-3) 100%);
+  border-bottom: 2px solid var(--danger);
+  min-height: 34px; /* Reduced from 42px */
+  max-height: 34px;
+  box-shadow: var(--shadow);
+}
+
+.session-expired-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-expired-reconnect-btn {
+  padding: 4px 12px;
+  background: var(--danger);
+  border: 1px solid var(--danger-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.session-expired-reconnect-btn:hover:not(:disabled) {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.session-expired-reconnect-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Compact Single-Line Header */
+.stream-controls-compact {
+  padding: 6px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  max-height: 40px;
+  position: relative;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.header-left h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Corner read-only badge removed to declutter UI */
+
+.read-mode-badge {
+  padding: 3px 8px;
+  background: rgba(0, 120, 212, 0.08);
+  border: 1px solid rgba(0, 120, 212, 0.2);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.last-updated-badge {
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.read-only-banner {
+  display: none; /* Moved to corner label */
+}
+
+.last-updated-bar {
+  display: none; /* Moved to corner label */
+}
+
+/* DLQ Badge - Compact */
+.dlq-badge {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Compact Badges */
+.entity-type-badge {
+  padding: 2px 8px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--surface);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: var(--shadow);
+}
+
+.entity-context {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* Compact Message Count Badge */
+.message-count-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  background: linear-gradient(135deg, var(--accent-soft-bg) 0%, var(--surface-3) 100%);
+  border: 1px solid var(--accent-soft-border);
+  padding: 4px 12px;
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+}
+
+/* Compact Action Buttons */
+.action-buttons-compact {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-compact {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: none;
+}
+
+.btn-disabled {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-disabled:hover {
+  background: var(--surface-3);
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
+.btn-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-compact:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.btn-compact.btn-primary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: var(--surface);
+}
+
+.btn-compact.btn-outline {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 2px solid var(--border-color);
+}
+
+/* Auto Mode badge - demoted to secondary styling for reduced clutter */
+.auto-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(0, 120, 212, 0.08);
+  border: 1px solid rgba(0, 120, 212, 0.2);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  box-shadow: none;
+  letter-spacing: 0.2px;
+}
+
+.auto-icon {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* Snapshot (Frozen View) banner */
+.snapshot-banner {
+  margin: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* Collapsible header row: always visible, one-line summary */
+.snapshot-banner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.snapshot-banner-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.snapshot-banner-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.snapshot-banner-summary-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.snapshot-banner-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* Collapsible content: do not unmount; cap height so grid stays primary */
+.snapshot-banner-content {
+  padding: 8px 10px;
+  max-height: min(140px, 10vh);
+  overflow: auto;
+  transition: max-height 180ms ease, padding 180ms ease;
+}
+
+.snapshot-banner-content.is-collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.snapshot-banner-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.snapshot-banner-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.snapshot-banner-footnote {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+
+
+/* DLQ Frozen badge */
+.dlq-frozen-badge {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.auto-text {
+  text-transform: uppercase;
+  font-size: 9px;
+}
+
+.refreshing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--surface);
+  border-radius: 50%;
+  margin-left: 4px;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 1; text-shadow: 0 0 4px var(--glow-soft); }
+  50% { opacity: 0.85; text-shadow: 0 0 8px var(--glow-strong); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+/* Last updated bar - single line */
+.last-updated-bar {
+  padding: 3px 12px;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* DLQ Banner - simplified one-liner */
+.dlq-banner {
+  padding: 8px 12px;
+  background: var(--danger-bg);
+  border-left: 4px solid var(--danger);
+  border-bottom: 1px solid var(--danger-border);
+  color: var(--danger-text);
+  text-align: left;
+}
+
+.dlq-banner-title {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.dlq-banner-subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.95;
+  line-height: 1.2;
+.dlq-severity-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.dlq-severity-badge.warning {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.dlq-severity-badge.critical {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.dlq-why {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: help;
+}
+}
+
+.dlq-banner-sep {
+  opacity: 0.75;
+  padding: 0 4px;
+}
+
+/* Read-only mode banner */
+.read-only-banner {
+  padding: 4px 12px;
+  background: var(--info-bg);
+  border-left: 4px solid var(--info);
+  border-bottom: 1px solid var(--info-border);
+  font-size: 10px;
+  color: var(--info-text);
+  text-align: center;
+}
+
+/* Disabled button style */
+.btn-disabled {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-disabled:hover {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  transform: none;
+}
+
+/* Modern Header Design (legacy - keeping for backwards compatibility) */
+.stream-controls {
+  padding: 20px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.dlq-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 16px;
+  padding: 4px 12px;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dlq-toggle:hover {
+  background: var(--warning-border);
+}
+
+.dlq-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.dlq-toggle span {
+  font-weight: 600;
+  color: var(--warning-text);
+}
+
+.mode-selector {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mode-btn {
+  padding: 8px 16px;
+  background: var(--surface);
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.mode-btn:last-child {
+  border-right: none;
+}
+
+.mode-btn:hover:not(:disabled) {
+  background: var(--light);
+}
+
+.mode-btn.active {
+  background: var(--primary);
+  color: var(--surface);
+}
+
+.mode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.stream-status {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.status-indicator {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+}
+
+.message-count-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Modern Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-primary,
+.btn-outline,
+.btn-success,
+.btn-danger {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--shadow);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: var(--surface);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--success) 0%, var(--success-text) 100%);
+  color: var(--surface);
+}
+
+.btn-success:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-outline {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 2px solid var(--border-color);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, var(--danger) 0%, var(--danger-text) 100%);
+  color: var(--surface);
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-primary:disabled,
+.btn-outline:disabled,
+.btn-success:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.status-indicator.connected {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.status-indicator.disconnected {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.mode-info {
+  padding: 8px var(--spacing);
+  background: var(--light);
+  border-bottom: 1px solid var(--border);
+}
+
+.mode-info p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dark);
+}
+
+.alert-success {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
+}
+
+.alert-danger {
+  padding: 8px 16px;
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
+  border-radius: 4px;
+  font-size: 13px;
+  margin: 0;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay-surface-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--skeleton-2);
+  border-top: 4px solid var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-spinner p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  box-shadow: var(--toast-shadow);
+  z-index: 2000;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 250px;
+  animation: slideIn 0.3s ease-out;
+  /* FIX(toast): do not block UI interaction. */
+  pointer-events: none;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-notification.success {
+  background: var(--success);
+  color: var(--surface);
+}
+
+.toast-notification.error {
+  background: var(--danger);
+  color: var(--surface);
+}

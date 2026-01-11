@@ -1,0 +1,247 @@
+.entity-card {
+  position: relative;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #1f2937; /* dark text for light theme */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background-color: #ffffff; /* fallback */
+}
+
+/* Gradient backgrounds by entity type */
+
+/* Light surface for sidebar cards with colored left accent */
+.entity-card-queue {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border-left: 4px solid rgba(59,130,246,0.18); /* blue accent */
+}
+
+.entity-card-topic {
+  background: linear-gradient(180deg, #ffffff 0%, #fcfbff 100%);
+  border-left: 4px solid rgba(168,85,247,0.18); /* purple accent */
+}
+
+.entity-card-subscription {
+  background: linear-gradient(180deg, #ffffff 0%, #fbffff 100%);
+  border-left: 4px solid rgba(6,182,212,0.12); /* cyan accent */
+}
+
+.entity-card-dlq {
+  background: linear-gradient(180deg, #fff7f7 0%, #fff0f0 100%);
+  border-left: 4px solid rgba(239,68,68,0.18); /* red accent */
+}
+
+.entity-card-default {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+}
+
+.entity-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.entity-card-selected {
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25), 0 6px 12px rgba(0, 0, 0, 0.18);
+  filter: none;
+}
+
+/* Left accent bar when selected */
+.entity-card-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+.entity-card-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 120, 212, 0.08);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.entity-card-queue.entity-card-selected::before { background: var(--accent); }
+.entity-card-topic.entity-card-selected::before { background: var(--accent); }
+.entity-card-subscription.entity-card-selected::before { background: var(--accent); }
+.entity-card-dlq.entity-card-selected::before { background: var(--danger); }
+
+/* Small check badge */
+.entity-card-selected-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  color: #111827;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+.entity-card-selected .entity-card-name {
+  font-weight: 800;
+}
+
+.entity-card-expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.entity-card-status-dot {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+
+.entity-card-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--surface-3);
+  backdrop-filter: blur(6px);
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 22px;
+  text-align: center;
+}
+
+.entity-card-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 30px;
+  margin-top: 2px;
+}
+
+.entity-card-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* tinted icon backgrounds for light cards */
+.entity-card-queue .entity-card-icon {
+  background: rgba(59,130,246,0.12);
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: #1e40af;
+}
+.entity-card-topic .entity-card-icon {
+  background: rgba(168,85,247,0.10);
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: #6b21a8;
+}
+.entity-card-subscription .entity-card-icon {
+  background: rgba(6,182,212,0.10);
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: #065f68;
+}
+.entity-card-dlq .entity-card-icon {
+  background: rgba(239,68,68,0.10);
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: #991b1b;
+}
+
+.entity-card-name {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  line-height: 1.2;
+}
+
+.entity-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #374151;
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+
+.entity-card-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-pulse {
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+.entity-card-size {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.entity-card-sub-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.entity-card-sub-badge,
+.entity-card-temp-badge,
+.entity-card-warning-badge {
+  background: rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(4px);
+  color: #1f2937;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.entity-card-warning-badge {
+  background: rgba(239, 68, 68, 0.3);
+  animation: pulse-soft 2s infinite;
+}
+
+.entity-card-expand-icon {
+  margin-left: auto;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}

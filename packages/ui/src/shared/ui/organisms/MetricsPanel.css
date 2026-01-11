@@ -1,0 +1,90 @@
+/* Metrics Panel - Compact Single Row */
+
+.metrics-panel-compact {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4px 16px;
+  margin: 0;
+}
+
+.metrics-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 24px;
+}
+
+.metric-inline-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.metric-inline-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.metric-inline-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-inline-value.critical {
+  color: var(--danger);
+}
+
+.metric-inline-value.warning {
+  color: var(--warning);
+}
+
+.metric-inline-value.success {
+  color: var(--success);
+}
+
+.metric-inline-value.info {
+  color: var(--accent);
+}
+
+.metrics-collapse-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: all 0.2s ease;
+}
+
+.metrics-collapse-btn:hover {
+  background: var(--app-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.metrics-panel-compact.collapsed {
+  /* Future: could add additional collapsed state styling */
+}
+
+.metrics-loading {
+  text-align: center;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.metrics-error {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 11px;
+}

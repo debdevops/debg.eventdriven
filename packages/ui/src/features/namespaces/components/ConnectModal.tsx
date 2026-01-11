@@ -1,0 +1,148 @@
+/**
+ * Connect Modal for adding new namespace
+ */
+
+import { useState } from 'react'
+import { apiClient } from "@/shared/api/client"
+import { useSessionV2 } from "@/shared/contexts/SessionContextV2"
+import type { Namespace } from '../types'
+import { queueEntityId, topicEntityId } from "@/shared/lib/utils/entityIdentity"
+import './ConnectModal.css'
+
+interface ConnectModalProps {
+  onConnect: (namespace: Namespace) => void
+  onClose: () => void
+}
+
+export function ConnectModal({ onConnect, onClose }: ConnectModalProps) {
+  const { setConnectionString: setSessionConnectionString, setSessionMeta, markConnected } = useSessionV2()
+  const [connectionString, setConnectionString] = useState('')
+  const [friendlyName, setFriendlyName] = useState('')
+  const FRIENDLY_NAME_MAX = 12
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!connectionString.trim()) {
+      setError('Connection string is required')
+      return
+    }
+
+    if (friendlyName.trim().length > FRIENDLY_NAME_MAX) {
+      setError(`Friendly name must be ${FRIENDLY_NAME_MAX} characters or fewer`)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await apiClient.connect(connectionString.trim())
+      const entities = await apiClient.listEntities(response.sessionId)
+
+      // Store in SessionController for deterministic reconnect.
+      setSessionConnectionString(connectionString.trim())
+      setSessionMeta({ sessionId: response.sessionId, expiresAtUtc: response.expiresAtUtc })
+      markConnected()
+
+      const namespace: Namespace = {
+        ...response,
+        friendlyName: friendlyName.trim() || undefined,
+        queues: entities.queues.map(q => ({ ...q, entityId: queueEntityId(q.name) })),
+        topics: entities.topics.map(t => ({
+          ...t,
+          entityId: topicEntityId(t.name),
+          type: 'Topic' as const,
+          subscriptions: []
+        }))
+      }
+
+      onConnect(namespace)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Add Namespace</h2>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-body">
+          <div className="form-group">
+            <label htmlFor="connectionString">
+              Service Bus Connection String <span className="required">*</span>
+            </label>
+            <input
+              id="connectionString"
+              type="text"
+              className="connection-string-input"
+              value={connectionString}
+              onChange={(e) => setConnectionString(e.target.value)}
+              placeholder="Endpoint=sb://...;SharedAccessKeyName=...;SharedAccessKey=..."
+              disabled={loading}
+              autoFocus
+            />
+            <small className="form-help">
+              Your Service Bus connection string. It will be stored in memory only (never persisted).
+            </small>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="friendlyName">Friendly Name (optional)</label>
+            <input
+              id="friendlyName"
+              type="text"
+              value={friendlyName}
+              maxLength={FRIENDLY_NAME_MAX}
+              onChange={(e) => {
+                // Enforce max length client-side (defensive)
+                const v = e.target.value
+                setFriendlyName(v.length <= FRIENDLY_NAME_MAX ? v : v.slice(0, FRIENDLY_NAME_MAX))
+              }}
+              placeholder="e.g., Production, Development"
+              disabled={loading}
+              aria-describedby="friendlyNameHelp friendlyNameCount"
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <small id="friendlyNameHelp" className="form-help">A display name for this namespace (optional)</small>
+              <small id="friendlyNameCount" className="form-help" style={{ color: friendlyName.length > FRIENDLY_NAME_MAX ? 'var(--danger)' : 'var(--text-muted)' }}>
+                {friendlyName.length}/{FRIENDLY_NAME_MAX}
+              </small>
+            </div>
+          </div>
+
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              {error}
+              {error.toLowerCase().includes('expired') && (
+                <div style={{ marginTop: '8px' }}>
+                  <small>Session has expired. Click "Connect" below to restart.</small>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="modal-footer">
+            <button type="button" onClick={onClose} className="btn-outline" disabled={loading}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Connecting...' : (error && error.toLowerCase().includes('expired') ? '🔄 Restart Session' : 'Connect')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

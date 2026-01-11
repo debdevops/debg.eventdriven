@@ -1,0 +1,81 @@
+.namespace-summary {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-header h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  background: var(--light);
+  border-radius: var(--radius);
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--secondary);
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dark);
+}
+
+.stat-value.expired {
+  color: var(--danger);
+}
+
+.expiry-warning {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: var(--radius);
+  font-size: 11px;
+  color: #856404;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.expiry-warning-text {
+  flex: 1;
+}
+
+.expiry-reconnect-btn {
+  padding: 3px 8px;
+  background: #ffc107;
+  border: 1px solid #ffb300;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.expiry-reconnect-btn:hover:not(:disabled) {
+  background: #ffb300;
+  transform: scale(1.05);
+}
+
+.expiry-reconnect-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

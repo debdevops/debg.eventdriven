@@ -1,0 +1,84 @@
+/* Unified Inspector Panel - Right Drawer (non-blocking) */
+
+.unified-inspector {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 42vw);
+  background: var(--surface);
+  border-left: 2px solid var(--accent);
+  box-shadow: -8px 0 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  z-index: 1200;
+  animation: slideInRight 0.16s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+}
+
+
+.inspector-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+
+.inspector-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.inspector-close-btn:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.inspector-content {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+
+/* Override MessageDetailPanel styles when in inspector */
+.inspector-content .message-detail-panel {
+  position: static;
+  height: 100%;
+  width: 100%;
+  box-shadow: none;
+  border: none;
+  animation: none;
+}
+
+.inspector-content .detail-header {
+  padding: 16px 20px;
+}
+
+.inspector-content .detail-navigation {
+  display: none; /* Navigation handled by inspector header */
+}

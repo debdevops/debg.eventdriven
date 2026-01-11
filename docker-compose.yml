@@ -1,0 +1,144 @@
+# ============================================================================
+# Service Bus Inspector - Docker Compose for Local Development
+# ============================================================================
+# Usage:
+#   docker-compose up -d        # Start all services
+#   docker-compose up -d ui     # Start only UI
+#   docker-compose logs -f      # View logs
+#   docker-compose down         # Stop all services
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # UI - Next.js 14 Frontend
+  # ==========================================================================
+  ui:
+    build:
+      context: ./packages/ui
+      dockerfile: Dockerfile
+    container_name: sb-inspector-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NEXT_PUBLIC_AI_URL=http://localhost:8000
+    volumes:
+      - ./packages/ui/src:/app/src
+      - ./packages/shared:/app/node_modules/@servicebus-inspector/shared
+    depends_on:
+      - api
+    networks:
+      - sb-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================================================
+  # API - .NET 9 Backend
+  # ==========================================================================
+  api:
+    build:
+      context: ./packages/api
+      dockerfile: Dockerfile
+    container_name: sb-inspector-api
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+      - SessionTimeoutMinutes=30
+      - AiServiceUrl=http://ai:8000
+      - Redis__ConnectionString=redis:6379
+    depends_on:
+      - ai
+      - redis
+    networks:
+      - sb-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================================================
+  # AI - Python FastAPI ML Service
+  # ==========================================================================
+  ai:
+    build:
+      context: ./packages/ai
+      dockerfile: Dockerfile
+    container_name: sb-inspector-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - HOST=0.0.0.0
+      - PORT=8000
+    volumes:
+      - ./packages/ai/src:/app/src
+      - ai-models:/app/models
+    networks:
+      - sb-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================================================
+  # Redis - Session & Cache Store
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: sb-inspector-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - sb-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ==========================================================================
+  # PostgreSQL - Optional for persistent data
+  # ==========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: sb-inspector-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=sbinspector
+      - POSTGRES_PASSWORD=localdev123
+      - POSTGRES_DB=sbinspector
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - sb-network
+    profiles:
+      - full  # Only start with --profile full
+
+# ==========================================================================
+# Volumes
+# ==========================================================================
+volumes:
+  redis-data:
+  postgres-data:
+  ai-models:
+
+# ==========================================================================
+# Networks
+# ==========================================================================
+networks:
+  sb-network:
+    driver: bridge

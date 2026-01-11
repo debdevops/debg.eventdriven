@@ -1,0 +1,15 @@
+# PNPM Workspace Configuration
+# Service Bus Inspector Monorepo
+# ================================
+# This file defines which packages are part of the workspace.
+# All packages will share dependencies and can reference each other.
+
+packages:
+  # Core application layers
+  - "packages/ui"           # Next.js 14 frontend
+  - "packages/api"          # .NET 8 backend API  
+  - "packages/ai"           # Python FastAPI ML service
+  - "packages/shared"       # Shared contracts and utilities
+  
+  # Shared configurations (optional, can be npm packages)
+  - "packages/shared/config/*"

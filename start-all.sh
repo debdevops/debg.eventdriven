@@ -9,30 +9,23 @@ echo "Cleaning up existing processes..."
 pkill -9 -f "dotnet run" 2>/dev/null || true
 pkill -9 -f "node.*vite" 2>/dev/null || true
 
-echo "Cleaning up ports 5002, 5174, and 7002 (avoiding macOS port 5000)..."
-lsof -ti :5002 | xargs kill -9 2>/dev/null || true
+echo "Cleaning up ports 7001, 5174 (avoiding macOS port 5000)..."
+lsof -ti :7001 | xargs kill -9 2>/dev/null || true
 lsof -ti :5174 | xargs kill -9 2>/dev/null || true
-lsof -ti :7002 | xargs kill -9 2>/dev/null || true
 
 # Wait for ports to be released
 sleep 3
 
 # Verify ports are free
-if lsof -i :5002 > /dev/null 2>&1; then
-    echo "❌ Port 5002 is still in use. Forcing cleanup..."
-    lsof -ti :5002 | xargs kill -9 2>/dev/null || true
+if lsof -i :7001 > /dev/null 2>&1; then
+    echo "❌ Port 7001 is still in use. Forcing cleanup..."
+    lsof -ti :7001 | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
 
 if lsof -i :5174 > /dev/null 2>&1; then
     echo "❌ Port 5174 is still in use. Forcing cleanup..."
     lsof -ti :5174 | xargs kill -9 2>/dev/null || true
-    sleep 2
-fi
-
-if lsof -i :7002 > /dev/null 2>&1; then
-    echo "❌ Port 7002 is still in use. Forcing cleanup..."
-    lsof -ti :7002 | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
 
@@ -53,7 +46,7 @@ fi
 echo "\nStarting Backend API from $BACKEND_DIR..."
 cd "$BACKEND_DIR"
 export ASPNETCORE_ENVIRONMENT=Development
-export ASPNETCORE_URLS="http://localhost:5002;https://localhost:7002"
+export ASPNETCORE_URLS="https://localhost:7001"
 dotnet run > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "Backend PID: $BACKEND_PID"
@@ -63,8 +56,8 @@ echo "Waiting for backend to initialize..."
 sleep 5
 
 # Check if backend started successfully
-if grep -q "Now listening on.*:5002" /tmp/backend.log; then
-    echo "✅ Backend started successfully on http://localhost:5002 (HTTP) and https://localhost:7002 (HTTPS)"
+if grep -q "Now listening on.*:7001" /tmp/backend.log; then
+    echo "✅ Backend started successfully on https://localhost:7001"
 else
     echo "❌ Backend failed to start. Check /tmp/backend.log"
     cat /tmp/backend.log
@@ -74,7 +67,9 @@ fi
 # Start frontend
 echo ""
 FRONTEND_DIR=""
-if [ -d "$SCRIPT_DIR/src/ui" ]; then
+if [ -d "$SCRIPT_DIR/packages/ui" ]; then
+    FRONTEND_DIR="$SCRIPT_DIR/packages/ui"
+elif [ -d "$SCRIPT_DIR/src/ui" ]; then
     FRONTEND_DIR="$SCRIPT_DIR/src/ui"
 elif [ -d "$SCRIPT_DIR/ui" ]; then
     FRONTEND_DIR="$SCRIPT_DIR/ui"
@@ -85,7 +80,7 @@ fi
 
 echo "Starting Frontend UI from $FRONTEND_DIR..."
 cd "$FRONTEND_DIR"
-PORT=5174 npm run dev > /tmp/frontend.log 2>&1 &
+PORT=5174 npx vite > /tmp/frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "Frontend PID: $FRONTEND_PID"
 
@@ -106,7 +101,7 @@ echo ""
 echo "=========================================="
 echo "✅ All Services Running!"
 echo "=========================================="
-echo "Backend API:  http://localhost:5002 (HTTP) / https://localhost:7002 (HTTPS)"
+echo "Backend API:  https://localhost:7001"
 echo "Frontend UI:  http://localhost:5174"
 echo ""
 echo "📝 Next Steps:"
